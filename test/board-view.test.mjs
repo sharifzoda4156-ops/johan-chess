@@ -48,5 +48,26 @@ test('selection retains cells and piece nodes; moves only update changed squares
  }finally{if(old===undefined)delete globalThis.document;else globalThis.document=old;}
 });
 
-import {moveDuration} from '../public/board-view.js';
-test('move motion has a natural bounded duration',()=>{assert.ok(moveDuration('e2','e4')>=240);assert.ok(moveDuration('a1','h8')<=320);assert.ok(moveDuration('a1','h8')>moveDuration('a1','a2'));});
+import {MOVE_SPEEDS,normalizeMotion,moveDuration,replyDelay} from '../public/board-view.js';
+test('classic medium animation is consistent, configurable and respects accessibility',()=>{
+ assert.equal(normalizeMotion('unknown'),'medium');assert.equal(normalizeMotion('none'),'none');assert.equal(moveDuration(),250);assert.ok(MOVE_SPEEDS.slow>MOVE_SPEEDS.medium&&MOVE_SPEEDS.medium>MOVE_SPEEDS.fast);assert.equal(MOVE_SPEEDS.none,0);assert.ok(replyDelay()>moveDuration());
+ const previous=globalThis.matchMedia;globalThis.matchMedia=()=>({matches:true});try{assert.equal(moveDuration(),0);assert.equal(replyDelay(),0);}finally{if(previous===undefined)delete globalThis.matchMedia;else globalThis.matchMedia=previous;}
+});
+
+test('capture and castle animation overlay is removed on completion or interrupted move',async()=>{
+ const doc={createElement(tag){const el=new El(tag,doc);el.style={};el.classList={add(c){el.className+=' '+c;}};el.animate=(frames,options)=>{let resolve,reject;const finished=new Promise((a,b)=>{resolve=a;reject=b;});const anim={frames,options,finished,resolve,cancel(){reject(Error('cancelled'));}};animations.push(anim);return anim;};return el;},createDocumentFragment(){return new El('fragment',doc);}};
+ const old=globalThis.document,animations=[];globalThis.document=doc;
+ try{
+  const board=doc.createElement('div');board.isConnected=true;board.clientWidth=400;
+  renderBoardView(board,{rows:rows({e4:'wP',d5:'bP'})});
+  renderBoardView(board,{rows:rows({d5:'wP'}),animateMoves:[{from:'e4',to:'d5'}]});
+  const layer=board.children.at(-1);assert.equal(layer.className,'board-motion-layer');assert.equal(layer.children.length,2);
+  const img=board.children.find(c=>c.dataset.square==='d5').children.find(c=>c.tag==='img');
+  assert.equal(img.style.visibility,'hidden');assert.equal(animations[0].options.duration,250);
+  animations[0].resolve();await Promise.resolve();await Promise.resolve();assert.equal(board.children.length,64);assert.equal(img.style.visibility,'');
+  renderBoardView(board,{rows:rows({e1:'wK',h1:'wR'})});
+  renderBoardView(board,{rows:rows({g1:'wK',f1:'wR'}),animateMoves:[{from:'e1',to:'g1'}]});
+  assert.equal(board.children.at(-1).children.length,2);assert.equal(animations[1].options.duration,animations[2].options.duration);
+  clearBoardView(board);assert.equal(board.children.length,0);await Promise.resolve();
+ }finally{if(old===undefined)delete globalThis.document;else globalThis.document=old;}
+});

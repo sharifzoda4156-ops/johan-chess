@@ -5,8 +5,20 @@ const boards=new WeakMap();
 const key=p=>p?p.color+p.type.toUpperCase():'';
 export const reducedMotion=()=>globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches===true;
 export const scrollBehavior=()=>reducedMotion()?'auto':'smooth';
-export function moveDuration(from,to){const d=Math.hypot(from.charCodeAt(0)-to.charCodeAt(0),Number(from[1])-Number(to[1]));return Math.round(Math.min(320,210+18*d));}
-export const replyDelay=()=>reducedMotion()?0:360;
+// Original timings inspired by the ordinary Chess.com Medium setting, not proprietary constants.
+export const MOVE_SPEEDS=Object.freeze({slow:360,medium:250,fast:130,none:0});
+const MOTION_KEY='jc-board-motion-v1';
+let motionStyle='medium';
+export const normalizeMotion=value=>Object.hasOwn(MOVE_SPEEDS,value)?value:'medium';
+export const moveDuration=()=>reducedMotion()?0:MOVE_SPEEDS[motionStyle];
+export const replyDelay=()=>moveDuration()?moveDuration()+65:0;
+export function initBoardMotion(storage=globalThis.localStorage){
+ const select=document.getElementById('boardMotion');
+ if(!select)return;
+ try{motionStyle=normalizeMotion(storage.getItem(MOTION_KEY));}catch{motionStyle='medium';}
+ select.value=motionStyle;
+ select.onchange=()=>{motionStyle=normalizeMotion(select.value);try{storage.setItem(MOTION_KEY,motionStyle);}catch{}};
+}
 export function squareOrder(flip=false){
  const order=Array.from({length:8},(_,i)=>flip?7-i:i);
  return order.flatMap((r,ri)=>order.map((f,fi)=>({r,f,ri,fi,sq:'abcdefgh'[f]+(8-r)})));
@@ -43,7 +55,46 @@ export function planMotion(before,after,moves){
 function coord(doc,cls,value){
  const el=doc.createElement('span');el.className=cls;el.textContent=value;return el;
 }
-function stop(state){for(const a of state.animations)a.cancel();state.animations=[];}
+function stop(state){
+ const run=state.motion;if(!run)return;
+ state.motion=null;
+ for(const a of run.animations)a.cancel();
+ for(const img of run.hidden)img.style.visibility='';
+ run.layer.remove();
+}
+function showMotion(board,state,order,before,moves,motion,duration){
+ if(!motion.length||!duration||!board.isConnected||board.clientWidth<=0)return;
+ const doc=board.ownerDocument,layer=doc.createElement('div');
+ layer.className='board-motion-layer';layer.setAttribute('aria-hidden','true');
+ const run={layer,hidden:[],animations:[]};state.motion=run;board.append(layer);
+ function sprite(square,piece){
+  const pos=order.find(x=>x.sq===square),holder=doc.createElement('div');
+  holder.className='board-motion-piece';holder.style.left=pos.fi*12.5+'%';holder.style.top=pos.ri*12.5+'%';
+  holder.append(pieceGraphic({color:piece[0],type:piece[1].toLowerCase()}));layer.append(holder);return holder;
+ }
+ // Keep a captured piece visible until the mover arrives. En passant uses its actual square.
+ if(moves.length===1){
+  const m=moves[0],source=before.get(m.from);
+  const victim=before.get(m.to)?m.to:source?.[1]==='P'&&m.from[0]!==m.to[0]?m.to[0]+m.from[1]:null;
+  const captured=victim&&before.get(victim);
+  if(captured&&captured[0]!==source[0])sprite(victim,captured);
+ }
+ try{
+  for(const m of motion){
+   const img=state.cells.get(m.to)?.img;if(!img)continue;
+   const a=order.find(x=>x.sq===m.from),b=order.find(x=>x.sq===m.to);
+   // The pawn travels as a pawn; the chosen piece appears on arrival.
+   const holder=sprite(m.from,before.get(m.from)||m.piece);
+   holder.classList.add('board-motion-moving');
+   if(!holder.animate){stop(state);return;}
+   img.style.visibility='hidden';run.hidden.push(img);
+   const anim=holder.animate([{transform:'translate(0,0)'},{transform:'translate('+((b.fi-a.fi)*100)+'%,'+((b.ri-a.ri)*100)+'%)'}],{duration,easing:'cubic-bezier(.25,.46,.45,.94)',fill:'forwards'});
+   run.animations.push(anim);
+  }
+  if(!run.animations.length){stop(state);return;}
+  Promise.all(run.animations.map(a=>a.finished)).then(()=>{if(state.motion===run)stop(state);},()=>{if(state.motion===run)stop(state);});
+ }catch{if(state.motion===run)stop(state);}
+}
 export function clearBoardView(board){
  const state=boards.get(board);if(state)stop(state);
  boards.delete(board);board.replaceChildren();
@@ -53,7 +104,7 @@ export function renderBoardView(board,{rows,flip=false,interactive=false,disable
  let state=boards.get(board);
  if(!state||state.flip!==flip||state.interactive!==interactive){
   if(state)stop(state);
-  state={flip,interactive,cells:new Map(),positions:null,animations:[],onClick};
+  state={flip,interactive,cells:new Map(),positions:null,motion:null,onClick};
   const frag=doc.createDocumentFragment();
   for(const {sq,r,f,ri,fi} of order){
    const cell=doc.createElement(interactive?'button':'div');
@@ -68,7 +119,9 @@ export function renderBoardView(board,{rows,flip=false,interactive=false,disable
  }
  state.onClick=onClick;
  const changed=!state.positions||[...next].some(([sq,p])=>state.positions.get(sq)!==p);
- const motion=changed&&!reducedMotion()?planMotion(state.positions,next,animateMoves):[];
+ const before=state.positions,duration=moveDuration();
+ // Multi-ply jumps are immediate; callers showing replies render each ply separately.
+ const motion=changed&&duration&&animateMoves.length===1?planMotion(before,next,animateMoves):[];
  if(changed)stop(state);
  const targetSet=new Set(targets),markedSet=new Set(marked);
  for(const {sq,r,f} of order){
@@ -89,15 +142,5 @@ export function renderBoardView(board,{rows,flip=false,interactive=false,disable
   }
  }
  state.positions=next;
- if(motion.length&&board.isConnected){
-  const size=board.clientWidth/8;
-  if(size>0)for(const m of motion){
-   const img=state.cells.get(m.to)?.img;
-   if(!img?.animate)continue;
-   const a=order.find(x=>x.sq===m.from),b=order.find(x=>x.sq===m.to);
-   const x=(a.fi-b.fi)*size,y=(a.ri-b.ri)*size;
-   const animation=img.animate([{transform:'translate('+x+'px,'+y+'px)',zIndex:4},{transform:'translate(0,0)',zIndex:4}],{duration:moveDuration(m.from,m.to),easing:'cubic-bezier(.25,.65,.35,1)'});
-   state.animations.push(animation);
-  }
- }
+ showMotion(board,state,order,before,animateMoves,motion,duration);
 }

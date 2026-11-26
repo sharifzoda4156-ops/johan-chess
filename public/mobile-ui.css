@@ -287,3 +287,12 @@ body.is-online-playing .app-header,body.is-online-playing .bottom-nav,body.is-on
 
 #aiHistory{max-height:min(52dvh,520px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
 #aiHistory:empty{display:none}
+
+/* Pieces glide above squares, not inside their stacking contexts. */
+#board,#playBoard,#puzzleBoard,#studyBoard,.mini-board{position:relative}
+.board-motion-layer{position:absolute;inset:0;pointer-events:none;z-index:15;overflow:hidden}
+.board-motion-piece{position:absolute;display:grid;place-items:center;width:12.5%;height:12.5%;pointer-events:none}
+.board-motion-piece .piece-image{display:block;width:96%;height:96%;object-fit:contain;pointer-events:none}
+.board-motion-moving{z-index:1}
+.board-motion-setting{display:grid;gap:6px;margin:12px 0;font-size:14px}
+.board-motion-setting select{width:100%}
