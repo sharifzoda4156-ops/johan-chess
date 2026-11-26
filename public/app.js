@@ -101,7 +101,7 @@ training=initTraining({
 });
 $('askReview').onclick=()=>{
  if(!game||training.active()||!results.length||!globalThis.JohanNative)return;
- $('aiShare').checked=true;
+ navigation.show('coach');$('aiShare').checked=true;
  $('aiQuestion').value='Разбери мою партию по данным Stockfish. Выдели главные ошибки, объясни их причины и предложи конкретную тренировку. Задай мне вопрос о том, что я рассчитывал в критической позиции.';
- navigation.show('coach');$('aiPanel').scrollIntoView({behavior:'smooth'});$('aiQuestion').focus();
+ $('aiPanel').scrollIntoView({behavior:'smooth'});$('aiQuestion').focus();
 };
