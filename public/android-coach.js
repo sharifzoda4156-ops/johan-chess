@@ -32,7 +32,8 @@ function showHistory(){
 }
 function syncStatus(s){
  active=Boolean(s.sharing);
- $('aiAccount').textContent=s.connected?(s.email||'ChatGPT'):'Не подключён';
+ document.dispatchEvent(new CustomEvent('jc-account',{detail:{connected:!!s.connected,sharing:!!s.sharing,name:typeof s.name==='string'?s.name:''}}));
+ $('aiAccount').textContent=s.connected?(s.name||'ChatGPT'):'Не подключён';
  $('aiLogin').textContent=s.connected?'Повторить вход':'Continue with ChatGPT';
  $('aiConsent').hidden=!s.connected||s.sharing;
  $('aiLogout').hidden=!s.connected;

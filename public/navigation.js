@@ -1,4 +1,4 @@
-export function normalizeScreen(requested,playing){return playing?'play':['home','puzzles','play','review','coach'].includes(requested)?requested:'home';}
+export function normalizeScreen(requested,playing){return playing?'play':['home','puzzles','play','review','coach','profile'].includes(requested)?requested:'home';}
 export function parentTab(screen){return ['play','review'].includes(screen)?'home':screen;}
 export function initNavigation(){
  let playing=false,screen='home';
