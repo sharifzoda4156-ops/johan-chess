@@ -64,7 +64,7 @@ training=initTraining({
  getUser:()=>$('user').value.trim(),
  lock:()=>{$('importPanel').hidden=true;$('review').hidden=true;$('aiPanel').hidden=true;},
  unlock:()=>{$('importPanel').hidden=false;$('review').hidden=!game;$('aiPanel').hidden=!globalThis.JohanNative;},
- review:(text,auto)=>{if(!load(text))return;$('review').scrollIntoView({behavior:'smooth'});if(auto)$('analyze').click();}
+ review:(text,auto,user)=>{if(user)$('user').value=user;if(pgn!==text||!game){if(!load(text))return;}$('review').scrollIntoView({behavior:'smooth'});if(auto&&results.length!==moves.length)$('analyze').click();}
 });
 $('askReview').onclick=()=>{
  if(!game||training.active()||!results.length||!globalThis.JohanNative)return;
