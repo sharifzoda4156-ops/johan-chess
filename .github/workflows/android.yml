@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: f2a3fb4ab76b18870d8fcacb6d519bc5e3912de1
+          ref: e8978021fde7bdff44d46e43935f175e5690cc94
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -50,5 +50,5 @@ jobs:
           sha256sum "$APK"
       - uses: actions/upload-artifact@v4
         with:
-          name: Johan-Chess-Android-debug-f2a3fb4
+          name: Johan-Chess-Android-debug-e897802
           path: android/app/build/outputs/apk/debug/app-debug.apk
