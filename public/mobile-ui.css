@@ -372,3 +372,7 @@ body:not(.review-board-focus) #review>.layout{grid-template-columns:minmax(0,1fr
 .review-title{display:flex;flex-direction:column;min-width:0;align-items:center;flex:1;gap:1px}
 #reviewBoardStatus{font-size:10px;letter-spacing:0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:100%;line-height:1.2}
 @media(orientation:landscape) and (max-height:550px){.review-title .game-title{font-size:15px}.game-topbar button{min-height:34px}.game-toolbar button{min-height:42px}}
+
+/* Reset older ID-specific scrolling/card rules in the fixed game workspace. */
+#playMoves.game-move-strip{height:32px;min-height:32px;max-height:32px;margin:0;padding:6px 12px;overflow-x:auto;overflow-y:hidden;border-radius:0;line-height:20px}
+@media(orientation:landscape) and (max-height:550px){#playMoves.game-move-strip{height:26px;min-height:26px;max-height:26px;padding-block:3px}}
