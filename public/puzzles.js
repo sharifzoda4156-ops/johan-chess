@@ -111,4 +111,5 @@ export function initPuzzles(getUser){
   else stats();
  }
  document.addEventListener('jc-screen',e=>{if(e.detail==='puzzles')enter();});
+ return {selectTheme(theme){if([...$('puzzleTheme').options].some(o=>o.value===theme)){$('puzzleTheme').value=theme;lastId=null;if(pack&&!starting)start();}}};
 }
