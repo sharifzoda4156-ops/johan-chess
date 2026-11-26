@@ -20,6 +20,11 @@ final class ChessImport {
             }
         } finally { c.disconnect(); }
     }
+    static JSONObject stats(String name)throws Exception {
+        String user=name==null?"":name.toLowerCase(Locale.ROOT);
+        if(!user.matches("[a-z0-9_-]{1,40}"))throw new IOException("Некорректный ник");
+        return get(user+"/stats");
+    }
     static JSONObject games(String name)throws Exception {
         String user=name==null?"":name.toLowerCase(Locale.ROOT);
         if(!user.matches("[a-z0-9_-]{1,40}"))throw new IOException("Некорректный ник");

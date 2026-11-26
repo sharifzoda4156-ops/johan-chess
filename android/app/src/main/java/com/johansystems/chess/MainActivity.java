@@ -41,6 +41,10 @@ public final class MainActivity extends Activity {
                     try { return response(200, PuzzleDownload.get(u)); }
                     catch(Exception e) { return response(502, "{\"error\":\"Puzzle data unavailable\"}"); }
                 }
+                if ("/api/player-stats".equals(u.getPath()) && "GET".equals(r.getMethod())) {
+                    try { return response(200, ChessImport.stats(u.getQueryParameter("user")).toString()); }
+                    catch(Exception e) { return response(502, "{\"error\":\"Chess.com stats unavailable\"}"); }
+                }
                 if ("/api/games".equals(u.getPath()) && "GET".equals(r.getMethod())) {
                     try { return response(200, ChessImport.games(u.getQueryParameter("user")).toString()); }
                     catch(Exception e) { return response(502, "{\"error\":\"Не удалось импортировать партии. Вставь PGN вручную.\"}"); }

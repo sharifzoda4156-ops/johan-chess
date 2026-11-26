@@ -2,6 +2,7 @@ import {initStudyLibrary} from './study-library.js';
 import {TOPICS} from './puzzle-training.js';
 import {initPuzzles,getPuzzleProgress,getPuzzleTraining} from './puzzles.js';
 import {displayName,profileStats} from './profile-core.js';
+import {initProfileDashboard} from './profile-dashboard.js';
 import {initThemes} from './piece-art.js';
 import {renderBoardView,scrollBehavior} from './board-view.js';
 import {initNavigation} from './navigation.js';
@@ -53,7 +54,7 @@ $('analyze').onclick=async()=>{
  const metrics=evaluateMove(best.score,played.score,isBest);const c=new Chess(m.before);let bestSan=best.best;try{bestSan=c.move({from:best.best.slice(0,2),to:best.best.slice(2,4),...(best.best.length>4?{promotion:best.best[4]}:{})}).san;}catch{};
  const continuation=new Chess(m.before),pv=[];for(const u of best.pv.slice(0,6)){try{pv.push(continuation.move({from:u.slice(0,2),to:u.slice(2,4),...(u.length>4?{promotion:u[4]}:{})}).san);}catch{break;}}
  results.push({index:i,color:m.color,san:m.san,move:actualMove,best:best.best,bestSan,pv,bestScore:best.score,playedScore:played.score,...metrics});prefix.push(actualMove);progress.value=i+1;renderReport();renderCoach();}
- const completedContext=coachContext();if(!historical)rememberGame(completedContext);status('Анализ завершён. Выбери ошибку для разбора.');$('export').disabled=false;
+ const completedContext=coachContext();if(!historical){rememberGame(completedContext);refreshProfile();}status('Анализ завершён. Выбери ошибку для разбора.');$('export').disabled=false;
  }catch(e){if(id===runId)status('Анализ прерван: '+e.message);}finally{if(id===runId){local?.close();engine=null;setBusy(false);render();$('export').disabled=!results.length;}}
 };
 $('stop').onclick=()=>{runId++;engine?.close();engine=null;setBusy(false);status('Анализ остановлен. Частичный отчёт сохранён на экране.');$('export').disabled=!results.length;render();};
@@ -108,10 +109,13 @@ function coachContext(){
 }
 $('coachUnavailable').hidden=!!globalThis.JohanNative;
 let accountStatus=null;
+try{const nick=localStorage.getItem('jc-profile-nick');if(/^[a-zA-Z0-9_-]{1,40}$/.test(nick||''))$('user').value=nick;}catch{}
+const dashboard=initProfileDashboard({Chess,getUser:()=>$('user').value.trim(),setUser:nick=>{if(busy||importing||training?.active())return false;$('user').value=nick;imported=[];$('games').hidden=true;$('review').hidden=true;game=null;pgn='';historical=null;results=[];$('analyze').disabled=true;try{localStorage.setItem('jc-profile-nick',nick);}catch{}refreshProfile();document.dispatchEvent(new CustomEvent('jc-profile-user',{detail:nick}));return true;},openGame:text=>{if(busy||importing||training?.active())return false;navigation.show('review');if(!load(text))return false;$('games').hidden=true;$('review').scrollIntoView({behavior:scrollBehavior()});return true;},canSync:()=>!busy&&!importing&&!training?.active()});
 function readLocal(key){try{const rows=JSON.parse(localStorage.getItem(key)||'[]');return Array.isArray(rows)?rows:[];}catch{return [];}}
 function refreshProfile(){
  const user=$('user').value.trim(),nick=user.toLowerCase();
- const s=profileStats(readLocal('jc-training-history-v1'),readLocal('jc-coach-games:'+nick),user,Chess);
+ const local=readLocal('jc-training-history-v1'),reviews=readLocal('jc-coach-games:'+nick);
+ const s=profileStats(local,reviews,user,Chess);
  const tactics=getPuzzleTraining(user);
  $('profilePuzzleTarget').textContent=String(tactics.target);$('profilePuzzleAttempts').textContent=String(tactics.attempts);$('profilePuzzleSkipped').textContent=String(tactics.skipped);$('profilePuzzleAccuracy').textContent=tactics.accuracy===null?'—':tactics.accuracy+'%';
  const topicList=$('profilePuzzleTopics');topicList.replaceChildren();
@@ -123,10 +127,13 @@ function refreshProfile(){
  $('profileNick').textContent=user?'Chess.com · '+user:'';
  $('profileConnection').textContent=accountStatus?.connected?(accountStatus.sharing?'ChatGPT подключён':'ChatGPT · требуется разрешение плана'):'ChatGPT не подключён';
  $('profileConnect').textContent=accountStatus?.connected?'Настройки ChatGPT':'Подключить ChatGPT';
+ $('profileConnect').hidden=!globalThis.JohanNative;
+ if(!globalThis.JohanNative)$('profileConnection').textContent='ChatGPT доступен в Android';
  $('profilePlayed').textContent=String(s.played);$('profileReviewed').textContent=String(s.reviewed);
  $('profileAccuracy').textContent=s.accuracy===null?'—':s.accuracy.toFixed(1)+'%';
  for(const [id,n] of [['Wins',s.wins],['Draws',s.draws],['Losses',s.losses]])$('profile'+id).textContent=String(n);
  for(const [id,n] of [['Win',s.wins],['Draw',s.draws],['Loss',s.losses]])$('profile'+id+'Bar').style.width=(s.played?100*n/s.played:0)+'%';
+ dashboard.update({local,reviews,stats:s,puzzles});
 }
 document.addEventListener('jc-screen',e=>{if(['home','profile'].includes(e.detail))refreshProfile();});
 document.addEventListener('jc-puzzle-progress',refreshProfile);
