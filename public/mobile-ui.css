@@ -1,39 +1,39 @@
-/* Mobile-first refinement; preserve every selected board/piece theme. */
+/* Midnight & Brass mobile design. The board has independent theme tokens. */
 :root{
- --surface:#302e2b;--surface-raised:#383631;--surface-inset:#242320;
- --ink:#f5f2eb;--muted:#bcb8ae;--accent:#a9ce79;--line:#45423d;
+ --app-bg:#111822;--chrome:#131d29;--surface:#202c3b;--surface-raised:#2a394b;--surface-inset:#17212e;
+ --ink:#f0f2f5;--on-accent:#241e16;--success:#8bd2ac;--danger:#f49c99;--muted:#a6b1c0;--accent:#d8b77d;--line:#354357;
  --radius:14px;--motion-fast:110ms;--motion-standard:180ms;
  -webkit-tap-highlight-color:transparent;
 }
-body{color:var(--ink);overscroll-behavior-y:none}
+body{background:var(--app-bg);color:var(--ink);overscroll-behavior-y:none}
 main{padding-bottom:calc(88px + env(safe-area-inset-bottom,0px))}
-.app-header{min-height:68px;padding-top:max(12px,env(safe-area-inset-top,0px));border-bottom:1px solid #3b3934}
+.app-header{min-height:68px;padding-top:max(12px,env(safe-area-inset-top,0px));border-bottom:1px solid #354357}
 .brand-mark{border-radius:12px}
 .brand h1{font-size:22px;font-weight:780;letter-spacing:-.7px}
-.panel{background:var(--surface);border-radius:var(--radius);box-shadow:none;border:1px solid #3e3b36}
+.panel{background:var(--surface);border-radius:var(--radius);box-shadow:none;border:1px solid #354357}
 h2{font-weight:740;letter-spacing:-.45px}
 .section-eyebrow{letter-spacing:1.5px;font-size:11px}
 button,input,textarea,select,.filebtn{min-height:48px;border-radius:10px}
 button,.filebtn,summary{touch-action:manipulation}
 button{transition:background-color var(--motion-fast) ease,color var(--motion-fast) ease,border-color var(--motion-fast) ease}
-button:not(:disabled):active{filter:none;background-color:#514e46}
-button.primary:not(:disabled):active,#analyze:not(:disabled):active,#playReview:not(:disabled):active,#askReview:not(:disabled):active{background:#90b75e;color:#1d2817;box-shadow:none}
-.primary,#analyze,#playReview,#askReview{background:var(--accent);color:#1e2918;box-shadow:none;border:1px solid transparent}
+button:not(:disabled):active{filter:none;background-color:#3b4b60}
+button.primary:not(:disabled):active,#analyze:not(:disabled):active,#playReview:not(:disabled):active,#askReview:not(:disabled):active{background:#c5a66e;color:#241e16;box-shadow:none}
+.primary,#analyze,#playReview,#askReview{background:var(--accent);color:var(--on-accent);box-shadow:none;border:1px solid transparent}
 .wide{min-height:54px}
-.home-hero{background:linear-gradient(125deg,#293b27,#394e2d 65%,#50633a);border:1px solid #536647;border-radius:18px;box-shadow:none;min-height:174px}
-.home-hero h2{font-size:29px;line-height:1.15;letter-spacing:-.8px}
-.home-hero p{color:#e2e8d8}
-.hero-knight{opacity:.32;right:3%;bottom:-28px;pointer-events:none}
+.home-hero{background:linear-gradient(135deg,#202c3b,#28374a);border:1px solid #455770;border-radius:18px;box-shadow:none;min-height:188px;isolation:isolate}
+.home-hero h2{font-size:27px;line-height:1.15;letter-spacing:-.8px;margin:8px 0}
+.home-hero p{color:#d4dde8}
+.hero-knight{opacity:.65;right:6%;bottom:16px;font-size:100px;transform:rotate(-9deg);pointer-events:none;color:var(--accent);z-index:-1}
 .home-section{margin-bottom:24px}
 .home-tile{background:var(--surface);border-radius:var(--radius);padding:13px;min-height:74px;border:1px solid var(--line)}
 .tile-icon{border-radius:12px}
 .home-tile strong{font-weight:700}.home-tile small{line-height:1.35;color:var(--muted)}
-.home-stats>div,.profile-stats>div,.puzzle-stats>div{background:var(--surface-inset);border-radius:12px;border:1px solid #403d38}
-.home-play-bar{bottom:calc(72px + env(safe-area-inset-bottom,0px));padding:10px 0 6px}
+.home-stats>div,.profile-stats>div,.puzzle-stats>div{background:var(--surface-inset);border-radius:12px;border:1px solid #354357}
+.home-hero .primary{min-width:142px;margin-top:5px}
 .bottom-nav{min-height:68px;padding:5px max(10px,env(safe-area-inset-left,0px)) calc(5px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);box-shadow:none}
 .bottom-nav button{border-radius:12px;min-height:56px;font-weight:650;gap:4px}
-.bottom-nav button[aria-current=page]{background:#3d4832;color:#c4e49a}
-.bottom-nav button:not([aria-current=page]):not(:disabled):active{background:#35332e}
+.bottom-nav button[aria-current=page]{background:#3a342c;color:#e7c994}
+.bottom-nav button:not([aria-current=page]):not(:disabled):active{background:#263447}
 .bottom-nav svg{width:24px;height:24px}
 .screen-back{min-height:48px;padding-inline:10px}
 #board,#playBoard,#puzzleBoard,#studyBoard,.mini-board{isolation:isolate;border-radius:6px;box-shadow:none;user-select:none;-webkit-user-select:none}
@@ -72,7 +72,7 @@ input[type=checkbox]{width:20px;height:20px;min-height:0;vertical-align:middle;a
  .home-hero{padding:18px}
 }
 @media(max-width:360px){
- .home-hero>div{max-width:88%}.hero-knight{opacity:.18}
+ .home-hero>div{max-width:88%}.hero-knight{opacity:.22;right:4%;bottom:10px}
  .nav{gap:3px}.nav button{padding-inline:4px;font-size:18px}
  .nav span{min-width:38px}
  .move{grid-template-columns:54px minmax(0,1fr) 52px;gap:4px}
@@ -81,3 +81,26 @@ input[type=checkbox]{width:20px;height:20px;min-height:0;vertical-align:middle;a
 @media(prefers-reduced-motion:reduce){
  *,*::before,*::after{animation-duration:0.01ms!important;transition-duration:0.01ms!important;scroll-behavior:auto!important}
 }
+
+/* Brand palette is not a board theme. Use green only for positive feedback. */
+:root{background:var(--app-bg);color:var(--ink);--panel:var(--surface);--deep:var(--surface-inset)}
+.app-header,.bottom-nav{background:var(--chrome)}
+.brand-mark{background:#302b26;color:var(--accent);border:1px solid #66543a}
+.brand h1 span,.section-eyebrow{color:var(--accent)}
+.pill{background:#263447;color:#d4dde8}
+.tile-icon{background:#2a394b;color:#e7c994}
+.puzzle-icon{background:#3a342c;color:#e7c994}
+.home-hero .section-eyebrow{color:#e7c994;letter-spacing:1.2px}
+.home-hero p{max-width:250px}
+.home-hero>div{max-width:76%}
+.home-hero .primary{padding-inline:22px}
+.home-tile:not(:disabled):active{background:#2a394b}
+.home-tile .chevron{color:#a6b1c0}
+.move.active,.theme-option[aria-pressed=true],.study-opening-moves button.active,.mini-controls button[aria-pressed=true]{background:#3a342c;color:#f0f2f5}
+.theme-option[aria-pressed=true]{border-color:var(--accent)}
+.best,.puzzle-success,.profile-connection{color:var(--success)}
+#profileWinBar{background:var(--success)}
+#profileLossBar{background:var(--danger)}
+.puzzle-wrong,.blunder{color:var(--danger)}
+#playBoard .square:focus-visible,#puzzleBoard .square:focus-visible{outline-color:#192737}
+@media(max-width:360px){.home-hero>div{max-width:88%}}

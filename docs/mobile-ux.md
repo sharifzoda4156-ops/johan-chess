@@ -8,3 +8,6 @@ Reference patterns (not copied assets/code): [Lichess mobile](https://github.com
  
 ## Device acceptance (not measured by unit tests)
 Run npm test and the Android build. On a physical Android device with WebView remote debugging, record Chrome DevTools Performance during repeated piece selections, bot replies, puzzle solving, flipping, long-game analysis and switching tabs. Target no persistent long tasks on interaction; 16.7 ms/frame at 60 Hz, 8.3 ms at 120 Hz where supported. Check reduced motion, 320/360/412 px portrait, landscape, screen reader focus and themes. Engine/network response time is separate from UI response. Verify move capture, castling, promotion, en passant and rapid taps. No FPS claim until profiled on hardware.
+
+## Visual identity: Midnight & Brass
+The app uses navy/graphite surfaces (#111822, #202C3B), brass actions (#D8B77D) and pale text (#F0F2F5). Green is semantic feedback only, or a selected chessboard theme. The five board themes and their artwork are unchanged. The home screen has one primary play action and separate training, coaching and analysis tiles. Android system bars and web theme-color match the chrome. Visual review on hardware is still required.

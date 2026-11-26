@@ -21,8 +21,8 @@ public final class MainActivity extends Activity {
         super.onCreate(b);
         web = new WebView(this);
         setContentView(web);
-        getWindow().setStatusBarColor(0xff211f1d);
-        getWindow().setNavigationBarColor(0xff211f1d);
+        getWindow().setStatusBarColor(0xff131d29);
+        getWindow().setNavigationBarColor(0xff131d29);
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
