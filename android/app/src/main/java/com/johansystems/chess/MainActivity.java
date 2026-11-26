@@ -1,6 +1,8 @@
 package com.johansystems.chess;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.view.WindowManager;
 import android.os.Bundle;
 import android.net.Uri;
 import android.webkit.*;
@@ -61,7 +63,7 @@ public final class MainActivity extends Activity {
         });
         web.setDownloadListener((url,agent,disposition,mime,length)->{});
         try { coach=new Coach(this); } catch(Exception ignored) {}
-        try { lichess=new Lichess(this); } catch(Exception ignored) {}
+        try { lichess=new Lichess(this);onlineSecure(lichess.locked()); } catch(Exception ignored) {}
         if(WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)){
             WebViewCompat.addWebMessageListener(web,"JohanNative",Collections.singleton(ORIGIN),(view,msg,origin,main,reply)->{
                 if(!main||!ORIGIN.equals(origin.toString()))return;
@@ -74,7 +76,9 @@ public final class MainActivity extends Activity {
                         out.put("id",req.getString("id"));
                         if(coach==null)throw new IOException("Защищённое хранилище недоступно");
                         if(lichess!=null&&lichess.locked()&&Arrays.asList("ask","continueCoach").contains(req.optString("op")))throw new IOException("ИИ недоступен во время онлайн-партии");
-                        out.put("data",coach.handle(req));
+                        JSONObject data=coach.handle(req);
+                        if(lichess!=null&&lichess.locked()&&Arrays.asList("ask","continueCoach").contains(req.optString("op")))throw new IOException("ИИ недоступен во время онлайн-партии");
+                        out.put("data",data);
                     } catch(Exception e) {
                         try { out.put("error", e.getMessage()==null?"Ошибка подключения":e.getMessage()); } catch(Exception ignored){}
                     }
@@ -104,6 +108,26 @@ public final class MainActivity extends Activity {
         });
     }
     void shareLichess(String url){runOnUiThread(()->{Intent intent=new Intent(Intent.ACTION_SEND);intent.setType("text/plain");intent.putExtra(Intent.EXTRA_TEXT,url);startActivity(Intent.createChooser(intent,"Поделиться профилем Lichess"));});}
+    void onlineSecure(boolean locked){
+        runOnUiThread(()->{if(isDestroyed())return;
+            if(locked)getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        });
+    }
+    void runLichessMaintenance(Runnable task){if(!lichessExecutor.isShutdown())lichessExecutor.execute(task);}
+    @Override protected void onResume(){super.onResume();if(lichess!=null)lichess.foreground(true);}
+    @Override protected void onPause(){if(lichess!=null)lichess.foreground(false);super.onPause();}
+    @Override public void onBackPressed(){
+        if(lichess!=null&&lichess.liveGame()){
+            new AlertDialog.Builder(this).setTitle("Покинуть онлайн-партию?")
+                .setMessage("Выход считается сдачей. Остаться можно без штрафа.")
+                .setNegativeButton("Продолжить игру",null)
+                .setPositiveButton("Сдаться",(dialog,which)->lichess.forfeitNow()).show();
+            return;
+        }
+        if(lichess!=null&&lichess.locked())return;
+        super.onBackPressed();
+    }
     @Override protected void onDestroy() {
         if(lichess!=null)lichess.close();lichessExecutor.shutdownNow();
         if(coach!=null)coach.cancelLogin();

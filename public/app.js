@@ -11,7 +11,7 @@ import {initOnline} from './online.js';
 import {initCoach,rememberGame,coachBusy} from './android-coach.js';
 import {Chess} from './chess.js';
 import {normalizePgn,splitPgn,buildPgn} from './pgn.js';
-import {Engine} from './engine.js';
+import {Engine,setEngineOnlineLock} from './engine.js';
 import {enginePath} from './engine-path.js';
 import {evaluateMove,displayScore,scoreValue} from './metrics.js';
 const $=id=>document.getElementById(id), status=t=>$('status').textContent=t;
@@ -153,7 +153,7 @@ training=initTraining({
 });
 initOnline({
  canStart:()=>!onlineLocked&&!busy&&!importing&&!training?.active()&&!coachBusy(),
- lock:value=>{onlineLocked=value;if(value){if(busy)$('stop').click();training?.interrupt();}navigation.setOnline(value);},
+ lock:value=>{onlineLocked=value;setEngineOnlineLock(value);if(value){if(busy)$('stop').click();training?.interrupt();}navigation.setOnline(value);},
  review:(text,nick)=>{if(onlineLocked||busy||importing||training?.active())return;navigation.show('review');if(load(text)){onlineReviewName=nick;flipped=own()==='b';render();$('games').hidden=true;$('analyze').click();}}
 });
 initStudyLibrary({
