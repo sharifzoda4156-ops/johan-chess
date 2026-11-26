@@ -3,3 +3,9 @@ public/engine/
 public/chess.js
 public/engine-path.js
 package-lock.json
+
+android/.gradle/
+android/**/build/
+android/local.properties
+*.jks
+*.keystore
