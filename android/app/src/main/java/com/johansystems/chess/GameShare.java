@@ -1,7 +1,6 @@
 package com.johansystems.chess;
 import android.content.*;
 import android.net.Uri;
-import android.os.Build;
 import androidx.core.content.FileProvider;
 import org.json.*;
 import java.io.*;
@@ -61,10 +60,11 @@ final class GameShare {
     }
     void share(String pgn,boolean file)throws Exception{
         if(pgn.isEmpty()||pgn.length()>LIMIT||pgn.getBytes(StandardCharsets.UTF_8).length>LIMIT)throw new IOException("Неверный размер PGN");
+        if(!file&&pgn.length()>64000)throw new IOException("Для большой партии выбери передачу файлом PGN");
         Intent i=new Intent(Intent.ACTION_SEND);
         if(file){
             File dir=new File(activity.getCacheDir(),"shared-pgn");if(!dir.isDirectory()&&!dir.mkdirs())throw new IOException("Не удалось подготовить файл");
-            File[] old=dir.listFiles();if(old!=null)for(File x:old)if(System.currentTimeMillis()-x.lastModified()>86400000L)x.delete();
+            File[] old=dir.listFiles();if(old!=null){Arrays.sort(old,Comparator.comparingLong(File::lastModified));for(int j=0;j<old.length;j++)if(j<old.length-19||System.currentTimeMillis()-old[j].lastModified()>86400000L)old[j].delete();}
             File target=File.createTempFile("johan-chess-",".pgn",dir);
             try(FileOutputStream out=new FileOutputStream(target)){out.write(pgn.getBytes(StandardCharsets.UTF_8));}
             Uri uri=FileProvider.getUriForFile(activity,activity.getPackageName()+".share",target);

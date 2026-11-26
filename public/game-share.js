@@ -4,7 +4,7 @@ let seq=0;const pending=new Map();
 if(native)native.onmessage=e=>{try{const m=JSON.parse(e.data),p=pending.get(m.id);if(!p)return;clearTimeout(p.timer);pending.delete(m.id);m.error?p.reject(Error(m.error)):p.resolve(m.data);}catch{}};
 function call(op,args={}){if(!native)return Promise.reject(Error('Передача доступна в Android'));return new Promise((resolve,reject)=>{const id=String(++seq),timer=setTimeout(()=>{pending.delete(id);reject(Error('Не удалось получить партию'));},100000);pending.set(id,{resolve,reject,timer});try{native.postMessage(JSON.stringify({id,op,...args}));}catch(e){clearTimeout(timer);pending.delete(id);reject(e);}});}
 export function initGameShare({Chess,canUse,open,user,exportPgn,notice}){
- const say=t=>notice(t);let processing=false,current=null,checking=false;
+ const say=t=>notice(t);let processing=false,current=null,checking=false,opened=null;
  $('sharePgnFile').hidden=!native;$('sharePgnText').hidden=!native;
  $('sharedInput').placeholder='PGN или ссылка Chess.com / Lichess';
  async function importValue(raw){
@@ -19,8 +19,8 @@ export function initGameShare({Chess,canUse,open,user,exportPgn,notice}){
  async function process(raw,item){
   if(processing||!canUse())return;processing=true;$('shareImport').disabled=true;
   try{
-   await importValue(raw);
-   if(item){await call('ack',{itemId:item});current=null;}
+   if(!item||opened!==item){await importValue(raw);if(item)opened=item;}
+   if(item){await call('ack',{itemId:item});current=null;opened=null;}
    $('sharedInput').value='';$('sharedPending').hidden=true;
   }catch(e){say(e.message);$('sharedPending').hidden=!current; }
   finally{processing=false;$('shareImport').disabled=false;}
@@ -36,7 +36,7 @@ export function initGameShare({Chess,canUse,open,user,exportPgn,notice}){
   }catch{}finally{checking=false;}
  }
  $('shareImport').onclick=()=>process($('sharedInput').value,current);
- $('shareDiscard').onclick=async()=>{if(!current||processing||!canUse())return;try{await call('ack',{itemId:current});current=null;$('sharedPending').hidden=true;$('sharedInput').value='';}catch(e){say(e.message);}};
+ $('shareDiscard').onclick=async()=>{if(!current||processing||!canUse())return;try{await call('ack',{itemId:current});current=null;opened=null;$('sharedPending').hidden=true;$('sharedInput').value='';}catch(e){say(e.message);}};
  for(const [id,file] of [['sharePgnFile',true],['sharePgnText',false]])$(id).onclick=async()=>{
   if(!canUse())return;const pgn=exportPgn();if(!pgn)return;
   try{validatedSharedPgn(pgn,Chess);await call('share',{pgn,file});}catch(e){say(e.message);}
