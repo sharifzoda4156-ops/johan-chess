@@ -1,3 +1,4 @@
+import {snapshotBoards,renderCoachContent} from './coach-board.js';
 const $=id=>document.getElementById(id);
 const native=globalThis.JohanNative;
 const pending=new Map();
@@ -18,15 +19,15 @@ function key(user){return 'jc-coach-games:'+String(user||'').toLowerCase().trim(
 function getGames(user){try{return JSON.parse(localStorage.getItem(key(user))||'[]');}catch{return [];}}
 export function rememberGame(context){
  if(!context?.game||!context.user||!context.game.complete||!['1-0','0-1','1/2-1/2'].includes(context.game.result))return;
- const g=context.game, own=g.color;
+ const g=context.game, own=g.color;if(!['w','b'].includes(own))return;
  const rs=(g.analysis||[]).filter(r=>r.color===own);
- const fingerprint=g.white+'|'+g.black+'|'+g.date+'|'+g.moves.join(' ');
- const record={id:fingerprint,date:g.date,white:g.white,black:g.black,result:g.result,color:own,depth:g.depth,accuracy:rs.length?rs.reduce((a,r)=>a+r.accuracy,0)/rs.length:null,errors:rs.filter(r=>r.loss>=5).sort((a,b)=>b.loss-a.loss).slice(0,5).map(r=>({index:r.index,san:r.san,best:r.bestSan,loss:r.loss,label:r.label,pv:r.pv}))};
+ const fingerprint=g.white+'|'+g.black+'|'+g.date+'|'+g.startFen+'|'+g.moves.join(' ');
+ const record={id:fingerprint,source:g.source||'import',date:g.date,white:g.white,black:g.black,result:g.result,color:own,depth:g.depth,accuracy:rs.length?rs.reduce((a,r)=>a+r.accuracy,0)/rs.length:null,errors:rs.filter(r=>r.loss>=5).sort((a,b)=>b.loss-a.loss).slice(0,5).map(r=>({index:r.index,san:r.san,best:r.bestSan,loss:r.loss,label:r.label,pv:r.pv}))};
  try{const saved=getGames(context.user).filter(r=>r.id!==fingerprint);localStorage.setItem(key(context.user),JSON.stringify([record,...saved].slice(0,30)));}catch{}
 }
 function showHistory(){
  const list=$('aiHistory');list.replaceChildren();
- for(const m of history){const el=document.createElement('div');el.className='ai-message '+m.role;const name=document.createElement('b');name.textContent=m.role==='assistant'?'Тренер':'Ты';const body=document.createElement('div');body.textContent=m.content;el.append(name,body);list.append(el);}
+ for(const m of history){const el=document.createElement('div');el.className='ai-message '+m.role;const name=document.createElement('b');name.textContent=m.role==='assistant'?'Тренер':'Ты';const body=document.createElement('div');renderCoachContent(body,m);el.append(name,body);list.append(el);}
  list.scrollTop=list.scrollHeight;
 }
 function syncStatus(s){
@@ -75,9 +76,9 @@ export function initCoach(provider){
   const context={user:ctx.user,profile:{goal:'Стабильные 1500 как первый этап; исследовать достижимый уровень',focus:'Расчёт ответных угроз и безопасность короля',notes:$('aiNotes').value.slice(0,3000)},game:include?ctx.game:null,recentGames:include?getGames(ctx.user).slice(0,20):[]};
   if(context.game&&!['1-0','0-1','1/2-1/2'].includes(context.game.result)){say('Загрузи завершённую партию или отключи отправку партии.');return;}
   if(JSON.stringify(context).length>160000){say('Слишком большой контекст. Отключи отправку партии или сократи анализ.');return;}
-  const previous=history.slice(-12);say('Тренер анализирует…');
+  const previous=history.slice(-12).map(({role,content})=>({role,content:content.slice(0,16000)}));say('Тренер анализирует…');
   const result=await call('ask',{model,context,history:previous,question});
-  history.push({role:'user',content:question},{role:'assistant',content:result.answer});
+  history.push({role:'user',content:question},{role:'assistant',content:result.answer,parts:snapshotBoards(result.answer,context.game)});
   history=history.slice(-20);$('aiQuestion').value='';showHistory();say('Ответ получен.');
  });
  try{$('aiNotes').value=localStorage.getItem('jc-coach-notes')||'';}catch{}
