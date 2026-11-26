@@ -6,7 +6,7 @@ const square=s=>typeof s==='string'&&/^[a-h][1-8]$/.test(s);
 function cleanCard(b,Chess){
  if(!b||typeof b.fen!=='string'||!['w','b'].includes(b.orientation))return null;
  try{
-  const c=new Chess(b.fen),out={fen:c.fen(),orientation:b.orientation,label:cut(b.label,100),classification:cut(b.classification,100)};
+  const c=new Chess(b.fen),out={fen:c.fen(),orientation:b.orientation,historical:b.historical===true,label:cut(b.label,100),classification:cut(b.classification,100)};
   for(const name of ['played','best']){
    const m=b[name];if(!square(m?.from)||!square(m?.to)||typeof m.fen!=='string')return null;
    const position=new Chess(m.fen);
