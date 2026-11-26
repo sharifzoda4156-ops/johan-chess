@@ -1,3 +1,4 @@
+import {initCoach,rememberGame} from './android-coach.js';
 import {Chess} from './chess.js';
 import {Engine} from './engine.js';
 import {enginePath} from './engine-path.js';
@@ -25,7 +26,7 @@ $('analyze').onclick=async()=>{
  const metrics=evaluateMove(best.score,played.score,isBest);const c=new Chess(m.before);let bestSan=best.best;try{bestSan=c.move({from:best.best.slice(0,2),to:best.best.slice(2,4),...(best.best.length>4?{promotion:best.best[4]}:{})}).san;}catch{};
  const continuation=new Chess(m.before),pv=[];for(const u of best.pv.slice(0,6)){try{pv.push(continuation.move({from:u.slice(0,2),to:u.slice(2,4),...(u.length>4?{promotion:u[4]}:{})}).san);}catch{break;}}
  results.push({index:i,color:m.color,san:m.san,move:actualMove,best:best.best,bestSan,pv,bestScore:best.score,playedScore:played.score,...metrics});prefix.push(actualMove);progress.value=i+1;renderReport();renderCoach();}
- status('Анализ завершён. Выбери ошибку для разбора.');$('export').disabled=false;
+ rememberGame(coachContext());status('Анализ завершён. Выбери ошибку для разбора.');$('export').disabled=false;
  }catch(e){if(id===runId)status('Анализ прерван: '+e.message);}finally{if(id===runId){local?.close();engine=null;setBusy(false);render();$('export').disabled=!results.length;}}
 };
 $('stop').onclick=()=>{runId++;engine?.close();engine=null;setBusy(false);status('Анализ остановлен. Частичный отчёт сохранён на экране.');$('export').disabled=!results.length;render();};
@@ -48,3 +49,12 @@ function renderReport(){const sum=$('summary');sum.replaceChildren();const score
 function chart(){const canvas=$('chart'),ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;ctx.clearRect(0,0,w,h);ctx.strokeStyle='#68727b';ctx.beginPath();ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();if(!results.length)return;const y=s=>h/2-Math.max(-1,Math.min(1,s/600))*(h/2-8);const x=i=>i/Math.max(1,moves.length)*(w-12)+6;const vals=[scoreValue(results[0].bestScore)*(results[0].color==='w'?1:-1),...results.map(r=>scoreValue(r.playedScore)*(r.color==='w'?1:-1))];ctx.strokeStyle='#a8d77c';ctx.lineWidth=3;ctx.beginPath();vals.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.stroke();ctx.strokeStyle='#e6e7e7';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x(cursor),0);ctx.lineTo(x(cursor),h);ctx.stroke();}
 $('chart').onclick=e=>{const r=$('chart').getBoundingClientRect();go(Math.round((e.clientX-r.left)/r.width*moves.length));};
 $('export').onclick=()=>{const blob=new Blob([JSON.stringify({version:'0.1.0',pgn,user:$('user').value,depth:Number($('depth').value),complete:results.length===moves.length,results},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='johan-chess-review.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+
+function coachContext(){
+ const user=$('user').value.trim();
+ if(!game)return {user,game:null};
+ const h=game.getHeaders();
+ const color=h.White?.toLowerCase()===user.toLowerCase()?'w':h.Black?.toLowerCase()===user.toLowerCase()?'b':null;
+ return {user,game:{white:player('w'),black:player('b'),date:h.Date||'',result:h.Result||'*',color,startFen,position:positions[cursor],cursor,moves:moves.map(m=>m.san),depth:Number($('depth').value),complete:results.length===moves.length,analysis:results}};
+}
+initCoach(coachContext);
