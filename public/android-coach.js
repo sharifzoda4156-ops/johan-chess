@@ -120,6 +120,7 @@ export function initCoach(provider,options){
   let result=await call('ask',{model,context,profile,history:previous,question,compact,memoryAllowed}),totalInput=0,totalCached=0,reported=false;
   for(let round=0;;round++){
    if(Number.isFinite(result.usage?.input)&&Number.isFinite(result.usage?.cached)){totalInput+=result.usage.input;totalCached+=result.usage.cached;reported=true;}
+   if(toolOptions?.onlineLocked?.())throw Error('Ответ отменён: онлайн-партия');
    if(!result.calls?.length)break;
    if(round>=6)throw Error('Лимит шагов инструментов достигнут.');
    const outputs=[];
@@ -134,6 +135,7 @@ export function initCoach(provider,options){
    result=await call('continueCoach',{turn:result.turn,outputs});
   }
   $('aiCacheStatus').textContent=reported?'Контекст: '+totalInput+' токенов · из кэша '+totalCached:'Статистика кэша не предоставлена';
+  if(toolOptions?.onlineLocked?.())throw Error('Ответ отменён: онлайн-партия');
   const answer=typeof result.answer==='string'?result.answer.trim():'';if(!answer)throw Error('Пустой ответ');
   const pair=[{role:'user',content:question},{role:'assistant',content:answer,parts:snapshotBoards(answer,context.game)}];
   if(requestKey!==memoryKey(account,contextProvider().user)){const saved=loadMemory(localStorage,requestKey,Chess);const stored=saveMemory(localStorage,requestKey,{...saved,history:[...saved.history,...pair]},Chess);switchMemory();say(stored.saved?'Ответ сохранён в предыдущем профиле.':'Не удалось сохранить ответ предыдущего профиля.');return;}

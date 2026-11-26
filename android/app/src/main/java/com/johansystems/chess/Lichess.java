@@ -65,7 +65,10 @@ final class Lichess {
                 gameId=restored;transportLost=true;
                 long wall=System.currentTimeMillis(),deadline=prefs.getLong("absenceDeadline",-1),heartbeat=prefs.getLong("lastActive",wall);
                 long left=deadline>=0?Math.max(0,deadline-wall):Math.max(0,OnlineAbsence.GRACE_MS-Math.max(0,wall-heartbeat));
-                absence.restore(SystemClock.elapsedRealtime(),left,prefs.getBoolean("resignPending",false));
+                long elapsed=SystemClock.elapsedRealtime(),checkpoint=prefs.getLong("absenceElapsed",-1);
+                int boot=android.provider.Settings.Global.getInt(a.getContentResolver(),"boot_count",-1);
+                if(boot>=0&&boot==prefs.getInt("absenceBoot",-2)&&checkpoint>=0&&elapsed>=checkpoint)left=Math.max(0,prefs.getLong("absenceLeft",OnlineAbsence.GRACE_MS)-(elapsed-checkpoint));
+                absence.restore(elapsed,left,prefs.getBoolean("resignPending",false));resignSent=prefs.getBoolean("resignSent",false);
             }
         }
         watchdog.scheduleWithFixedDelay(this::watch,0,1,TimeUnit.SECONDS);
@@ -92,9 +95,9 @@ final class Lichess {
         long left=absence.remaining(SystemClock.elapsedRealtime()),wall=System.currentTimeMillis();
         SharedPreferences.Editor p=prefs.edit().putBoolean("onlineLock",locked());
         if(live()){
-            p.putString("activeGame",gameId).putBoolean("resignPending",absence.pending()).putLong("lastActive",wall);
+            p.putString("activeGame",gameId).putBoolean("resignPending",absence.pending()).putBoolean("resignSent",resignSent).putLong("lastActive",wall).putLong("absenceElapsed",SystemClock.elapsedRealtime()).putLong("absenceLeft",left<0?OnlineAbsence.GRACE_MS:left).putInt("absenceBoot",android.provider.Settings.Global.getInt(activity.getContentResolver(),"boot_count",-1));
             if(left>=0)p.putLong("absenceDeadline",wall+left);else p.remove("absenceDeadline");
-        }else p.remove("activeGame").remove("resignPending").remove("absenceDeadline").remove("lastActive");
+        }else p.remove("activeGame").remove("resignPending").remove("resignSent").remove("absenceDeadline").remove("lastActive").remove("absenceElapsed").remove("absenceLeft").remove("absenceBoot");
         p.commit();activity.onlineSecure(locked());
     }
     synchronized void foreground(boolean value){foreground=value;updateAbsence();}
@@ -108,7 +111,7 @@ final class Lichess {
                 if(closed)return;updateAbsence();long now=SystemClock.elapsedRealtime();
                 if(maintenanceQueued||now<nextMaintenance||token.isEmpty()||!connectedNetwork())return;
                 boolean resign=live()&&absence.pending()&&!resignSent;
-                boolean reconcile=locked()&&waiting==null&&(needsSync||transportLost||live()&&absence.pending()&&resignSent);
+                boolean reconcile=waiting==null&&(locked()&&(needsSync||transportLost||live()&&absence.pending()&&resignSent)||events==null&&!token.isEmpty());
                 if(!resign&&!reconcile)return;
                 maintenanceQueued=true;nextMaintenance=now+5000;
             }
@@ -223,7 +226,7 @@ final class Lichess {
         if(game!=null)game.cancel();if(waiting!=null){waiting.cancel();waiting=null;}
         boolean same=next.equals(gameId)&&!terminal;
         revision++;gameId=next;terminal=false;needsSync=false;full=null;state=null;
-        if(!same){absence.reset();resignSent=false;transportLost=false;}else transportLost=true;
+        if(!same){absence.reset();resignSent=false;}transportLost=true;
         updateAbsence();notice="Подключаюсь к партии";persistLock();
         game=new Stream("game","/api/board/game/stream/"+next,"GET",null);game.start();
     }
@@ -272,7 +275,7 @@ final class Lichess {
             if(!absence.pending()&&!notice.startsWith("Партия завершена"))notice="";return snapshot();
         }
     }
-    private synchronized JSONObject snapshot()throws Exception{
+    synchronized JSONObject snapshot()throws Exception{
         updateAbsence();
         JSONObject out=new JSONObject().put("connected",!token.isEmpty()).put("username",username).put("account",account).put("locked",locked()).put("needsSync",needsSync).put("eventReady",events!=null&&events.ready).put("waiting",waiting!=null).put("gameId",gameId).put("terminal",terminal).put("notice",notice).put("incoming",incoming).put("ongoing",ongoing).put("absenceRemaining",absence.remaining(SystemClock.elapsedRealtime())).put("forfeitPending",absence.pending());
         if(full!=null)out.put("full",full);if(state!=null)out.put("state",state);
@@ -310,7 +313,9 @@ final class Lichess {
         return json("/api/board/game/"+target+"/"+suffix,"POST","");
     }
     JSONObject handle(JSONObject r)throws Exception{
-        switch(r.getString("op")){
+        String op=r.getString("op");
+        if(locked()&&!Arrays.asList("snapshot","refresh","cancel","gameAction","forfeit").contains(op))throw new IOException("Действие недоступно во время онлайн-партии");
+        switch(op){
             case "snapshot":return snapshot();
             case "refresh":return token.isEmpty()?snapshot():refresh();
             case "login":return login();

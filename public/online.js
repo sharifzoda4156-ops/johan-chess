@@ -79,9 +79,10 @@ export function initOnline({canStart,lock,review}){
  for(const type of ['q','r','b','n'])$('onlinePromote'+type).onclick=()=>{const m=promotion.find(x=>x.promotion===type);if(m)sendMove(m);};
  $('onlinePromotionCancel').onclick=()=>{promotion=[];draw();};
  document.addEventListener('jc-screen',e=>{active=e.detail==='online';if(active){controls();draw();}});
+ document.addEventListener('jc-native-online-lock',()=>{setLock(true);poll();});
  if(!native){say('Для онлайн-игры нужна Android-сборка.');$('onlineLogin').disabled=true;return {locked:()=>false};}
  async function poll(){if(polling||working)return;polling=true;try{const s=await call('snapshot');apply(s);if(s.connected&&s.needsSync&&!s.waiting&&s.terminal&&syncAttempt!==s.gameId+':'+s.notice){syncAttempt=s.gameId+':'+s.notice;action(refresh);}}catch(e){if(active)say(e.message);}finally{polling=false;}}
- action(async()=>{const s=await call('snapshot');apply(s);if(s.connected){setLock(true);try{await refresh();}catch(e){apply(await call('snapshot'));throw e;}}});
+ setLock(true);action(async()=>{const s=await call('snapshot');if(s.connected){snap=s;try{await refresh();}catch(e){apply(await call('snapshot'));throw e;}}else apply(s);});
  setInterval(poll,500);setInterval(()=>{if(active)tick();},200);document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll();});
  return {locked:()=>uiLock};
 }
