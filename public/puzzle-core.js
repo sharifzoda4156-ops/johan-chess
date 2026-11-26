@@ -39,3 +39,10 @@ export function choosePuzzle(items,progress,current){
  const rotated=index<0?items:[...items.slice(index+1),...items.slice(0,index+1)];
  return rotated.find(p=>p.id!==current&&!progress.solved.includes(p.id))||rotated[0]||null;
 }
+
+// Review is a separate replay of the source solution, never mutates the live game.
+export function buildPuzzleReview(puzzle,Chess){
+ const c=new Chess(puzzle.startFen),frames=[{fen:c.fen(),move:null}];
+ for(const u of puzzle.solution){const move=c.move(parseUci(u));frames.push({fen:c.fen(),move});}
+ return frames;
+}

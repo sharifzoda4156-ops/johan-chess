@@ -104,3 +104,102 @@ input[type=checkbox]{width:20px;height:20px;min-height:0;vertical-align:middle;a
 .puzzle-wrong,.blunder{color:var(--danger)}
 #playBoard .square:focus-visible,#puzzleBoard .square:focus-visible{outline-color:#192737}
 @media(max-width:360px){.home-hero>div{max-width:88%}}
+
+/* Original brass route; independent from chessboard themes. */
+.puzzle-mode-tabs{display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:5px;padding:4px;background:var(--surface-inset);border-radius:12px;margin:0 0 18px}
+.puzzle-mode-tabs button{padding:8px 4px;font-size:13px;min-width:0;background:transparent;border:1px solid transparent}
+.puzzle-mode-tabs button[aria-pressed=true]{background:#3a342c;color:var(--accent);border-color:#66543a}
+.journey-heading,.journey-session-top,.journey-meta{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.journey-heading h3{font-size:22px;margin:5px 0;color:var(--ink)}
+.journey-heading small,.journey-clock small{letter-spacing:1px;font-size:10px;font-weight:700}
+.journey-heading>strong{color:var(--accent);font-size:20px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.journey-meter{display:flex;gap:10px;align-items:center;font-size:12px;color:var(--muted)}
+.journey-meter progress{flex:1;width:auto;min-width:0;height:8px;appearance:none;border:0;overflow:hidden;border-radius:99px;background:#354357}
+.journey-meter progress::-webkit-progress-bar{background:#354357;border-radius:99px}
+.journey-meter progress::-webkit-progress-value{background:var(--accent);border-radius:99px}
+.journey-meta{font-size:12px;color:var(--muted);margin:8px 0 14px}
+.journey-path{position:relative;isolation:isolate;display:flex;flex-direction:column;gap:10px;padding:15px 10px;margin-bottom:14px;border:1px solid #354357;border-radius:16px;overflow:hidden;background-color:#17212e;background-image:conic-gradient(#ffffff04 25%,transparent 0 50%,#ffffff04 0 75%,transparent 0);background-size:56px 56px}
+.journey-path::before{content:'';position:absolute;z-index:-1;left:50%;top:22px;bottom:22px;border-left:2px dashed #536278}
+.journey-node{display:flex;align-items:center;gap:12px;width:100%;max-width:235px;min-height:62px;padding:7px 12px;background:#202c3b;border:1px solid #354357;border-radius:14px;align-self:center}
+.journey-node:nth-child(3n+1){transform:translateX(-12%)}.journey-node:nth-child(3n+2){transform:translateX(12%)}
+.node-number{display:grid;place-items:center;flex:none;width:42px;height:42px;border:1px solid #536278;background:#263447;border-radius:12px;color:var(--muted);font-size:18px;font-weight:800}
+.node-info{display:grid;gap:3px;min-width:0}.node-info small{letter-spacing:0;font-size:11px}
+.journey-node.is-complete .node-number{background:#254236;border-color:#47765e;color:var(--success)}
+.journey-node.is-current{border-color:var(--accent);background:#3a342c}
+.journey-node.is-current .node-number{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.journey-node.is-current .node-info strong{color:var(--accent)}
+.journey-note,.puzzle-source{text-align:center;font-size:11px;margin:10px 0 0}
+.journey-session-top{margin-bottom:10px;font-size:12px;color:var(--muted)}.journey-session-top button{background:transparent;border-color:#354357}
+#journeySessionXP{color:var(--accent);white-space:nowrap}
+.journey-clock{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:10px 0}
+.journey-clock>div{display:grid;gap:4px;background:var(--surface-inset);border-radius:10px;padding:10px 5px;text-align:center}
+.journey-clock strong{font-size:19px;font-variant-numeric:tabular-nums}
+.journey-reward{margin:12px 0;padding:12px;border:1px solid #66543a;border-radius:12px;background:#3a342c;color:#e7c994;font-weight:700;font-size:14px;line-height:1.5}
+.daily-calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin:12px 0}
+.daily-calendar button{padding:5px 0;min-width:0;font-size:13px;display:grid;gap:4px;justify-items:center}
+.daily-calendar button small{letter-spacing:0;font-size:10px}
+.daily-calendar button[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}
+.daily-calendar button.daily-done{background:#254236;color:var(--success)}
+.daily-hearts{letter-spacing:5px;color:#f49c99;font-size:20px;margin:8px 0;min-height:30px}
+@media(max-width:360px){.journey-node:nth-child(n){transform:none}.journey-node{max-width:100%}.journey-heading h3{font-size:19px}.journey-heading>strong{font-size:16px}.journey-session-top{flex-wrap:wrap}}
+
+/* Keep the map CTA within easy reach on compact phones. */
+.journey-path{max-height:min(380px,43vh);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.journey-node{flex-shrink:0}
+#journeyStart{margin-top:2px}
+
+/* A focused mobile workspace: board first, local coaching, no copied artwork. */
+.puzzle-focus .app-header,.puzzle-focus .bottom-nav,.puzzle-focus footer,.puzzle-focus .puzzle-source{display:none}
+.puzzle-focus main{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));max-width:620px}
+.puzzle-focus .puzzle-panel{background:transparent;border:0;box-shadow:none;padding:0;margin:0 auto;max-width:560px}
+.puzzle-focus #puzzleStorage{margin:6px 12px}
+.puzzle-focus-header{display:grid;grid-template-columns:46px minmax(0,1fr) 46px;gap:8px;align-items:center;padding:10px 12px;margin:0 0 10px}
+.puzzle-focus-header>div{text-align:center;grid-column:2}
+.puzzle-focus-header h2{font-size:21px;margin:2px 0;line-height:1.2}
+.puzzle-focus-header small{font-size:10px;letter-spacing:1px;color:var(--accent)}
+.puzzle-focus-header button{background:transparent;border:0;color:var(--muted);font-size:29px;padding:0;min-height:46px}
+#puzzleWorkspace{display:flex;flex-direction:column;gap:10px}
+.puzzle-coach-banner{display:flex;align-items:center;gap:10px;margin:0 12px;background:var(--surface);border:1px solid #354357;border-radius:14px;padding:10px;min-height:78px}
+.puzzle-coach-emblem{display:grid;place-items:center;flex:none;width:46px;height:46px;font-size:32px;color:var(--accent);background:#302b26;border:1px solid #66543a;border-radius:12px}
+.puzzle-coach-copy{min-width:0;flex:1}
+.puzzle-coach-copy strong{font-size:15px}
+.puzzle-coach-copy p{font-size:13px;line-height:1.4;margin:3px 0 0;min-height:0}
+.puzzle-focus #puzzleBoard{width:100%;border-radius:4px;max-width:none}
+.puzzle-focus #puzzleBoard .square[data-feedback]::after{content:'✓';position:absolute;right:0;top:0;width:41%;height:41%;display:grid;place-items:center;font-size:clamp(10px,3vw,17px);font-weight:900;background:#397653;color:white;border-radius:50%;border:0;z-index:6;pointer-events:none}
+.puzzle-focus #puzzleBoard .square[data-feedback=wrong]::after{content:'×';background:#a63f4a}
+.puzzle-underboard{padding:0 12px 8px}
+.journey-session-score{display:flex;align-items:center;gap:9px;min-height:35px;font-variant-numeric:tabular-nums}
+#journeySessionXP{font-size:24px;color:var(--ink)}
+#journeyDelta,#journeyRun{font-size:13px;color:var(--success);font-weight:700}
+#puzzleElapsed{margin-left:auto;color:var(--muted);font-size:18px}
+#sessionProgress{height:10px}
+.journey-session-meta{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;margin:3px 0}
+.journey-session-meta strong{color:var(--ink)}
+.puzzle-id{font-size:11px;color:var(--muted);margin:6px 0}
+.puzzle-action-row{display:flex;gap:8px;align-items:stretch;margin-top:10px}
+.puzzle-action-row button{min-width:0;flex:1;display:grid;gap:3px;place-items:center;padding:7px 4px;font-size:23px;background:var(--surface);border-color:var(--line)}
+.puzzle-action-row button span{font-size:11px;font-weight:650;line-height:1.2}
+.puzzle-action-row button.primary{flex:2;background:var(--accent);color:var(--on-accent);font-size:19px;font-weight:800}
+.puzzle-focus .daily-hearts{text-align:center;letter-spacing:7px;font-size:29px;line-height:1.4;color:var(--accent);margin:7px 0}
+#puzzleDailyResult{text-align:center;padding:8px 12px 12px}
+#dailyResultBoard{width:min(62vw,270px);margin:5px auto 16px}
+#puzzleDailyResult h2{font-size:29px;line-height:1.15;margin:10px 0}
+#dailyResultTime{margin:6px 0}
+.daily-result-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
+.daily-result-stats>div{background:var(--surface);border:1px solid var(--line);padding:12px;border-radius:12px;display:grid;gap:4px}
+.daily-result-stats strong{font-size:25px;font-variant-numeric:tabular-nums}
+.daily-result-stats small{letter-spacing:0}
+.daily-result-actions{display:grid;grid-template-columns:1fr 1fr;margin:10px 0}
+#dailyShareText{width:100%;resize:none;min-height:72px;margin-top:8px}
+#puzzleReview{padding:0 12px}
+#puzzleReview .puzzle-coach-banner{margin:0 0 10px}
+#puzzleReviewBoard{width:100%;max-width:520px;margin:auto}
+.puzzle-review-controls{display:grid;grid-template-columns:1fr 1fr 2fr}
+.puzzle-review-controls button{min-height:48px}
+#puzzleWorkspace [hidden],#puzzleDailyResult [hidden]{display:none!important}
+@media(max-width:700px){.puzzle-focus main{padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}.puzzle-focus-header{margin-top:env(safe-area-inset-top,0px)}}
+@media(orientation:landscape) and (max-height:550px){.puzzle-focus #puzzleBoard,.puzzle-focus #puzzleReviewBoard{max-width:calc(100dvh - 24px);margin:auto}.puzzle-focus-header{padding-block:4px;margin-bottom:4px}}
+
+/* Also use the original theme's progress style below the board. */
+.journey-session-score #journeyDelta:empty{display:none}
+.puzzle-focus #puzzleBoard .square[data-feedback]::after{inset:0 0 auto auto;transform:none}
