@@ -18,8 +18,8 @@ export function initOnline({canStart,lock,review}){
   text('onlineConnect',connected?'Lichess · '+snap.username:'Подключить Lichess');text('onlineProfileStatus',connected?'Профиль: '+snap.username:'Онлайн-игра и друзья');
   $('onlineLogin').disabled=working||uiLock||!native;$('onlineLogout').disabled=blocked;$('onlineRefresh').disabled=working||!connected;
   $('onlineSeek').disabled=blocked||!snap.eventReady||!canStart();$('onlineChallenge').disabled=blocked||!snap.eventReady||!canStart();$('onlineCancel').hidden=!snap.waiting;$('onlineCancel').disabled=working;
-  $('onlineGame').hidden=!game;$('onlineHistoryRefresh').disabled=blocked;$('onlineFriendSearch').disabled=blocked;$('onlineFriendsRefresh').disabled=blocked;
-  $('onlineWaiting').hidden=!snap.waiting;$('onlineReconnect').hidden=!(snap.locked&&!snap.waiting&&(!game||snap.needsSync));
+  $('onlineGame').hidden=!game||snap.waiting;$('onlineHistoryRefresh').disabled=blocked;$('onlineFriendSearch').disabled=blocked;$('onlineFriendsRefresh').disabled=blocked;
+  $('onlineWaiting').hidden=!snap.waiting;$('onlineReconnect').hidden=!(snap.locked&&!snap.waiting&&(!game||snap.needsSync||awaiting));$('onlineOpenGame').hidden=!snap.gameId||!snap.locked;
  }
  function profileView(){text('onlineName',snap.username||'');const perf=snap.account?.perfs||{};for(const [type,id] of [['blitz','onlineBlitzRating'],['rapid','onlineRapidRating'],['classical','onlineClassicalRating']]){const r=perf[type];text(id,Number.isFinite(r?.rating)?r.rating+(r.prov?'?':''):'—');}}
  function tick(){if(!game)return;const times=serverClock(game,Math.max(0,performance.now()-receivedAt));text('onlineTopClock',clock(times[game.color==='w'?'b':'w']));text('onlineBottomClock',clock(times[game.color]));}
@@ -48,10 +48,10 @@ export function initOnline({canStart,lock,review}){
    if(s.full&&s.state){try{game=readOnlineGame(s.full,s.state,s.username,Chess);receivedAt=performance.now();const moves=old&&lastGame===s.gameId&&game.moves.length===old.moves.length+1&&old.moves.every((u,i)=>u===game.moves[i])?[game.game.history({verbose:true}).at(-1)]:[];lastGame=s.gameId;draw(moves);}catch(e){say(e.message+' · открой Lichess для этой партии');}}else clearBoardView($('onlineBoard'));
   }else if(previous.needsSync!==s.needsSync||previous.locked!==s.locked)draw();
   const ck=JSON.stringify([s.incoming,s.locked,s.eventReady]);if(ck!==challengeKey){challengeKey=ck;challenges();}
-  if(s.notice&&!error)text('onlineStatus',s.notice);controls();
+  if(s.notice&&!error)text('onlineStatus',s.notice);else if(!error)text('onlineStatus','');if(!s.needsSync)syncAttempt='';controls();
  }
  async function action(fn){if(working)return;working=true;error='';controls();try{await fn();}catch(e){say(e.message||'Ошибка Lichess');}finally{working=false;controls();draw();}}
- async function refresh(){apply(await call('refresh'));}
+ async function refresh(){apply(await call('refresh'));if(!snap.needsSync){awaiting=false;draw();}}
  function begin(op,args){if(working||uiLock||!canStart())return;if(!snap.eventReady){say('Обнови подключение');return;}setLock(true);action(async()=>{try{apply(await call(op,args));}catch(e){try{apply(await call('snapshot'));}catch{}throw e;}});}
  function params(){const [minutes,increment]=$('onlineControl').value.split('+').map(Number);return {minutes,increment,rated:$('onlineRated').checked};}
  async function sendMove(move){if(sending||awaiting||working||!game||game.done||snap.needsSync||game.game.turn()!==game.color)return;sending=true;awaiting=true;selected=null;promotion=[];draw();try{await call('gameAction',{gameId:snap.gameId,action:'move',move:move.from+move.to+(move.promotion||'')});}catch(e){say(e.message);try{await refresh();}catch{}awaiting=false;}finally{sending=false;draw();}}
@@ -63,7 +63,7 @@ export function initOnline({canStart,lock,review}){
  function openReview(id){if(!validGameId(id)||uiLock||!canStart())return;action(async()=>{const r=await call('pgn',{gameId:id});if(!completedPgn(r.pgn,Chess))throw Error('Нужна завершённая партия с ходами');review(r.pgn,snap.username);});}
  $('onlineLogin').onclick=()=>action(async()=>{say('Продолжи вход в браузере.');apply(await call('login'));});
  $('onlineLogout').onclick=()=>action(async()=>{if(confirm('Отключить аккаунт Lichess?'))apply(await call('logout'));});
- $('onlineRefresh').onclick=()=>action(refresh);$('onlineReconnect').onclick=()=>action(refresh);
+ $('onlineRefresh').onclick=()=>action(refresh);$('onlineReconnect').onclick=()=>action(refresh);$('onlineOpenGame').onclick=()=>action(()=>call('openGame'));
  $('onlineSeek').onclick=()=>{const p=params();if(!matchControl(p.minutes,p.increment,false)){say('Для блица нужен прямой вызов. Выбери рапид или классику.');return;}begin('seek',p);};
  $('onlineChallenge').onclick=()=>{const p=params(),user=$('onlineFriendNick').value.trim();if(!validNick(user)||!matchControl(p.minutes,p.increment,true)){say('Проверь ник и контроль времени');return;}begin('challenge',{...p,user});};
  $('onlineCancel').onclick=()=>action(async()=>apply(await call('cancel')));
@@ -77,7 +77,7 @@ export function initOnline({canStart,lock,review}){
  $('onlinePromotionCancel').onclick=()=>{promotion=[];draw();};
  document.addEventListener('jc-screen',e=>{active=e.detail==='online';if(active){controls();draw();}});
  if(!native){say('Для онлайн-игры нужна Android-сборка.');$('onlineLogin').disabled=true;return {locked:()=>false};}
- async function poll(){if(polling||working)return;polling=true;try{const s=await call('snapshot');apply(s);if(s.connected&&s.needsSync&&!s.waiting&&!s.full&&syncAttempt!==s.gameId+':'+s.notice){syncAttempt=s.gameId+':'+s.notice;action(refresh);}}catch(e){if(active)say(e.message);}finally{polling=false;}}
+ async function poll(){if(polling||working)return;polling=true;try{const s=await call('snapshot');apply(s);if(s.connected&&s.needsSync&&!s.waiting&&(!s.full||s.terminal)&&syncAttempt!==s.gameId+':'+s.notice){syncAttempt=s.gameId+':'+s.notice;action(refresh);}}catch(e){if(active)say(e.message);}finally{polling=false;}}
  action(async()=>{const s=await call('snapshot');apply(s);if(s.connected){setLock(true);try{await refresh();}catch(e){apply(await call('snapshot'));throw e;}}});
  setInterval(poll,500);setInterval(()=>{if(active)tick();},200);document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll();});
  return {locked:()=>uiLock};

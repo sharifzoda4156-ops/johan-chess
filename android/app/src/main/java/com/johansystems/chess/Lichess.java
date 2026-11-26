@@ -31,6 +31,7 @@ final class Lichess {
     private String gameId="",notice="";
     private Stream events,game,waiting;
     private boolean terminal=false;
+    private long revision=0;
     Lichess(MainActivity a)throws Exception{
         activity=a;prefs=a.getSharedPreferences("lichess",0);
         KeyStore ks=KeyStore.getInstance("AndroidKeyStore");ks.load(null);
@@ -147,7 +148,7 @@ final class Lichess {
         String next=id(raw);
         if(next.equals(gameId)&&game!=null)return;
         if(game!=null)game.cancel();if(waiting!=null){waiting.cancel();waiting=null;}
-        gameId=next;terminal=false;needsSync=false;full=null;state=null;notice="Подключаюсь к партии";persistLock();
+        revision++;gameId=next;terminal=false;needsSync=false;full=null;state=null;notice="Подключаюсь к партии";persistLock();
         game=new Stream("game","/api/board/game/stream/"+next,"GET",null);game.start();
     }
     private synchronized void receive(Stream s,JSONObject msg)throws Exception{
@@ -155,30 +156,42 @@ final class Lichess {
         String type=msg.optString("type");
         if(s==events){
             if("gameStart".equals(type)){JSONObject g=msg.optJSONObject("game");if(g!=null&&!"correspondence".equals(g.optString("speed")))startGame(g.optString("gameId",g.optString("id")));}
-            else if("challenge".equals(type)||"challengeCanceled".equals(type)||"challengeDeclined".equals(type)){notice="Есть обновление вызовов";}
-            else if("gameFinish".equals(type)&&!terminal){needsSync=true;persistLock();}
+            else if("challenge".equals(type)||"challengeCanceled".equals(type)||"challengeDeclined".equals(type)){
+                JSONObject challenge=msg.optJSONObject("challenge");
+                if(challenge!=null){
+                    String cid=challenge.optString("id");JSONArray updated=new JSONArray();
+                    for(int i=0;i<incoming.length();i++){JSONObject row=incoming.optJSONObject(i);if(row!=null&&!cid.equals(row.optString("id")))updated.put(row);}
+                    JSONObject dest=challenge.optJSONObject("destUser");
+                    if("challenge".equals(type)&&dest!=null&&username.equalsIgnoreCase(dest.optString("id")))updated.put(challenge);
+                    incoming=updated;
+                }
+                notice="Есть обновление вызовов";
+            }
+            else if("gameFinish".equals(type)&&!terminal){JSONObject g=msg.optJSONObject("game");if(g!=null&&gameId.equals(g.optString("gameId",g.optString("id")))){revision++;needsSync=true;persistLock();}}
         }else if(s==game){
             if("gameFull".equals(type)){full=msg;state=msg.getJSONObject("state");}
             else if("gameState".equals(type)&&full!=null)state=msg;
-            if(state!=null){terminal=finished(state.optString("status"));notice=terminal?"Партия завершена":"";if(terminal)needsSync=false;persistLock();}
+            if(state!=null){boolean wasTerminal=terminal;terminal=finished(state.optString("status"));notice=terminal?"Партия завершена":"";if(terminal&&!wasTerminal){revision++;needsSync=true;}else if(!terminal)needsSync=false;persistLock();}
         }
     }
     private synchronized void ended(Stream s,String error){
         if(closed||s.canceled)return;
-        if(s==events){events=null;notice=error.isEmpty()?"Поток событий закрыт":error;}
-        else if(s==waiting){waiting=null;needsSync=true;notice=error.isEmpty()?"Поиск завершён. Проверяю партии…":error;persistLock();}
-        else if(s==game){game=null;if(!terminal){needsSync=true;notice=error.isEmpty()?"Связь потеряна. Обнови соединение.":error;persistLock();}}
+        if(s==events){events=null;notice=error.isEmpty()?"Поток событий закрыт":error;if(waiting!=null){waiting.cancel();waiting=null;needsSync=true;revision++;persistLock();}}
+        else if(s==waiting){revision++;waiting=null;needsSync=true;notice=error.isEmpty()?"Поиск завершён. Проверяю партии…":error;persistLock();}
+        else if(s==game){game=null;if(!terminal){revision++;needsSync=true;notice=error.isEmpty()?"Связь потеряна. Обнови соединение.":error;persistLock();}}
     }
     private JSONObject refresh()throws Exception{
-        requireLogin();JSONObject a=json("/api/account","GET",null);
+        requireLogin();final long before; synchronized(this){before=revision;}
+        JSONObject a=json("/api/account","GET",null);
         JSONArray playing=json("/api/account/playing?nb=50","GET",null).getJSONArray("nowPlaying");
         JSONArray challenges=json("/api/challenge","GET",null).optJSONArray("in");
         synchronized(this){
             account=a;ongoing=playing;incoming=challenges==null?new JSONArray():challenges;
             if(events==null){events=new Stream("events","/api/stream/event","GET",null);events.start();}
+            if(before!=revision)return snapshot();
             String next="";
             for(int i=0;i<playing.length();i++){JSONObject p=playing.getJSONObject(i);if(!"correspondence".equals(p.optString("speed"))){next=id(p.getString("gameId"));if(next.equals(gameId))break;}}
-            if(!next.isEmpty()){if(game==null||!next.equals(gameId))startGame(next);}
+            if(!next.isEmpty()){if(game==null||!next.equals(gameId)||needsSync){if(game!=null){game.cancel();game=null;}startGame(next);}}
             else if(waiting==null){if(!gameId.isEmpty()&&!terminal){if(game!=null)game.cancel();game=null;gameId="";full=state=null;}needsSync=false;persistLock();}
             notice="";return snapshot();
         }
@@ -208,11 +221,12 @@ final class Lichess {
             if(variant==null||!"standard".equals(variant.optString("key"))||clock==null||!"clock".equals(clock.optString("type"))||clock.optInt("limit")+40*clock.optInt("increment")<180)throw new IOException("Этот вызов не поддерживается Board API");
             needsSync=true;persistLock();
         }
-        json("/api/challenge/"+c+"/accept","POST","");return refresh();
+        json("/api/challenge/"+c+"/accept","POST","");
+        synchronized(this){if(!c.equals(gameId)||game==null)startGame(c);return snapshot();}
     }
     private JSONObject action(JSONObject r)throws Exception{
         String target=id(r.getString("gameId")),action=r.getString("action"),suffix;
-        synchronized(this){if(!target.equals(gameId)||terminal||full==null||state==null||game==null||!game.ready)throw new IOException("Нет активной подключённой партии");}
+        synchronized(this){if(!target.equals(gameId)||terminal||needsSync||full==null||state==null||game==null||!game.ready)throw new IOException("Нет активной подключённой партии");}
         if("move".equals(action)){String m=r.getString("move");if(!m.matches("[a-h][1-8][a-h][1-8][qrbn]?"))throw new IOException("Неверный ход");suffix="move/"+m;}
         else if(Arrays.asList("resign","abort","draw/yes","draw/no").contains(action))suffix=action;
         else throw new IOException("Неизвестное действие");
@@ -239,6 +253,7 @@ final class Lichess {
             case "history":if(locked())throw new IOException("Сначала заверши игру");return new JSONObject().put("games",ndjson("/api/games/user/"+nick(username)+"?max=20&ongoing=false&moves=false&clocks=false&evals=false",20));
             case "pgn":if(locked())throw new IOException("Сначала заверши игру");return new JSONObject().put("pgn",request("/game/export/"+id(r.getString("gameId")),"GET",token,null,"application/x-chess-pgn",300000));
             case "share":requireLogin();activity.shareLichess(HOST+"/@/"+nick(username));return new JSONObject().put("ok",true);
+            case "openGame":requireLogin();synchronized(this){if(gameId.isEmpty())throw new IOException("Нет партии");activity.openBrowser(HOST+"/"+id(gameId));}return new JSONObject().put("ok",true);
             case "open":requireLogin();activity.openBrowser(HOST+"/@/"+nick(r.optString("user",username)));return new JSONObject().put("ok",true);
             default:throw new IOException("Неизвестное действие Lichess");
         }
