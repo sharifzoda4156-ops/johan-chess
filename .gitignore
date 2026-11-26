@@ -1,0 +1,5 @@
+node_modules/
+public/engine/
+public/chess.js
+public/engine-path.js
+package-lock.json
