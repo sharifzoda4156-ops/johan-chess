@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'public/**'
+      - 'android/**'
       - 'lib/**'
       - 'scripts/**'
       - 'test/**'
@@ -29,3 +30,12 @@ jobs:
       - name: Check JavaScript syntax
         run: find public lib scripts test -type f \( -name '*.js' -o -name '*.mjs' \) -print0 | xargs -0 -n1 node --check
       - run: npm test
+      - name: Test fixed chess layout in Chrome
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts playwright-core@1.51.1
+          node scripts/check-game-layout.mjs
+      - name: Test native opponent presence policy
+        run: |
+          mkdir -p "$RUNNER_TEMP/online-tests"
+          javac -d "$RUNNER_TEMP/online-tests" android/app/src/main/java/com/johansystems/chess/OpponentPresence.java test/native/OpponentPresenceTest.java
+          java -cp "$RUNNER_TEMP/online-tests" com.johansystems.chess.OpponentPresenceTest

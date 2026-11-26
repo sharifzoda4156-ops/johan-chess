@@ -47,3 +47,33 @@ test('selection retains cells and piece nodes; moves only update changed squares
   clearBoardView(board);assert.equal(board.children.length,0);
  }finally{if(old===undefined)delete globalThis.document;else globalThis.document=old;}
 });
+
+import {MOVE_SPEEDS,normalizeMotion,moveDuration,replyDelay,roundMotionFactor,motionProgress,motionFrames} from '../public/board-view.js';
+test('classic medium animation is consistent, configurable and respects accessibility',()=>{
+ assert.equal(normalizeMotion('unknown'),'medium');assert.equal(normalizeMotion('none'),'none');assert.equal(moveDuration(),250);assert.deepEqual(MOVE_SPEEDS,{slow:500,medium:250,fast:120,none:0});assert.equal(replyDelay(),375);
+ const previous=globalThis.matchMedia;globalThis.matchMedia=()=>({matches:true});try{assert.equal(moveDuration(),0);assert.equal(replyDelay(),0);}finally{if(previous===undefined)delete globalThis.matchMedia;else globalThis.matchMedia=previous;}
+});
+
+test('capture and castle animation overlay is removed on completion or interrupted move',async()=>{
+ const doc={createElement(tag){const el=new El(tag,doc);el.style={};el.classList={add(c){el.className+=' '+c;}};el.animate=(frames,options)=>{let resolve,reject;const finished=new Promise((a,b)=>{resolve=a;reject=b;});const anim={frames,options,finished,resolve,cancel(){reject(Error('cancelled'));}};animations.push(anim);return anim;};return el;},createDocumentFragment(){return new El('fragment',doc);}};
+ const old=globalThis.document,animations=[];globalThis.document=doc;
+ try{
+  const board=doc.createElement('div');board.isConnected=true;board.clientWidth=400;
+  renderBoardView(board,{rows:rows({e4:'wP',d5:'bP'})});
+  renderBoardView(board,{rows:rows({d5:'wP'}),animateMoves:[{from:'e4',to:'d5'}]});
+  const layer=board.children.at(-1);assert.equal(layer.className,'board-motion-layer');assert.equal(layer.children.length,2);
+  const img=board.children.find(c=>c.dataset.square==='d5').children.find(c=>c.tag==='img');
+  assert.equal(img.style.visibility,'hidden');assert.equal(animations[0].options.duration,250);
+  animations[0].resolve();await Promise.resolve();await Promise.resolve();assert.equal(board.children.length,64);assert.equal(img.style.visibility,'');
+  renderBoardView(board,{rows:rows({e1:'wK',h1:'wR'})});
+  renderBoardView(board,{rows:rows({g1:'wK',f1:'wR'}),animateMoves:[{from:'e1',to:'g1'}]});
+  assert.equal(board.children.at(-1).children.length,2);assert.equal(animations[1].options.duration,animations[2].options.duration);
+  clearBoardView(board);assert.equal(board.children.length,0);await Promise.resolve();
+ }finally{if(old===undefined)delete globalThis.document;else globalThis.document=old;}
+});
+
+test('Lichess cubic interpolation, speed threshold and clock scaling',()=>{
+ assert.equal(motionProgress(0),0);assert.equal(motionProgress(.25),.0625);assert.equal(motionProgress(.5),.5);assert.equal(motionProgress(.75),.9375);assert.equal(motionProgress(1),1);
+ const frames=motionFrames(200,-100);assert.equal(frames.length,121);assert.deepEqual(frames[30],{offset:.25,transform:'translate(12.5%,-6.25%)'});assert.equal(frames.at(-1).transform,'translate(200%,-100%)');
+ assert.equal(roundMotionFactor(600000,0),1.2);assert.equal(roundMotionFactor(180000,0),.4);assert.equal(roundMotionFactor(60000,0),0);assert.equal(roundMotionFactor(180000,2000,true),1);assert.equal(moveDuration(.2),0);assert.equal(moveDuration(1.2),300);
+});

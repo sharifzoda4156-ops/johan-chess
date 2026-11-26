@@ -27,3 +27,33 @@ test('history bounds, consent and complete pairs',()=>{
  assert.equal(normalizeMemory({history:[...pair,{role:'assistant',content:'orphan'}]},Chess).history.length,0);
  assert.equal(saveMemory({setItem(){throw Error('quota');}},key,{history:pair},Chess).saved,false);
 });
+
+import {shouldCompact,coachHistory,createMemoryUpdate} from '../public/coach-memory.js';
+test('compact memory is bounded and only sent with history consent',()=>{
+ let m=normalizeMemory({summary:'a'.repeat(5000),summaryPending:5},Chess);assert.equal(m.summary.length,2400);assert.ok(shouldCompact(m,[]));
+ assert.equal(coachHistory({...m,shareHistory:false},pair).length,0);
+ assert.equal(shouldCompact({...m,shareHistory:false},pair),false);
+});
+test('model owns the replacement; staged write is committed only on successful finish',()=>{
+ const m=normalizeMemory({summary:'Old goal and stale detail',summaryPending:5,goal:'1500',plan:'Study endgames'},Chess);
+ const tx=createMemoryUpdate(m,()=>true);
+ assert.equal(tx.execute({action:'replace',summary:'New verified goal'}).ok,true);
+ assert.equal(m.summary,'Old goal and stale detail');
+ assert.equal(tx.execute({action:'replace',summary:'Another'}).ok,false);
+ const saved=tx.finish(m);assert.equal(saved.summary,'New verified goal');assert.equal(saved.summaryPending,0);assert.equal(saved.goal,'1500');assert.equal(saved.plan,'Study endgames');
+ assert.equal(createMemoryUpdate(m,()=>true).finish(m).summaryPending,6);
+});
+test('keep, clear, invalid input, consent revocation and profile switch',()=>{
+ let allowed=true;const m=normalizeMemory({summary:'Old',summaryPending:5},Chess);
+ let tx=createMemoryUpdate(m,()=>allowed);
+ assert.equal(tx.execute({action:'replace',summary:'x'.repeat(2401)}).ok,false);
+ assert.equal(tx.execute({action:'keep',summary:'not empty'}).ok,false);
+ assert.equal(tx.execute({action:'replace',summary:'',goal:'injected'}).ok,false);
+ assert.equal(tx.execute({action:'keep',summary:''}).ok,true);
+ assert.equal(tx.finish(m).summary,'Old');assert.equal(tx.finish(m).summaryPending,0);
+ tx=createMemoryUpdate(m,()=>allowed);assert.equal(tx.execute({action:'replace',summary:''}).ok,true);
+ assert.equal(tx.finish(m).summary,'');assert.equal(shouldCompact(tx.finish(m),Array(20).fill({})),false);
+ allowed=false;assert.equal(tx.finish(m),m);assert.equal(createMemoryUpdate(m,()=>allowed).execute({action:'replace',summary:'new'}).ok,false);
+ const off={...m,shareHistory:false};assert.equal(createMemoryUpdate(off,()=>true).execute({action:'replace',summary:'new'}).ok,false);
+ assert.equal(createMemoryUpdate(off,()=>true).finish(off),off);
+});

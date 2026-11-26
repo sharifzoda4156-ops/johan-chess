@@ -20,6 +20,28 @@ final class ChessImport {
             }
         } finally { c.disconnect(); }
     }
+    static JSONObject stats(String name)throws Exception {
+        String user=name==null?"":name.toLowerCase(Locale.ROOT);
+        if(!user.matches("[a-z0-9_-]{1,40}"))throw new IOException("Некорректный ник");
+        return get(user+"/stats");
+    }
+    // Chess.com only documents player archives, not a public single-game lookup.
+    static String sharedGame(String name,String kind,String id)throws Exception{
+        String user=name==null?"":name.toLowerCase(Locale.ROOT);
+        if(!user.matches("[a-z0-9_-]{1,40}")||!Arrays.asList("live","daily").contains(kind)||!id.matches("[0-9]{1,20}"))throw new IOException("Нужен корректный ник и ссылка Chess.com");
+        JSONArray archives=get(user+"/games/archives").getJSONArray("archives");
+        for(int i=archives.length()-1;i>=Math.max(0,archives.length()-3);i--){
+            java.util.regex.Matcher m=java.util.regex.Pattern.compile("/(\\d{4})/(\\d{2})$").matcher(archives.getString(i));
+            if(!m.find())continue;
+            JSONArray rows=get(user+"/games/"+m.group(1)+"/"+m.group(2)).getJSONArray("games");
+            for(int j=0;j<rows.length();j++){
+                JSONObject g=rows.getJSONObject(j);
+                String url=g.optString("url");
+                if(url.matches("https://(?:www\\.)?chess\\.com/game/"+kind+"/"+id+"/?")&&"chess".equals(g.optString("rules"))&&!g.optString("pgn").isEmpty())return g.getString("pgn");
+            }
+        }
+        throw new IOException("Партия не найдена в последних трёх архивах этого игрока. Поделись PGN или укажи ник участника.");
+    }
     static JSONObject games(String name)throws Exception {
         String user=name==null?"":name.toLowerCase(Locale.ROOT);
         if(!user.matches("[a-z0-9_-]{1,40}"))throw new IOException("Некорректный ник");

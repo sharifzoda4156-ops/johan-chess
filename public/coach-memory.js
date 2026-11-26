@@ -38,7 +38,7 @@ export function normalizeMemory(raw,Chess){
   const pair=[user,assistant],size=JSON.stringify(pair).length*2;if(bytes+size>MAX_BYTES)break;
   bytes+=size;history.unshift(...pair);
  }
- return {history,notes:cut(r.notes,3000),goal:cut(r.goal,300),focus:cut(r.focus,500),minutes:[15,30,45,60,90,120].includes(r.minutes)?r.minutes:60,plan:cut(r.plan,4000),shareHistory:r.shareHistory!==false};
+ return {history,notes:cut(r.notes,3000),goal:cut(r.goal,300),focus:cut(r.focus,500),minutes:[15,30,45,60,90,120].includes(r.minutes)?r.minutes:60,plan:cut(r.plan,4000),shareHistory:r.shareHistory!==false,shareGames:r.shareGames!==false,summary:cut(r.summary,2400),summaryPending:Number.isSafeInteger(r.summaryPending)?Math.max(0,Math.min(100,r.summaryPending)):0};
 }
 export function loadMemory(storage,key,Chess){
  if(!key)return normalizeMemory(null,Chess);
@@ -59,4 +59,34 @@ export function recentConversation(history,enabled){
   used+=n;out.unshift(...pair);
  }
  return out;
+}
+
+export function shouldCompact(memory,history){
+ return memory.shareHistory!==false&&(memory.summaryPending>=5||(!memory.summary&&memory.summaryPending>0&&history.length>=10));
+}
+export function coachHistory(memory,history){
+ if(memory.shareHistory===false)return [];
+ const rows=history.slice(-(shouldCompact(memory,history)?12:8));let chars=0;const out=[];
+ for(let i=rows.length-2;i>=0;i-=2){
+  const pair=rows.slice(i,i+2).map(m=>({role:m.role,content:cut(m.content,3000)}));
+  const n=pair.reduce((s,m)=>s+m.content.length,0);if(chars+n>12000)break;chars+=n;out.unshift(...pair);
+ }return out;
+}
+// One transaction per completed coach turn. The model chooses what to retain,
+// replace or remove. No data are persisted until the final answer succeeds.
+export function createMemoryUpdate(memory,allowed){
+ let staged=null;
+ return {
+  execute(args){
+   if(!memory.shareHistory||!allowed())return {ok:false,error:'Память отключена или профиль изменился'};
+   if(staged!==null)return {ok:false,error:'Память уже обработана в этом запросе'};
+   if(!args||typeof args!=='object'||Array.isArray(args)||Object.keys(args).sort().join(',')!=='action,summary'||!['replace','keep'].includes(args.action)||typeof args.summary!=='string'||args.summary.length>2400||args.action==='keep'&&args.summary!=='')return {ok:false,error:'Неверный формат. Полная сводка до 2400 символов; keep требует пустую строку.'};
+   staged={summary:args.action==='keep'?memory.summary:args.summary.trim()};
+   return {ok:true,staged:true,action:args.action,characters:staged.summary.length};
+  },
+  finish(current){
+   if(!current.shareHistory||!allowed())return current;
+   return {...current,summary:staged===null?current.summary:staged.summary,summaryPending:staged===null?Math.min(100,current.summaryPending+1):0};
+  }
+ };
 }
