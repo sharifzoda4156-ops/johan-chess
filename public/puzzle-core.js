@@ -62,7 +62,7 @@ export function finishAttempt(raw,id,assisted){
  return {completed:p.completed+1,clean:p.clean+(clean?1:0),streak,bestStreak:Math.max(streak,p.bestStreak),solved:[...new Set([...p.solved,id])].slice(-1000)};
 }
 export function choosePuzzle(items,progress,current){
- const list=items.filter(p=>p.id!==current);
- const pool=list.length?list:items;
- return pool.find(p=>!progress.solved.includes(p.id))||pool[0]||null;
+ const index=items.findIndex(p=>p.id===current);
+ const rotated=index<0?items:[...items.slice(index+1),...items.slice(0,index+1)];
+ return rotated.find(p=>p.id!==current&&!progress.solved.includes(p.id))||rotated[0]||null;
 }
