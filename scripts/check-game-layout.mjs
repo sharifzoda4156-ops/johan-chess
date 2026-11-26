@@ -30,7 +30,7 @@ try{
    assert.ok(initial.board.x>=-.5&&initial.board.y>=-.5&&initial.board.x+initial.board.w<=initial.width+.5&&initial.board.y+initial.board.h<=initial.height+.5);
    assert.ok(initial.toolbar.y+initial.toolbar.h<=initial.height+.5);
    assert.equal(initial.nav,'none');
-   if(viewport.height>=800&&viewport.width<500)assert.ok(initial.board.w>=viewport.width-1);
+   if(viewport.height>=800&&viewport.width<500)assert.ok(initial.board.w>=viewport.width-1,JSON.stringify({viewport,mode,initial}));
    await page.evaluate(mode=>{
     const $=id=>document.getElementById(id),strip=$(mode==='play'?'playMoves':mode==='online'?'onlineMoveStrip':'reviewMoveStrip');
     strip.textContent='1. e4 e5 2. Nf3 Nc6 '.repeat(150);strip.scrollLeft=strip.scrollWidth;
