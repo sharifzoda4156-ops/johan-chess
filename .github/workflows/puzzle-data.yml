@@ -1,0 +1,78 @@
+name: Publish Lichess puzzle data
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/puzzle-data.yml'
+      - 'scripts/publish-puzzle-data.mjs'
+permissions:
+  contents: write
+concurrency:
+  group: lichess-data-publish
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download and partition official CC0 dataset
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh repo view --json visibility --jq .visibility)" = PUBLIC
+          command -v zstd >/dev/null || (sudo apt-get update && sudo apt-get install -y zstd)
+          mkdir -p "$RUNNER_TEMP/puzzle-data"
+          TAG="lichess-data-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          curl --fail --location --retry 3 https://database.lichess.org/lichess_db_puzzle.csv.zst -o "$RUNNER_TEMP/lichess.csv.zst"
+          zstd -dc "$RUNNER_TEMP/lichess.csv.zst" | node scripts/publish-puzzle-data.mjs "$RUNNER_TEMP/puzzle-data" "$TAG"
+          rm "$RUNNER_TEMP/lichess.csv.zst"
+      - name: Validate starter before publishing
+        run: |
+          npm install --ignore-scripts
+          cp "$RUNNER_TEMP/puzzle-data/starter.json" public/lichess-puzzles.json
+          npm test
+      - name: Upload immutable-version data files
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/puzzle-data"
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Lichess puzzles $TAG" --notes "CC0 data from https://database.lichess.org/#puzzles; original IDs, FEN, UCI, ratings and themes." 
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" ./*.bin catalog.json starter.json
+      - name: Verify partial downloads before switching catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/puzzle-data"
+          node --input-type=module -e 'import fs from "node:fs";const c=JSON.parse(fs.readFileSync("catalog.json"));for(const a of new Set(c.packs.map(p=>p.asset))){const p=c.packs.filter(p=>p.asset===a).at(-1);console.log([a,p.offset,p.length,p.sha256].join(" "));}' > checks.txt
+          while read -r asset offset length sha; do
+            end=$((offset+length-1))
+            code=$(curl -sS --fail --location --retry 3 --max-filesize "$length" --max-time 90 -H "Accept-Encoding: identity" -H "Range: bytes=$offset-$end" -o check.bin -w '%{http_code}' "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$asset")
+            test "$code" = 206
+            test "$(wc -c < check.bin)" = "$length"
+            echo "$sha  check.bin" | sha256sum --check -
+          done < checks.txt
+      - name: Publish small catalog pointer after all checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git reset --hard
+          if git ls-remote --exit-code --heads origin puzzle-catalog >/dev/null; then
+            git fetch origin puzzle-catalog
+            git switch -c puzzle-catalog FETCH_HEAD
+          else
+            git switch --orphan puzzle-catalog
+          fi
+          cp "$RUNNER_TEMP/puzzle-data/catalog.json" "$RUNNER_TEMP/puzzle-data/starter.json" .
+          git add catalog.json starter.json
+          git commit -m "Publish verified Lichess catalog $TAG"
+          git push origin HEAD:refs/heads/puzzle-catalog
