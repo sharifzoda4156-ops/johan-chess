@@ -26,7 +26,7 @@ export async function cacheGet(key){
 export async function cachePut(key,value){
  const size=new TextEncoder().encode(value).byteLength;if(size>LIMIT)return false;
  try{const d=await db(),tx=d.transaction(['data','meta'],'readwrite'),done=completed(tx),data=tx.objectStore('data'),meta=tx.objectStore('meta');
-  const entries=await result(meta.getAll());for(const k of evictions(entries,key,size)){data.delete(k);meta.delete(k);}
+  done.catch(()=>{});const entries=await result(meta.getAll());for(const k of evictions(entries,key,size)){data.delete(k);meta.delete(k);}
   data.put(value,key);meta.put({key,size,used:Date.now()});await done;return true;
  }catch{return false;}
 }
