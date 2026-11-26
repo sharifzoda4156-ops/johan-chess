@@ -1,3 +1,5 @@
+import {Chess} from 'chess.js';
+import {preparePuzzle} from '../public/puzzle-core.js';
 import {createInterface} from 'node:readline';
 import {mkdirSync,appendFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
@@ -28,7 +30,7 @@ for await(const line of createInterface({input:process.stdin,crlfDelay:Infinity}
  const g=groups.get(band);g.rows.push(p);total++;if(g.rows.length===1000)flush(g);
  // Starter: 100 popular positions in each of ten rating bands, 600–2599.
  if(band>=3&&band<=12&&Number(get('Popularity'))>=80&&Number(get('NbPlays'))>=100){
-  if(!starter.has(band))starter.set(band,[]);if(starter.get(band).length<100)starter.get(band).push(p);
+  if(!starter.has(band))starter.set(band,[]);if(starter.get(band).length<100&&preparePuzzle(p,Chess))starter.get(band).push(p);
  }
 }
 for(const g of groups.values())flush(g);
