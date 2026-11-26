@@ -1,9 +1,11 @@
+import {Chess} from './chess.js';
+import {memoryKey,loadMemory,saveMemory,recentConversation,normalizeMemory} from './coach-memory.js';
 import {getPuzzleTraining} from './puzzles.js';
 import {snapshotBoards,renderCoachContent} from './coach-board.js';
 const $=id=>document.getElementById(id);
 const native=globalThis.JohanNative;
 const pending=new Map();
-let seq=0, active=false, history=[], contextProvider=null;
+let seq=0, active=false, history=[], contextProvider=null,account='',scopeKey=null,memory=normalizeMemory(null,Chess);
 if(native)native.onmessage=e=>{
  try{const m=JSON.parse(e.data), p=pending.get(m.id);if(!p)return;clearTimeout(p.timer);pending.delete(m.id);m.error?p.reject(Error(m.error)):p.resolve(m.data);}catch{}
 };
@@ -26,13 +28,31 @@ export function rememberGame(context){
  const record={id:fingerprint,source:g.source||'import',date:g.date,white:g.white,black:g.black,result:g.result,color:own,depth:g.depth,accuracy:rs.length?rs.reduce((a,r)=>a+r.accuracy,0)/rs.length:null,errors:rs.filter(r=>r.loss>=5).sort((a,b)=>b.loss-a.loss).slice(0,5).map(r=>({index:r.index,san:r.san,best:r.bestSan,loss:r.loss,label:r.label,pv:r.pv}))};
  try{const saved=getGames(context.user).filter(r=>r.id!==fingerprint);localStorage.setItem(key(context.user),JSON.stringify([record,...saved].slice(0,30)));}catch{}
 }
+function updateStudyFields(){
+ $('aiNotes').value=memory.notes;$('aiGoal').value=memory.goal;$('aiFocus').value=memory.focus;$('aiMinutes').value=String(memory.minutes);$('aiPlan').value=memory.plan;
+ $('aiMemoryStatus').textContent=scopeKey?'Локальная память · '+history.length/2+' диалогов':'Войди в ChatGPT, чтобы сохранять занятия.';
+ for(const id of ['aiNotes','aiGoal','aiFocus','aiMinutes','aiPlan','aiClear','aiDeleteStudy','aiContinue','aiMakePlan','aiShareHistory','aiDeleteMemory'])$(id).disabled=!scopeKey;
+}
+function switchMemory(force=false){
+ const next=memoryKey(account,contextProvider?.().user);
+ if(next===scopeKey&&!force)return;
+ scopeKey=next;memory=loadMemory(localStorage,scopeKey,Chess);history=memory.history;
+ $('aiQuestion').value='';updateStudyFields();showHistory();
+}
+function persist(){
+ if(!scopeKey)return false;
+ const result=saveMemory(localStorage,scopeKey,{...memory,history},Chess);
+ memory=result.memory;history=memory.history;
+ $('aiMemoryStatus').textContent=result.saved?'Локальная память · '+history.length/2+' диалогов':'Не удалось сохранить память на устройстве.';
+ return result.saved;
+}
 function showHistory(){
  const list=$('aiHistory');list.replaceChildren();
  for(const m of history){const el=document.createElement('div');el.className='ai-message '+m.role;const name=document.createElement('b');name.textContent=m.role==='assistant'?'Тренер':'Ты';const body=document.createElement('div');renderCoachContent(body,m);el.append(name,body);list.append(el);}
  list.scrollTop=list.scrollHeight;
 }
 function syncStatus(s){
- active=Boolean(s.sharing);
+ active=Boolean(s.sharing);account=s.connected&&typeof s.memoryId==='string'?s.memoryId:'';switchMemory();
  document.dispatchEvent(new CustomEvent('jc-account',{detail:{connected:!!s.connected,sharing:!!s.sharing,name:typeof s.name==='string'?s.name:''}}));
  $('aiAccount').textContent=s.connected?(s.name||'ChatGPT'):'Не подключён';
  $('aiLogin').textContent=s.connected?'Повторить вход':'Continue with ChatGPT';
@@ -55,35 +75,41 @@ async function refresh(){
 let busy=false;
 async function action(fn){
  if(busy)return;busy=true;
- const controls=['aiLogin','aiConsent','aiLogout','aiForget','aiRefresh','aiAsk','aiClear'];
+ const controls=['aiLogin','aiConsent','aiLogout','aiForget','aiRefresh','aiAsk','aiClear','aiDeleteStudy','aiDeleteMemory','aiContinue','aiMakePlan','aiNotes','aiGoal','aiFocus','aiMinutes','aiPlan','aiShareHistory'];
  for(const id of controls)$(id).disabled=true;
  try{await fn();}catch(e){say(e.message||'Ошибка подключения.');}
- finally{busy=false;for(const id of controls)$(id).disabled=false;$('aiAsk').disabled=!active||!$('aiModel').options.length;}
+ finally{busy=false;for(const id of controls)$(id).disabled=false;switchMemory();for(const id of controls.slice(6))$(id).disabled=!scopeKey;$('aiAsk').disabled=!active||!scopeKey||!$('aiModel').options.length;}
 }
 export function initCoach(provider){
  contextProvider=provider;
  if(!native)return;
  $('aiPanel').hidden=false;
- const login=consent=>action(async()=>{say('Продолжи вход в системном браузере, затем вернись в приложение.');await call('login',{consent});history=[];showHistory();await refresh();});
+ const login=consent=>action(async()=>{say('Продолжи вход в системном браузере, затем вернись в приложение.');await call('login',{consent});await refresh();});
  $('aiLogin').onclick=()=>login(false);$('aiConsent').onclick=()=>login(true);
  $('aiRefresh').onclick=()=>action(refresh);
- const logout=forget=>action(async()=>{const r=await call(forget?'forget':'logout');history=[];showHistory();syncStatus(r);if(!r.revoked)say('Локальный выход выполнен. Отзови доступ в настройках ChatGPT, если требуется.');});
+ const logout=forget=>action(async()=>{const r=await call(forget?'forget':'logout');syncStatus(r);if(!r.revoked)say('Локальный выход выполнен. Отзови доступ в настройках ChatGPT, если требуется.');});
  $('aiLogout').onclick=()=>logout(false);$('aiForget').onclick=()=>{if(confirm('Удалить сохранённую регистрацию ChatGPT с устройства?'))logout(true);};
- $('aiClear').onclick=()=>{history=[];showHistory();};
+ $('aiClear').onclick=()=>{if(!scopeKey||!confirm('Удалить сохранённый диалог? План и заметки останутся.'))return;history=[];persist();showHistory();};
+ $('aiDeleteStudy').onclick=()=>{if(!scopeKey||!confirm('Удалить диалог, мини-доски, план и заметки для текущего аккаунта и ника?'))return;try{localStorage.removeItem(scopeKey);switchMemory(true);}catch{say('Не удалось удалить память.');}};
+ $('aiContinue').onclick=()=>{$('aiQuestion').value='Продолжим обучение. На основе доступного плана, прошлых занятий и статистики предложи один следующий шаг. Если контекста недостаточно, уточни.';$('aiQuestion').focus();};
+ $('aiMakePlan').onclick=()=>{$('aiQuestion').value='Составь индивидуальный план на неделю по моим целям, времени и доступной статистике. Используй проверенные учебные источники и существующие задачи Lichess; не создавай новые шахматные позиции.';$('aiQuestion').focus();};
  $('aiDeleteMemory').onclick=()=>{if(confirm('Удалить локальную историю проанализированных партий этого игрока?')){try{localStorage.removeItem(key(contextProvider().user));say('История анализа очищена.');}catch{say('Не удалось очистить историю.');}}};
  $('aiAsk').onclick=()=>action(async()=>{
-  const question=$('aiQuestion').value.trim(),model=$('aiModel').value;if(!question||!model)return;
+  switchMemory();const requestKey=scopeKey;
+  const question=$('aiQuestion').value.trim(),model=$('aiModel').value;if(!question||!model||!requestKey)return;
   const ctx=contextProvider();
   const include=$('aiShare').checked;
-  const context={user:ctx.user,profile:{goal:'Стабильные 1500 как первый этап; исследовать достижимый уровень',focus:'Расчёт ответных угроз и безопасность короля',notes:$('aiNotes').value.slice(0,3000)},game:include?ctx.game:null,recentGames:include?getGames(ctx.user).slice(0,20):[],puzzleTraining:include?getPuzzleTraining(ctx.user):null};
+  const context={user:ctx.user,profile:{goal:memory.goal,focus:memory.focus,minutesPerDay:memory.minutes,notes:memory.notes,studyPlan:memory.plan},game:include?ctx.game:null,recentGames:include?getGames(ctx.user).slice(0,20):[],puzzleTraining:include?getPuzzleTraining(ctx.user):null};
   if(context.game&&!['1-0','0-1','1/2-1/2'].includes(context.game.result)){say('Загрузи завершённую партию или отключи отправку партии.');return;}
   if(JSON.stringify(context).length>160000){say('Слишком большой контекст. Отключи отправку партии или сократи анализ.');return;}
-  const previous=history.slice(-12).map(({role,content})=>({role,content:content.slice(0,16000)}));say('Тренер анализирует…');
+  const previous=recentConversation(history,$('aiShareHistory').checked);say('Тренер анализирует…');
   const result=await call('ask',{model,context,history:previous,question});
-  history.push({role:'user',content:question},{role:'assistant',content:result.answer,parts:snapshotBoards(result.answer,context.game)});
-  history=history.slice(-20);$('aiQuestion').value='';showHistory();say('Ответ получен.');
+  const pair=[{role:'user',content:question},{role:'assistant',content:result.answer,parts:snapshotBoards(result.answer,context.game)}];
+  if(requestKey!==memoryKey(account,contextProvider().user)){const saved=loadMemory(localStorage,requestKey,Chess);saveMemory(localStorage,requestKey,{...saved,history:[...saved.history,...pair]},Chess);switchMemory();say('Ответ сохранён в предыдущем профиле.');return;}
+  history.push(...pair);const saved=persist();$('aiQuestion').value='';showHistory();say(saved?'Ответ получен.':'Ответ получен, но сохранение не удалось.');
  });
- try{$('aiNotes').value=localStorage.getItem('jc-coach-notes')||'';}catch{}
- $('aiNotes').oninput=()=>{try{localStorage.setItem('jc-coach-notes',$('aiNotes').value);}catch{}};
+ for(const [id,k] of [['aiNotes','notes'],['aiGoal','goal'],['aiFocus','focus'],['aiMinutes','minutes'],['aiPlan','plan']])$(id).onchange=()=>{if(!scopeKey||busy)return;memory[k]=k==='minutes'?Number($(id).value):$(id).value;persist();};
+ document.addEventListener('jc-screen',e=>{if(e.detail==='coach'&&!busy)switchMemory();});
+ updateStudyFields();
  action(refresh);
 }
