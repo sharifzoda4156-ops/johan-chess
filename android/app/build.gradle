@@ -1,0 +1,27 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.johansystems.chess'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.johansystems.chess'
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName '0.2.0-alpha'
+    }
+    sourceSets { main { assets.srcDirs = ['../../public'] } }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+dependencies {
+    implementation 'androidx.webkit:webkit:1.12.1'
+    implementation 'com.nimbusds:nimbus-jose-jwt:9.37.3'
+}
+tasks.named('preBuild').configure {
+    doFirst {
+        if (!file('../../public/engine-path.js').exists() || !file('../../public/chess.js').exists())
+            throw new GradleException('Run npm install at the repository root before building the APK.')
+    }
+}
