@@ -116,5 +116,5 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
  $('promote-cancel').onclick=()=>{promotions=[];draw();};
  document.addEventListener('visibilitychange',()=>{if(session)tick();});
  historyList();
- return {active:()=>!!session,startReplay:(fen,color)=>{if(session||!canStart())return; $('playFen').value=fen;$('playPanel').scrollIntoView({behavior:scrollBehavior()});return start({fen,color,replay:true});}};
+ return {active:()=>!!session,interrupt:()=>{if(session)cancel('Тренировка остановлена: онлайн-партия');},startReplay:(fen,color)=>{if(session||!canStart())return; $('playFen').value=fen;$('playPanel').scrollIntoView({behavior:scrollBehavior()});return start({fen,color,replay:true});}};
 }

@@ -16,6 +16,8 @@ public final class MainActivity extends Activity {
     private static final String ORIGIN = "https://appassets.androidplatform.net";
     private WebView web;
     private Coach coach;
+    private Lichess lichess;
+    private final ExecutorService lichessExecutor=Executors.newSingleThreadExecutor();
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
@@ -59,6 +61,7 @@ public final class MainActivity extends Activity {
         });
         web.setDownloadListener((url,agent,disposition,mime,length)->{});
         try { coach=new Coach(this); } catch(Exception ignored) {}
+        try { lichess=new Lichess(this); } catch(Exception ignored) {}
         if(WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)){
             WebViewCompat.addWebMessageListener(web,"JohanNative",Collections.singleton(ORIGIN),(view,msg,origin,main,reply)->{
                 if(!main||!ORIGIN.equals(origin.toString()))return;
@@ -70,10 +73,21 @@ public final class MainActivity extends Activity {
                         JSONObject req=new JSONObject(raw);
                         out.put("id",req.getString("id"));
                         if(coach==null)throw new IOException("Защищённое хранилище недоступно");
+                        if(lichess!=null&&lichess.locked()&&Arrays.asList("ask","continueCoach").contains(req.optString("op")))throw new IOException("ИИ недоступен во время онлайн-партии");
                         out.put("data",coach.handle(req));
                     } catch(Exception e) {
                         try { out.put("error", e.getMessage()==null?"Ошибка подключения":e.getMessage()); } catch(Exception ignored){}
                     }
+                    runOnUiThread(()->{if(!isDestroyed())try{reply.postMessage(out.toString());}catch(Exception ignored){}});
+                });
+            });
+            WebViewCompat.addWebMessageListener(web,"JohanLichess",Collections.singleton(ORIGIN),(view,msg,origin,isMain,reply)->{
+                if(!isMain||!ORIGIN.equals(origin.toString()))return;
+                String raw=msg.getData();if(raw==null||raw.length()>30000)return;
+                lichessExecutor.execute(()->{
+                    JSONObject out=new JSONObject();
+                    try{JSONObject req=new JSONObject(raw);out.put("id",req.getString("id"));if(lichess==null)throw new IOException("Защищённое хранилище Lichess недоступно");out.put("data",lichess.handle(req));}
+                    catch(Exception e){try{out.put("error",e.getMessage()==null?"Ошибка Lichess":e.getMessage());}catch(Exception ignored){}}
                     runOnUiThread(()->{if(!isDestroyed())try{reply.postMessage(out.toString());}catch(Exception ignored){}});
                 });
             });
@@ -89,7 +103,9 @@ public final class MainActivity extends Activity {
             catch(Exception e) { if(coach!=null)coach.cancelLogin(); }
         });
     }
+    void shareLichess(String url){runOnUiThread(()->{Intent intent=new Intent(Intent.ACTION_SEND);intent.setType("text/plain");intent.putExtra(Intent.EXTRA_TEXT,url);startActivity(Intent.createChooser(intent,"Поделиться профилем Lichess"));});}
     @Override protected void onDestroy() {
+        if(lichess!=null)lichess.close();lichessExecutor.shutdownNow();
         if(coach!=null)coach.cancelLogin();
         executor.shutdownNow();
         if(web!=null)web.destroy();

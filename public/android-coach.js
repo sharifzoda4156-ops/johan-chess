@@ -75,6 +75,7 @@ async function refresh(){
  }
 }
 let busy=false;
+export const coachBusy=()=>busy;
 async function action(fn){
  if(busy)return;busy=true;
  const controls=['aiLogin','aiConsent','aiLogout','aiForget','aiRefresh','aiAsk','aiClear','aiDeleteStudy','aiDeleteMemory','aiContinue','aiMakePlan','aiSummary','aiNotes','aiGoal','aiFocus','aiMinutes','aiPlan','aiShareHistory'];
@@ -99,6 +100,7 @@ export function initCoach(provider,options){
  $('aiMakePlan').onclick=()=>{if(busy||!scopeKey)return;$('aiQuestion').value='Составь индивидуальный план на неделю по моим целям, времени и доступной статистике. Используй проверенные учебные источники и существующие задачи Lichess; не создавай новые шахматные позиции.';$('aiQuestion').focus();};
  $('aiDeleteMemory').onclick=()=>{if(!busy&&scopeKey&&confirm('Удалить локальную историю проанализированных партий этого игрока?')){try{localStorage.removeItem(key(contextProvider().user));say('История анализа очищена.');}catch{say('Не удалось очистить историю.');}}};
  $('aiAsk').onclick=()=>action(async()=>{
+  if(toolOptions?.onlineLocked?.())throw Error('Тренер недоступен во время онлайн-партии');
   switchMemory();const requestKey=scopeKey;
   const question=$('aiQuestion').value.trim(),model=$('aiModel').value;if(!question||!model||!requestKey)return;
   const ctx=contextProvider();
