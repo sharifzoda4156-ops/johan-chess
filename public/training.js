@@ -43,7 +43,7 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
   session=null;serial++;stopEngine(s);selected=null;promotions=[];
   s.game.setHeader('Result',end.result);s.game.setHeader('Termination',end.reason);
   const pgn=s.game.pgn(),hasMoves=s.game.history().length>0;
-  finished=hasMoves?{pgn}:null;
+  finished=hasMoves?{pgn,user:s.user}:null;
   if(hasMoves){const record={pgn,result:end.result,date:new Date().toISOString().slice(0,10),level:s.level,user:s.user};
    if(!storeHistory(record))status('Партия завершена, но локальное сохранение не удалось.');
    if(s.adaptive&&s.standard&&!s.replay){try{localStorage.setItem('jc-bot-level:'+s.user.toLowerCase(),String(adaptiveLevel(s.levelIndex,end.result,s.color)));}catch{}}
@@ -51,7 +51,7 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
   $('playPromotion').hidden=true;for(const d of $('playBoard').children)d.disabled=true;
   $('playResign').disabled=true;$('playCancel').disabled=true;$('playReview').hidden=!hasMoves;settings(true);historyList();unlock();
   status(end.reason+' · '+end.result+(hasMoves?' · можно разобрать партию':' · нет ходов для анализа'));
-  if(hasMoves)review(pgn,false);
+  if(hasMoves)review(pgn,true,s.user);
  }
  function cancel(message){
   const s=session;session=null;serial++;stopEngine(s);selected=null;promotions=[];finished=null;
@@ -90,7 +90,7 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
   const p=s.game.get(square);selected=p?.color===s.color&&selected!==square?square:null;draw();
  }
  async function start(overrides={}){
-  if(session||!canStart())return false;
+  if(session||!canStart()){status('Дождись окончания импорта или анализа.');return false;}
   let game,fen=overrides.fen??$('playFen').value.trim();
   try{game=fen?new Chess(fen):new Chess();const end=terminal(game);if(end)throw Error('В этой позиции партия уже окончена.');}
   catch(e){status('Некорректная стартовая позиция: '+e.message);return false;}
@@ -118,8 +118,8 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
  $('playStart').onclick=()=>start();
  $('playCancel').onclick=()=>{if(session&&confirm('Прервать тренировку без результата?'))cancel('Тренировка отменена.');};
  $('playResign').onclick=()=>{if(session&&!session.starting&&confirm('Сдаться?')){tick();if(session)finish({result:resultFor(opposite(session.color)),reason:'Игрок сдался'});}};
- $('playReview').onclick=()=>{if(finished&&!session&&canStart())review(finished.pgn,true);};
- $('playOpenHistory').onclick=()=>{if(!session&&canStart()){const g=readHistory()[Number($('playHistory').value)];if(g)review(g.pgn,true);}};
+ $('playReview').onclick=()=>{if(finished&&!session&&canStart())review(finished.pgn,true,finished.user);};
+ $('playOpenHistory').onclick=()=>{if(!session&&canStart()){const g=readHistory()[Number($('playHistory').value)];if(g)review(g.pgn,true,g.user);}};
  for(const p of ['q','r','b','n'])$('promote-'+p).onclick=()=>{const m=promotions.find(x=>x.promotion===p);if(m)human(m);};
  $('promote-cancel').onclick=()=>{promotions=[];draw();};
  document.addEventListener('visibilitychange',()=>{if(session)tick();});
