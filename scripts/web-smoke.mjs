@@ -18,8 +18,10 @@ try{
   await page.locator('#profileAwards .profile-award').first().waitFor();
   await page.locator('[data-tab="puzzles"]').click();
   await page.locator('#modeClassic').click();
+  await page.locator('#classicStart').click();
   await page.locator('#puzzleBoard [data-square]').first().waitFor({timeout:30000});
   assert.equal(await page.locator('#puzzleBoard [data-square]').count(),64);
+  await page.locator('#journeyBack').click();
   await page.locator('[data-tab="coach"]').click();
   await page.locator('#coachUnavailable').waitFor();
   await page.locator('[data-go="library"]').click();
@@ -27,7 +29,7 @@ try{
   assert.equal(await page.locator('#studyBoard [data-square]').count(),64);
   await page.locator('#studyNext').click();
   await page.locator('[data-tab="home"]').click();
-  await page.locator('[data-go="review"]').click();
+  await page.locator('[data-go="review"]').first().click();
   await page.locator('#manual summary').click();
   await page.locator('#pgn').fill('[Result "1-0"]\n\n1. e4 e5 2. Nf3 Nc6 1-0');
   await page.locator('#load').click();
@@ -42,6 +44,7 @@ try{
   await page.locator('#playStart').click();
   await page.locator('#playBoard [data-square="e2"]').waitFor();
   assert.equal(await page.locator('#playBoard [data-square]').count(),64);
+  await page.waitForFunction(()=>document.querySelector('#playStatus').textContent.startsWith('Твой ход'),{},{timeout:30000});
   await page.locator('#playBoard [data-square="e2"]').click();
   await page.locator('#playBoard [data-square="e4"]').click();
   await page.waitForFunction(()=>document.querySelector('#playBoard [data-square="e4"]')?.getAttribute('aria-label')==='e4 wp');
