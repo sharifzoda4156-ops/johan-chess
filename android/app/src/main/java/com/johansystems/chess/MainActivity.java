@@ -124,7 +124,7 @@ public final class MainActivity extends Activity {
     void runLichessMaintenance(Runnable task){if(!lichessExecutor.isShutdown())lichessExecutor.execute(task);}
     private void syncForeground(){if(lichess!=null)lichess.foreground(resumed&&(hasWindowFocus()||confirmingExit));}
     @Override protected void onResume(){super.onResume();resumed=true;syncForeground();}
-    @Override protected void onPause(){resumed=false;syncForeground();super.onPause();}
+    @Override protected void onPause(){resumed=false;if(lichess!=null)lichess.background();super.onPause();}
     @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);syncForeground();}
     @Override public void onBackPressed(){
         if(lichess!=null&&lichess.liveGame()){
@@ -133,7 +133,7 @@ public final class MainActivity extends Activity {
             AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Покинуть онлайн-партию?")
                 .setMessage("Выход считается сдачей. Остаться можно без штрафа.")
                 .setNegativeButton("Продолжить игру",null)
-                .setPositiveButton("Сдаться",(d,which)->lichess.forfeitNow()).create();
+                .setPositiveButton("Сдаться",(d,which)->lichess.resignConfirmed()).create();
             dialog.setOnDismissListener(d->{confirmingExit=false;syncForeground();});dialog.show();
             return;
         }
