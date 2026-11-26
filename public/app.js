@@ -1,4 +1,5 @@
-import {initPuzzles,getPuzzleProgress} from './puzzles.js';
+import {TOPICS} from './puzzle-training.js';
+import {initPuzzles,getPuzzleProgress,getPuzzleTraining} from './puzzles.js';
 import {displayName,profileStats} from './profile-core.js';
 import {pieceGraphic} from './piece-art.js';
 import {initNavigation} from './navigation.js';
@@ -68,6 +69,10 @@ function readLocal(key){try{const rows=JSON.parse(localStorage.getItem(key)||'[]
 function refreshProfile(){
  const user=$('user').value.trim(),nick=user.toLowerCase();
  const s=profileStats(readLocal('jc-training-history-v1'),readLocal('jc-coach-games:'+nick),user,Chess);
+ const tactics=getPuzzleTraining(user);
+ $('profilePuzzleTarget').textContent=String(tactics.target);$('profilePuzzleAttempts').textContent=String(tactics.attempts);$('profilePuzzleSkipped').textContent=String(tactics.skipped);$('profilePuzzleAccuracy').textContent=tactics.accuracy===null?'—':tactics.accuracy+'%';
+ const topicList=$('profilePuzzleTopics');topicList.replaceChildren();
+ for(const [tag,label] of Object.entries(TOPICS)){const stat=tactics.topics[tag],row=elem('div',undefined,'topic-row');row.append(elem('span',label),elem('strong',stat.attempts?stat.clean+'/'+stat.attempts+(stat.attempts<5?' · мало данных':''):'—'));topicList.append(row);}
  const puzzles=getPuzzleProgress(user);$('profilePuzzleSolved').textContent=String(puzzles.solved.length);$('profilePuzzleStreak').textContent=String(puzzles.bestStreak);
  $('homePlayed').textContent=String(s.played);$('homeReviewed').textContent=String(s.reviewed);
  const name=displayName(accountStatus,user);
@@ -81,6 +86,7 @@ function refreshProfile(){
  for(const [id,n] of [['Win',s.wins],['Draw',s.draws],['Loss',s.losses]])$('profile'+id+'Bar').style.width=(s.played?100*n/s.played:0)+'%';
 }
 document.addEventListener('jc-screen',e=>{if(['home','profile'].includes(e.detail))refreshProfile();});
+document.addEventListener('jc-puzzle-progress',refreshProfile);
 document.addEventListener('jc-account',e=>{accountStatus=e.detail;refreshProfile();});
 $('profileConnect').onclick=()=>{navigation.show('coach');const settings=document.querySelector('.coach-settings');if(settings)settings.open=true;};
 refreshProfile();
