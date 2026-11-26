@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {platformFetch} from '../public/platform-api.js';
+import {platformFetch,webLichessPgn} from '../public/platform-api.js';
 const response=data=>new Response(JSON.stringify(data));
 test('native and local routes remain untouched',async()=>{
  const opts={cache:'no-store'};let called=false;
@@ -16,4 +16,13 @@ test('Pages reports network failure and refuses a full release download',async()
  const path='/api/puzzle-data/pack?tag=lichess-data-123-1&asset=band-1-1.bin&offset=0&length=3';
  await assert.rejects(platformFetch(path,{},async()=>new Response('123'),true),/диапазона/);
  const r=await platformFetch(path,{},async(url,o)=>{assert.equal(o.headers.Range,'bytes=0-2');return new Response('123',{status:206,headers:{'Content-Range':'bytes 0-2/3'}});},true);assert.equal(await r.text(),'123');
+});
+
+test('web Lichess export uses only public IDs and bounded PGN',async()=>{
+ const pgn='[Result "1-0"]\n\n1. e4 1-0';
+ let calls=0;const fetcher=async(url,opts)=>{calls++;assert.equal(url,'https://lichess.org/game/export/Ab12Cd34');assert.equal(opts.credentials,'omit');assert.equal(opts.headers.Accept,'application/x-chess-pgn');return new Response(pgn);};
+ assert.equal(await webLichessPgn('Ab12Cd34',fetcher),pgn);
+ await assert.rejects(webLichessPgn('Ab12Cd34abcd',fetcher),/Некорректная/);assert.equal(calls,1);
+ await assert.rejects(webLichessPgn('Ab12Cd34',async()=>new Response('x'.repeat(1048577))),/Не удалось/);
+ await assert.rejects(webLichessPgn('Ab12Cd34',async()=>new Response('',{status:404})),/Не удалось/);
 });

@@ -40,3 +40,15 @@ export async function platformFetch(path,options={},fetcher=globalThis.fetch,pag
   return json({games:games.sort((a,b)=>b.ended-a.ended).slice(0,30)});
  }catch{return json({error:'Chess.com недоступен из браузера. Можно вставить PGN вручную.'},502);}
 }
+
+// Only public game IDs; PGN result/variant/legality is validated by the caller.
+export async function webLichessPgn(id,fetcher=globalThis.fetch){
+ if(!/^[A-Za-z0-9]{8}$/.test(id))throw Error('Некорректная ссылка Lichess');
+ try{
+  const r=await fetcher('https://lichess.org/game/export/'+id,{headers:{Accept:'application/x-chess-pgn'},credentials:'omit',signal:AbortSignal.timeout(15000)});
+  if(!r.ok)throw Error('HTTP '+r.status);
+  const reader=r.body?.getReader();if(!reader)throw Error('Нет данных');
+  const decoder=new TextDecoder();let text='',size=0;
+  try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>1048576){await reader.cancel();throw Error('PGN слишком большой');}text+=decoder.decode(value,{stream:true});}return text+decoder.decode();}finally{reader.releaseLock();}
+ }catch{throw Error('Не удалось загрузить партию Lichess. Вставь PGN вручную.');}
+}
