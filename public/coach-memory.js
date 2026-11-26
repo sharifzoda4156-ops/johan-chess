@@ -62,7 +62,7 @@ export function recentConversation(history,enabled){
 }
 
 export function shouldCompact(memory,history){
- return memory.shareHistory!==false&&(memory.summaryPending>=5||(!memory.summary&&history.length>=10));
+ return memory.shareHistory!==false&&(memory.summaryPending>=5||(!memory.summary&&memory.summaryPending>0&&history.length>=10));
 }
 export function coachHistory(memory,history){
  if(memory.shareHistory===false)return [];
@@ -72,13 +72,21 @@ export function coachHistory(memory,history){
   const n=pair.reduce((s,m)=>s+m.content.length,0);if(chars+n>12000)break;chars+=n;out.unshift(...pair);
  }return out;
 }
-export function splitCoachAnswer(answer,requested){
- const m=String(answer||'').match(/\n?\[\[memory_update\]\]([\s\S]*?)\[\[\/memory_update\]\]\s*$/);
- if(!m)return {answer:String(answer||''),summary:null};
- const body=answer.slice(0,m.index).trim(),summary=m[1].trim();
- return {answer:body,summary:requested&&body&&summary&&summary.length<=2400?summary:null};
-}
-export function recordCoachTurn(memory,summary){
- if(!memory.shareHistory)return memory;
- return {...memory,summary:summary===null?memory.summary:summary,summaryPending:summary===null?Math.min(100,memory.summaryPending+1):0};
+// One transaction per completed coach turn. The model chooses what to retain,
+// replace or remove. No data are persisted until the final answer succeeds.
+export function createMemoryUpdate(memory,allowed){
+ let staged=null;
+ return {
+  execute(args){
+   if(!memory.shareHistory||!allowed())return {ok:false,error:'Память отключена или профиль изменился'};
+   if(staged!==null)return {ok:false,error:'Память уже обработана в этом запросе'};
+   if(!args||typeof args!=='object'||Array.isArray(args)||Object.keys(args).sort().join(',')!=='action,summary'||!['replace','keep'].includes(args.action)||typeof args.summary!=='string'||args.summary.length>2400||args.action==='keep'&&args.summary!=='')return {ok:false,error:'Неверный формат. Полная сводка до 2400 символов; keep требует пустую строку.'};
+   staged={summary:args.action==='keep'?memory.summary:args.summary.trim()};
+   return {ok:true,staged:true,action:args.action,characters:staged.summary.length};
+  },
+  finish(current){
+   if(!current.shareHistory||!allowed())return current;
+   return {...current,summary:staged===null?current.summary:staged.summary,summaryPending:staged===null?Math.min(100,current.summaryPending+1):0};
+  }
+ };
 }
