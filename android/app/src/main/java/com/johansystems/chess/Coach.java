@@ -69,7 +69,7 @@ final class Coach {
     }
     private static boolean scope(JSONObject p){return Arrays.asList(p.optString("scope").split("\\s+")).contains(PLAN);}
     private JSONObject status()throws Exception{
-        return new JSONObject().put("connected",!profile.optString("access_token").isEmpty()).put("sharing",scope(profile)&&!profile.optString("access_token").isEmpty()).put("email",profile.optString("email")).put("registered",profile.has("client_id"));
+        return new JSONObject().put("connected",!profile.optString("access_token").isEmpty()).put("sharing",scope(profile)&&!profile.optString("access_token").isEmpty()).put("email",profile.optString("email")).put("name",profile.optString("access_token").isEmpty()?"":profile.optString("name")).put("registered",profile.has("client_id"));
     }
     private static final class ApiError extends IOException{
         final String code;
@@ -116,7 +116,7 @@ final class Coach {
         String access=t.getString("access_token"), refresh=t.optString("refresh_token"), scope=t.optString("scope",old.optString("scope"));
         long lifetime=t.getLong("expires_in");
         if(access.isEmpty()||!"Bearer".equalsIgnoreCase(t.getString("token_type"))||lifetime<=0||lifetime>86400*365L||Arrays.asList(scope.split("\\s+")).contains(PLAN)&&refresh.isEmpty())throw new IOException("Неверный ответ авторизации");
-        return new JSONObject().put("client_id",client).put("sub",identity.getSubject()).put("email",identity.getStringClaim("email")==null?old.optString("email"):identity.getStringClaim("email")).put("scope",scope).put("access_token",access).put("refresh_token",refresh).put("id_token",t.optString("id_token",old.optString("id_token"))).put("expires",System.currentTimeMillis()+lifetime*1000);
+        return new JSONObject().put("client_id",client).put("sub",identity.getSubject()).put("email",identity.getStringClaim("email")==null?old.optString("email"):identity.getStringClaim("email")).put("name",identity.getStringClaim("name")==null?old.optString("name"):identity.getStringClaim("name")).put("scope",scope).put("access_token",access).put("refresh_token",refresh).put("id_token",t.optString("id_token",old.optString("id_token"))).put("expires",System.currentTimeMillis()+lifetime*1000);
     }
     void cancelLogin(){ServerSocket s=listener;if(s!=null)try{s.close();}catch(Exception ignored){}}
     private static void browserReply(Socket s,boolean ok)throws Exception{
