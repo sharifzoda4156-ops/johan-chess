@@ -5,3 +5,5 @@ Inspired by [Chess.com Puzzle points](https://support.chess.com/en/articles/9681
 - Classic: existing unlimited adaptive/topic practice and GitHub pack fetching remain.
 - All positions and solutions from CC0 Lichess. No new subscription or remote service. Existing adaptive estimate remains separate from XP.
 - Device verification: exercise mode switching, returning to ladder mid-attempt, background timer, offline daily, date change, wrong move/hint/reveal, local progress reload, remote loading, promotion and endgame link from library. No measured device performance claim.
+
+The compact route scrolls internally to the active level. If the local date rolls over, a finished daily advances to today; an in-progress daily within the archive stays available, with the new day selectable in the calendar.

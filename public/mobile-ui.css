@@ -142,3 +142,8 @@ input[type=checkbox]{width:20px;height:20px;min-height:0;vertical-align:middle;a
 .daily-calendar button.daily-done{background:#254236;color:var(--success)}
 .daily-hearts{letter-spacing:5px;color:#f49c99;font-size:20px;margin:8px 0;min-height:30px}
 @media(max-width:360px){.journey-node:nth-child(n){transform:none}.journey-node{max-width:100%}.journey-heading h3{font-size:19px}.journey-heading>strong{font-size:16px}.journey-session-top{flex-wrap:wrap}}
+
+/* Keep the map CTA within easy reach on compact phones. */
+.journey-path{max-height:min(380px,43vh);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.journey-node{flex-shrink:0}
+#journeyStart{margin-top:2px}
