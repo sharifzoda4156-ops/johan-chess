@@ -1,3 +1,4 @@
+import {initRush} from './rush.js';
 import {initStudyLibrary} from './study-library.js';
 import {TOPICS} from './puzzle-training.js';
 import {initPuzzles,getPuzzleProgress,getPuzzleTraining} from './puzzles.js';
@@ -134,6 +135,7 @@ document.addEventListener('jc-account',e=>{accountStatus=e.detail;refreshProfile
 $('profileConnect').onclick=()=>{navigation.show('coach');const settings=document.querySelector('.coach-settings');if(settings)settings.open=true;};
 refreshProfile();
 const puzzleUI=initPuzzles(()=>$('user').value.trim());
+initRush({getUser:()=>$('user').value.trim(),back:()=>navigation.show('puzzles')});
 initCoach(coachContext);
 training=initTraining({
  canStart:()=>!busy&&!importing,

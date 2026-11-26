@@ -31,7 +31,7 @@ export function initPuzzles(getUser){
   $('journeyStart').disabled=$('dailyStart').disabled=$('classicStart').disabled=starting||!pack;
   $('journeyBack').disabled=false;$('puzzleArchive').disabled=false;
   document.body.classList.toggle('puzzle-focus',active&&!map);
-  $('puzzleMenuHeading').hidden=$('modeJourney').parentElement.hidden=!map;
+  $('puzzleMenuHeading').hidden=$('modeJourney').parentElement.hidden=$('rushLaunch').hidden=!map;
   $('journeyMap').hidden=mode!=='journey'||!map;$('dailyHeader').hidden=mode!=='daily'||!map;
   $('classicStats').hidden=$('classicFilters').hidden=mode!=='classic'||!map;
   $('puzzleSession').hidden=map;$('journeySession').hidden=mode!=='journey';
