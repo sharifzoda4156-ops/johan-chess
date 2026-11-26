@@ -22,6 +22,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: npm install --ignore-scripts
       - name: Download and partition official CC0 dataset
         shell: bash
         run: |
@@ -36,7 +37,6 @@ jobs:
           rm "$RUNNER_TEMP/lichess.csv.zst"
       - name: Validate starter before publishing
         run: |
-          npm install --ignore-scripts
           cp "$RUNNER_TEMP/puzzle-data/starter.json" public/lichess-puzzles.json
           npm test
       - name: Upload immutable-version data files
