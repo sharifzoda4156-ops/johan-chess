@@ -17,7 +17,8 @@ test('motion recognizes exact moves, captures, promotions and ignores jumps',()=
  assert.equal(planMotion(pos({a7:'wP'}),pos({a8:'wN'}),[{from:'a7',to:'a8',promotion:'n'}])[0].piece,'wN');
  assert.equal(planMotion(pos({e5:'wP',d5:'bP'}),pos({d6:'wP'}),[{from:'e5',to:'d6'}]).length,1);
  assert.equal(planMotion(pos({e1:'wK',h1:'wR'}),pos({g1:'wK',f1:'wR'}),[{from:'e1',to:'g1'}]).length,2);
- assert.equal(planMotion(pos({e2:'wP',d7:'bP'}),pos({d4:'bP'}),[{from:'e2',to:'d4'},{from:'d7',to:'d4'}]).length,1);
+ assert.deepEqual(planMotion(pos({e2:'wP',d5:'bP'}),pos({e4:'bP'}),[{from:'e2',to:'e4'},{from:'d5',to:'e4'}]),[{from:'d5',to:'e4',piece:'bP'}]);
+ assert.equal(planMotion(pos({e2:'wP',d7:'bP'}),pos({d4:'bP'}),[{from:'e2',to:'d4'},{from:'d7',to:'d4'}]).length,0);
 });
 class El{
  constructor(tag,doc){this.tag=tag;this.ownerDocument=doc;this.children=[];this.dataset={};this.attrs={};this.disabled=false;this.className='';this.isConnected=false;}
