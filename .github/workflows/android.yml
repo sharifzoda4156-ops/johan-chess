@@ -1,13 +1,19 @@
 name: Android APK
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/android.yml']
 permissions:
   contents: read
 jobs:
   android:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'build/android-test-f2a3fb4'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: f2a3fb4ab76b18870d8fcacb6d519bc5e3912de1
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -36,7 +42,13 @@ jobs:
         with:
           gradle-version: '8.9'
       - run: gradle -p android :app:assembleDebug
+      - name: Verify APK signature and metadata
+        run: |
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | head -20
+          sha256sum "$APK"
       - uses: actions/upload-artifact@v4
         with:
-          name: Johan-Chess-Android-debug
+          name: Johan-Chess-Android-debug-f2a3fb4
           path: android/app/build/outputs/apk/debug/app-debug.apk
