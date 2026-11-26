@@ -49,13 +49,21 @@ async function getPack(c,p){
  const q=new URLSearchParams({tag:c.tag,asset:p.asset,offset:String(p.offset),length:String(p.length)});
  try{const text=await fetchText('/api/puzzle-data/pack?'+q),rows=await decodePack(text,p);retryAfter=0;return {key,rows,persisted:await cachePut(key,text)};}catch(e){retryAfter=Date.now()+60000;throw e;}
 }
+export function packCandidates(c,theme,band,target,excluded,seen,keys){
+ const matches=matchingPacks(c,theme,band,target).filter(p=>!excluded.has(packKey(c.tag,p)));
+ const isCached=p=>keys.has(packKey(c.tag,p)),isFresh=p=>!seen.has(packKey(c.tag,p));
+ return {fresh:matches.filter(isFresh),cached:matches.filter(isCached),rest:matches.filter(p=>!isFresh(p)&&!isCached(p))};
+}
 export async function loadMorePuzzles({theme,band,target,excluded,seen}){
- const c=await catalog(),matches=matchingPacks(c,theme,band,target),keys=new Set(await cacheKeys());
- const eligible=matches.filter(p=>!excluded.has(packKey(c.tag,p)));
- // Cached packs can be used offline; try new remote packs when local ones are exhausted.
- const cached=eligible.filter(p=>keys.has(packKey(c.tag,p))),fresh=eligible.filter(p=>!keys.has(packKey(c.tag,p))&&!seen.has(packKey(c.tag,p))),rest=eligible.filter(p=>!keys.has(packKey(c.tag,p))&&seen.has(packKey(c.tag,p)));
- const ordered=[...cached,...fresh,...rest];if(!ordered.length)return null;
- let last;
- for(const p of ordered.slice(0,3)){try{return await getPack(c,p);}catch(e){last=e;if(!keys.has(packKey(c.tag,p)))break;}}
+ const c=await catalog(),keys=new Set(await cacheKeys()),groups=packCandidates(c,theme,band,target,excluded,seen,keys);
+ // Prefer unseen packs in rating order; cached packs remain available after eviction from RAM.
+ // After a network failure, try cached packs without starting more downloads.
+ const ordered=[...groups.fresh.slice(0,2),...groups.cached.slice(0,4),...groups.rest.slice(0,1)];
+ const tried=new Set();let last;
+ for(const p of ordered){
+  const key=packKey(c.tag,p);if(tried.has(key))continue;tried.add(key);
+  if(Date.now()<retryAfter&&!keys.has(key))continue;
+  try{return await getPack(c,p);}catch(e){last=e;}
+ }
  if(last)throw last;return null;
 }
