@@ -134,7 +134,7 @@ document.addEventListener('jc-account',e=>{accountStatus=e.detail;refreshProfile
 $('profileConnect').onclick=()=>{navigation.show('coach');const settings=document.querySelector('.coach-settings');if(settings)settings.open=true;};
 refreshProfile();
 const puzzleUI=initPuzzles(()=>$('user').value.trim());
-initCoach(coachContext);
+initCoach(coachContext,{Engine,enginePath,canAnalyze:()=>!busy&&!importing&&!training?.active()});
 training=initTraining({
  canStart:()=>!busy&&!importing,
  getUser:()=>$('user').value.trim(),
