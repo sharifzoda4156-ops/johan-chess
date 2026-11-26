@@ -13,19 +13,30 @@ export function pickRush(rows,seen,score,random=Math.random){
 }
 export function createRush(mode,start){
  if(!validMode(mode)||!Number.isFinite(start))throw Error('Invalid rush');
- return {mode,start,score:0,mistakes:0,entries:[],end:null,reason:null};
+ return {mode,start,score:0,mistakes:0,entries:[],end:null,reason:null,pausedAt:null,pausedMs:0};
 }
-export function remainingRush(run,now){const limit=MODES[run.mode];return limit===null?null:Math.max(0,limit*1000-Math.max(0,(run.end??now)-run.start));}
+// Rest time is excluded only between completed puzzles. A live puzzle
+// continues to consume time, including when the app is in the background.
+export function elapsedRush(run,now){return Math.max(0,(run.end??run.pausedAt??now)-run.start-run.pausedMs);}
+export function remainingRush(run,now){const limit=MODES[run.mode];return limit===null?null:Math.max(0,limit*1000-elapsedRush(run,now));}
 export function endRush(run,now,reason){
  if(run.end!==null)return run;
- const limit=MODES[run.mode],deadline=limit===null?Infinity:run.start+limit*1000;
- const end=Math.max(run.start,Math.min(now,deadline));
- return {...run,end,reason:now>=deadline?'time':reason};
+ const limit=MODES[run.mode],deadline=limit===null?Infinity:run.start+run.pausedMs+limit*1000;
+ const effective=run.pausedAt??now,end=Math.max(run.start,Math.min(effective,deadline));
+ return {...run,end,reason:effective>=deadline?'time':reason};
 }
 export function checkRush(run,now){return run.end===null&&remainingRush(run,now)===0?endRush(run,now,'time'):run;}
+export function pauseRush(run,now){
+ const s=checkRush(run,now);
+ return s.end!==null||s.pausedAt!==null?s:{...s,pausedAt:Math.max(s.start+s.pausedMs,now)};
+}
+export function resumeRush(run,now){
+ if(run.end!==null||run.pausedAt===null)return run;
+ return {...run,pausedMs:run.pausedMs+Math.max(0,now-run.pausedAt),pausedAt:null};
+}
 export function recordRush(run,puzzle,correct,now){
  let s=checkRush(run,now);
- if(s.end!==null||!idOk(puzzle?.id)||!Number.isInteger(puzzle.rating)||puzzle.rating<0||puzzle.rating>9999||s.entries.some(e=>e.id===puzzle.id))return s;
+ if(s.end!==null||s.pausedAt!==null||!idOk(puzzle?.id)||!Number.isInteger(puzzle.rating)||puzzle.rating<0||puzzle.rating>9999||s.entries.some(e=>e.id===puzzle.id))return s;
  s={...s,score:s.score+(correct?1:0),mistakes:s.mistakes+(correct?0:1),entries:[...s.entries,{id:puzzle.id,rating:puzzle.rating,correct:!!correct}]};
  return s.mistakes>=3?endRush(s,now,'mistakes'):s;
 }
@@ -50,5 +61,5 @@ export function normalizeRushHistory(raw){
 export function saveRushHistory(raw,run,date){
  const s=normalizeRushHistory(raw);
  if(run.end===null)return s;
- return normalizeRushHistory({best:s.best,runs:[{mode:run.mode,date,seconds:(run.end-run.start)/1000,reason:run.reason,entries:run.entries},...s.runs]});
+ return normalizeRushHistory({best:s.best,runs:[{mode:run.mode,date,seconds:elapsedRush(run,run.end)/1000,reason:run.reason,entries:run.entries},...s.runs]});
 }

@@ -2,7 +2,7 @@ import {Chess} from './chess.js';
 import {preparePuzzle,advancePuzzle,buildPuzzleReview} from './puzzle-core.js';
 import {renderBoardView,clearBoardView} from './board-view.js';
 import {formatDuration} from './puzzle-journey.js';
-import {MODES,validMode,pickRush,createRush,remainingRush,checkRush,endRush,recordRush,normalizeRushHistory,saveRushHistory} from './rush-core.js';
+import {MODES,validMode,pickRush,createRush,remainingRush,elapsedRush,pauseRush,resumeRush,checkRush,endRush,recordRush,normalizeRushHistory,saveRushHistory} from './rush-core.js';
 const $=id=>document.getElementById(id);
 const labels={'3':'3 минуты','5':'5 минут',survival:'Survival'};
 const reasons={time:'Время вышло',mistakes:'Три ошибки',exhausted:'Офлайн-набор пройден',stopped:'Раунд остановлен'};
@@ -32,15 +32,17 @@ export function initRush({getUser,back}){
   $('rushMenu').hidden=view!=='menu';$('rushPlay').hidden=view!=='play';$('rushResult').hidden=view!=='result';$('rushReview').hidden=view!=='review';
   $('rushStart').disabled=loading;for(const b of document.querySelectorAll('[data-rush-mode]'))b.disabled=loading;
  }
- function draw(){
+ function draw(animateMoves=[]){
   if(!game){clearBoardView($('rushBoard'));return;}
-  const targets=selected&&!promotion.length?game.moves({square:selected,verbose:true}).map(m=>m.to):[];
-  renderBoardView($('rushBoard'),{rows:game.board(),flip:puzzle.color==='b',interactive:true,disabled:run.end!==null||!!promotion.length,onClick:click,selected,targets});
+  const waiting=run.pausedAt!==null;
+  const targets=!waiting&&selected&&!promotion.length?game.moves({square:selected,verbose:true}).map(m=>m.to):[];
+  renderBoardView($('rushBoard'),{rows:game.board(),flip:puzzle.color==='b',interactive:true,disabled:run.end!==null||waiting||!!promotion.length,onClick:click,selected,targets,animateMoves});
+  $('rushNext').hidden=!waiting||run.end!==null;
   $('rushPromotion').hidden=!promotion.length;
  }
  function scoreboard(){
   if(!run)return;
-  const time=remainingRush(run,now()),text=time===null?formatDuration(((run.end??now())-run.start)/1000):formatDuration(Math.ceil(time/1000));
+  const time=remainingRush(run,now()),text=time===null?formatDuration(elapsedRush(run,now())/1000):formatDuration(Math.ceil(time/1000));
   if($('rushTime').textContent!==text)$('rushTime').textContent=text;
   $('rushScore').textContent=String(run.score);$('rushLives').textContent='●'.repeat(3-run.mistakes)+'×'.repeat(run.mistakes);$('rushLives').setAttribute('aria-label','Ошибок '+run.mistakes+' из 3');
  }
@@ -49,25 +51,31 @@ export function initRush({getUser,back}){
   const next=checkRush(run,now());if(next.end!==null){run=next;finish();return false;}return true;
  }
  function nextPuzzle(){
-  if(!check())return;
+  if(!check()||run.pausedAt===null)return;
   let p;
   while((p=pickRush(rows,seen,run.score))){seen.add(p.id);puzzle=preparePuzzle(p,Chess);if(puzzle)break;}
   if(!p){run=endRush(run,now(),'exhausted');finish();return;}
   if(!check())return;
   game=new Chess(puzzle.startFen);step=0;selected=null;promotion=[];
-  $('rushTurn').textContent=game.turn()==='w'?'Ход белых':'Ход чёрных';$('rushRating').textContent=String(puzzle.rating);draw();scoreboard();
+  $('rushTurn').textContent=game.turn()==='w'?'Ход белых':'Ход чёрных';$('rushRating').textContent=String(puzzle.rating);
+  $('rushFeedback').textContent='Найди лучший ход';$('rushFeedback').className='muted';
+  // Render first, then begin charging the next puzzle. No next position is visible during rest.
+  draw();run=resumeRush(run,now());draw();scoreboard();
  }
  function move(m){
-  if(!check()||!game)return;
+  if(!check()||run.pausedAt!==null||!game)return;
   const n=advancePuzzle(puzzle,game,step,m,Chess);if(!check())return;
   selected=null;promotion=[];
-  if(n&&!n.done){game=n.game;step=n.index;draw();return;}
-  run=recordRush(run,puzzle,!!n,now());
-  $('rushFeedback').textContent=n?'Верно!':'Ошибка · следующая задача';$('rushFeedback').className=n?'puzzle-success':'puzzle-wrong';
-  if(run.end!==null){finish();return;}nextPuzzle();
+  const animation=n?[n.played,...(n.reply?[n.reply]:[])]:[];
+  if(n){game=n.game;step=n.index;if(!n.done){draw(animation);return;}}
+  const completedAt=now();run=recordRush(run,puzzle,!!n,completedAt);
+  $('rushFeedback').textContent=n?'Верно! · время остановлено':'Ошибка · время остановлено';$('rushFeedback').className=n?'puzzle-success':'puzzle-wrong';
+  if(run.end!==null){finish();return;}
+  run=pauseRush(run,completedAt);if(run.end!==null){finish();return;}
+  draw(animation);scoreboard();
  }
  function click(sq){
-  if(!check()||!game||promotion.length)return;
+  if(!check()||run.pausedAt!==null||!game||promotion.length)return;
   if(selected){const options=game.moves({square:selected,verbose:true}).filter(m=>m.to===sq);if(options.length>1){promotion=options;draw();return;}if(options.length===1){move(options[0]);return;}}
   const p=game.get(sq);selected=p?.color===game.turn()&&selected!==sq?sq:null;draw();
  }
@@ -77,7 +85,7 @@ export function initRush({getUser,back}){
   try{
    const source=await loadPack();if(token!==generation||!active)return;
    rows=source;byId=new Map(rows.map(p=>[p.id,p]));seen=new Set();game=null;puzzle=null;promotion=[];selected=null;
-   clock={start:Date.now(),wall:Date.now(),mono:performance.now()};run=createRush(mode,clock.start);view='play';$('rushFeedback').textContent='Найди лучший ход';$('rushFeedback').className='muted';$('rushNotice').textContent='';sync();nextPuzzle();window.scrollTo(0,0);
+   clock={start:Date.now(),wall:Date.now(),mono:performance.now()};run=pauseRush(createRush(mode,clock.start),clock.start);view='play';$('rushFeedback').textContent='Найди лучший ход';$('rushFeedback').className='muted';$('rushNotice').textContent='';sync();nextPuzzle();window.scrollTo(0,0);
   }catch(e){if(token===generation)$('rushNotice').textContent=e.message;}
   finally{if(token===generation){loading=false;sync();}}
  }
@@ -110,8 +118,9 @@ export function initRush({getUser,back}){
  }
  for(const b of document.querySelectorAll('[data-rush-mode]'))b.onclick=()=>{if(!loading&&validMode(b.dataset.rushMode)){mode=b.dataset.rushMode;menu();}};
  for(const type of ['q','r','b','n'])$('rushPromote'+type).onclick=()=>{if(!check())return;const m=promotion.find(x=>x.promotion===type);if(m)move(m);};
- $('rushPromoteCancel').onclick=()=>{if(!check())return;promotion=[];draw();};
+ $('rushPromoteCancel').onclick=()=>{if(!check()||run.pausedAt!==null)return;promotion=[];draw();};
  $('rushStart').onclick=start;
+ $('rushNext').onclick=()=>{if(check()&&run.pausedAt!==null)nextPuzzle();};
  $('rushBack').onclick=()=>{generation++;loading=false;back();};
  $('rushStop').onclick=()=>{if(!check())return;if(confirm('Завершить раунд?')){if(!check())return;run=endRush(run,now(),'stopped');finish();}};
  $('rushAgain').onclick=()=>{mode=result?.mode||mode;menu();};

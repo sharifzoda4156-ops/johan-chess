@@ -237,3 +237,5 @@ body.rush-focus main{padding-bottom:max(12px,env(safe-area-inset-bottom,0px))}
 body.rush-focus .rush-panel{border:0;background:transparent;padding:0}
 @media(max-width:700px){body.rush-focus main{padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}#rushResult,#rushReview{padding:0 12px}}
 @media(orientation:landscape) and (max-height:550px){#rushBoard,#rushReviewBoard{max-width:calc(100dvh - 24px)}}
+
+.rush-next-wrap{padding:0 12px 12px}.rush-next-wrap button{width:100%}
