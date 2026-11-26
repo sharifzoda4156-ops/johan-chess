@@ -15,5 +15,5 @@ export function initNavigation(){
  for(const b of buttons)b.addEventListener('click',()=>show(b.dataset.tab));
  for(const link of links)link.addEventListener('click',()=>show(link.dataset.go));
  show('home',{scroll:false});
- return {show,setOnline(value){if(online===value)return;online=value;document.body.classList.toggle('is-online-playing',value);show(value?'online':screen,{scroll:value});},setPlaying(value){playing=value;document.body.classList.toggle('is-playing',value);show(value?'play':screen,{scroll:value});}};
+ return {show,current:()=>screen,setOnline(value){if(online===value)return;online=value;document.body.classList.toggle('is-online-playing',value);show(value?'online':screen,{scroll:value});},setPlaying(value){playing=value;document.body.classList.toggle('is-playing',value);show(value?'play':screen,{scroll:value});}};
 }

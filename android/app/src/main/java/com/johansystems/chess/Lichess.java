@@ -30,6 +30,7 @@ final class Lichess {
     private volatile boolean closed=false,needsSync=false;
     private volatile long rateUntil=0;
     private volatile ServerSocket loginSocket;
+    private volatile boolean loginCanceled=false;
     private JSONObject account=new JSONObject(),full=null,state=null;
     private JSONArray ongoing=new JSONArray(),incoming=new JSONArray();
     private String gameId="",notice="";
@@ -84,7 +85,7 @@ final class Lichess {
     private synchronized void persistLock(){
         SharedPreferences.Editor p=prefs.edit().putBoolean("onlineLock",locked());
         if(live())p.putString("activeGame",gameId);else p.remove("activeGame");
-        p.commit();activity.onlineSecure(locked());
+        p.commit();activity.onlineSecure(locked());activity.notifyLichessUpdate();
     }
     synchronized void foreground(boolean value){foreground=value;}
     synchronized void background(){
@@ -160,20 +161,34 @@ final class Lichess {
         JSONArray out=new JSONArray();
         try{send(c,null);try(BufferedReader in=new BufferedReader(new InputStreamReader(c.getInputStream(),StandardCharsets.UTF_8))){String line;while(out.length()<max&&(line=in.readLine())!=null){if(line.length()>500000)throw new IOException("Строка слишком большая");if(!line.trim().isEmpty())out.put(new JSONObject(line));}}return out;}finally{c.disconnect();}
     }
+    private static String readHeaderLine(InputStream in,int limit)throws IOException{
+        ByteArrayOutputStream buf=new ByteArrayOutputStream();int ch;
+        while((ch=in.read())!=-1&&ch!='\n'){if(buf.size()>limit)throw new IOException("Неверный callback");if(ch!='\r')buf.write(ch);}
+        return buf.toString("UTF-8");
+    }
+    void cancelLogin(){
+        loginCanceled=true;
+        ServerSocket s=loginSocket;
+        if(s!=null)try{s.close();}catch(Exception ignored){}
+    }
     private JSONObject login()throws Exception{
         if(locked())throw new IOException("Сначала заверши или синхронизируй онлайн-партию");
+        loginCanceled=false;
         String verifier=random(),stateToken=random(),code=null;String redirect;
         try(ServerSocket server=new ServerSocket()){
             server.bind(new InetSocketAddress(InetAddress.getByName("127.0.0.1"),0));loginSocket=server;
             redirect="http://127.0.0.1:"+server.getLocalPort()+"/lichess";
             String url=HOST+"/oauth?"+form("response_type","code","client_id",CLIENT,"redirect_uri",redirect,"scope","board:play challenge:read challenge:write follow:read follow:write","state",stateToken,"code_challenge_method","S256","code_challenge",b64(MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII))));
+            if(loginCanceled)throw new IOException("Вход отменён");
             activity.openOAuthBrowser(url);long end=System.currentTimeMillis()+300000;
-            while(System.currentTimeMillis()<end){
+            while(System.currentTimeMillis()<end&&!loginCanceled){
                 server.setSoTimeout((int)Math.max(1,end-System.currentTimeMillis()));
                 try(Socket socket=server.accept()){
-                    socket.setSoTimeout(2500);InputStream in=socket.getInputStream();ByteArrayOutputStream line=new ByteArrayOutputStream();int ch;
-                    while((ch=in.read())!=-1&&ch!='\n'){if(line.size()>8192)throw new IOException("Неверный callback");if(ch!='\r')line.write(ch);}
-                    String[] parts=line.toString("UTF-8").split(" ");
+                    socket.setSoTimeout(2500);InputStream in=socket.getInputStream();
+                    String requestLine=readHeaderLine(in,8192);
+                    // Drain bounded HTTP headers before responding so browser does not get ERR_CONNECTION_RESET.
+                    for(int h=0;h<64;h++){String header=readHeaderLine(in,8192);if(header.isEmpty())break;}
+                    String[] parts=requestLine.split(" ");
                     Uri callback=parts.length==3&&"GET".equals(parts[0])&&parts[1].startsWith("/lichess?")?Uri.parse("http://127.0.0.1"+parts[1]):null;
                     boolean ok=callback!=null&&stateToken.equals(callback.getQueryParameter("state"));
                     byte[] body=(ok?"Return to Johan Chess.":"Invalid callback.").getBytes(StandardCharsets.UTF_8);
@@ -181,8 +196,8 @@ final class Lichess {
                     if(ok){code=callback.getQueryParameter("code");break;}
                 }catch(SocketTimeoutException ignored){}
             }
-        }finally{loginSocket=null;}
-        if(code==null||code.isEmpty())throw new IOException("Вход отменён или истёк");
+        }catch(SocketException e){if(loginCanceled)throw new IOException("Вход отменён");throw e;}finally{loginSocket=null;}
+        if(loginCanceled||code==null||code.isEmpty())throw new IOException("Вход отменён или истёк");
         JSONObject t=new JSONObject(request("/api/token","POST",null,form("grant_type","authorization_code","client_id",CLIENT,"redirect_uri",redirect,"code",code,"code_verifier",verifier),"application/json",20000));
         String access=t.getString("access_token");if(access.isEmpty()||!"Bearer".equalsIgnoreCase(t.getString("token_type")))throw new IOException("Неверный OAuth ответ");
         JSONObject profile=new JSONObject(request("/api/account","GET",access,null,"application/json",500000));String name=nick(profile.getString("username"));
@@ -198,7 +213,7 @@ final class Lichess {
             String error="";
             try{
                 HttpURLConnection c=Lichess.this.connection(path,method,auth,body,"application/x-ndjson");connection=c;if(canceled)return;
-                c.setReadTimeout(45000);send(c,body);ready=true;
+                c.setReadTimeout(45000);send(c,body);ready=true;activity.notifyLichessUpdate();
                 try(BufferedReader in=new BufferedReader(new InputStreamReader(c.getInputStream(),StandardCharsets.UTF_8))){
                     String l;while(!canceled&&(l=in.readLine())!=null){if(l.length()>1000000)throw new IOException("Строка слишком большая");if(!l.trim().isEmpty()&&!"wait".equals(kind))receive(this,new JSONObject(l));}
                 }
@@ -232,6 +247,7 @@ final class Lichess {
                     incoming=updated;
                 }
                 notice="Есть обновление вызовов";
+                activity.notifyLichessUpdate();
             }
             else if("gameFinish".equals(type)&&!terminal){JSONObject g=msg.optJSONObject("game");if(g!=null&&gameId.equals(g.optString("gameId",g.optString("id")))){revision++;needsSync=true;persistLock();}}
         }else if(s==game){
@@ -252,7 +268,7 @@ final class Lichess {
             else if("opponentGone".equals(type)&&full!=null&&!terminal){
                 Object delay=msg.opt("claimWinInSeconds");
                 Integer seconds=delay instanceof Number?msg.optInt("claimWinInSeconds",-1):null;
-                if(msg.opt("gone") instanceof Boolean)opponent.update(msg.getBoolean("gone"),seconds,SystemClock.elapsedRealtime());
+                if(msg.opt("gone") instanceof Boolean){opponent.update(msg.getBoolean("gone"),seconds,SystemClock.elapsedRealtime());activity.notifyLichessUpdate();}
                 return;
             }else return;
             if(state!=null){boolean wasTerminal=terminal;terminal=finished(state.optString("status"));transportLost=false;notice=terminal?"Партия завершена":"";if(terminal&&!wasTerminal){opponent.reset();revision++;needsSync=true;}else if(!terminal)needsSync=false;persistLock();}
@@ -260,7 +276,7 @@ final class Lichess {
     }
     private synchronized void ended(Stream s,String error){
         if(closed||s.canceled)return;
-        if(s==events){events=null;notice=error.isEmpty()?"Поток событий закрыт":error;if(waiting!=null){waiting.cancel();waiting=null;needsSync=true;revision++;persistLock();}}
+        if(s==events){events=null;notice=error.isEmpty()?"Поток событий закрыт":error;if(waiting!=null){waiting.cancel();waiting=null;needsSync=true;revision++;persistLock();}else activity.notifyLichessUpdate();}
         else if(s==waiting){revision++;waiting=null;needsSync=true;notice=error.isEmpty()?"Поиск завершён. Проверяю партии…":error;persistLock();}
         else if(s==game){game=null;if(!terminal){revision++;needsSync=true;transportLost=true;opponent.reset();notice=error.isEmpty()?"Связь потеряна. Восстанавливаю соединение.":error;persistLock();}}
     }
@@ -326,6 +342,7 @@ final class Lichess {
             case "snapshot":return snapshot();
             case "refresh":return token.isEmpty()?snapshot():refresh();
             case "login":return login();
+            case "cancelLogin":cancelLogin();return snapshot();
             case "logout":
                 if(locked())throw new IOException("Сначала заверши партию");
                 requireLogin();request("/api/token","DELETE",token,null,"application/json",10000);
@@ -346,5 +363,5 @@ final class Lichess {
             default:throw new IOException("Неизвестное действие Lichess");
         }
     }
-    void close(){background();closed=true;watchdog.shutdownNow();ServerSocket socket=loginSocket;if(socket!=null)try{socket.close();}catch(Exception ignored){}synchronized(this){persistLock();stopStreams();}streams.shutdownNow();}
+    void close(){background();closed=true;watchdog.shutdownNow();cancelLogin();synchronized(this){persistLock();stopStreams();}streams.shutdownNow();}
 }
