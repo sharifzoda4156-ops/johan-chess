@@ -61,10 +61,11 @@ export function initPuzzles(getUser){
    if(!unseen(puzzle)||(adaptive&&Math.abs(puzzle.rating-training.target)>200)){
     status('Подгружаю задачи Lichess с GitHub…');
     const extra=await loadMorePuzzles({theme:$('puzzleTheme').value,band:$('puzzleBand').value,target:training.target,excluded,seen:visited});
-    if(extra){excluded.add(extra.key);visited.add(extra.key);write('visited',user,[...visited].slice(-20000));remotePacks=[...remotePacks,extra].slice(-4);if(!extra.persisted)notice=' · пакет не сохранён в офлайн-кэш';puzzle=validPick();}
+    if(extra){visited.add(extra.key);write('visited',user,[...visited].slice(-20000));remotePacks=[...remotePacks,extra].slice(-4);excluded=new Set(remotePacks.map(p=>p.key));if(!extra.persisted)notice=' · пакет не сохранён в офлайн-кэш';puzzle=validPick();}
    }
   }catch(e){notice=' · GitHub недоступен, используем локальные задачи';}
-  finally{starting=false;$('puzzleNext').disabled=$('puzzleTheme').disabled=$('puzzleBand').disabled=false;if(pendingTheme)queueMicrotask(()=>{if(userNow()===user)start();else enter();});}
+  finally{starting=false;$('puzzleNext').disabled=$('puzzleTheme').disabled=$('puzzleBand').disabled=false;if(pendingTheme||userNow()!==user)queueMicrotask(()=>enter());}
+  if(pendingTheme||userNow()!==user){puzzle=null;game=null;return;}
   $('puzzleCacheInfo').textContent='В памяти: '+new Set([...(pack||[]),...remotePacks.flatMap(p=>p.rows)].map(p=>p.id)).size+' задач · кэш до 50 МБ';
   if(!puzzle){$('puzzleTurn').textContent='';$('puzzleExplanation').hidden=true;$('puzzleTitle').textContent='Нет задач';$('puzzleNext').disabled=false;$('puzzleNext').textContent='Повторить загрузку';status('В этой категории пока нет доступных задач'+notice+'. Попробуй снова или выбери другую тему.');draw();stats();return;}
   lastId=puzzle.id;game=new Chess(puzzle.startFen);$('puzzleNext').disabled=false;$('puzzleNext').textContent='Пропустить';
