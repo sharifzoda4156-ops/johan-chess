@@ -1,4 +1,4 @@
-import {isPages} from './platform-api.js';
+import {isPages,webLichessPgn} from './platform-api.js';
 import {sharedInput,validatedSharedPgn} from './share-core.js';
 const native=globalThis.JohanShare,$=id=>document.getElementById(id);
 let seq=0;const pending=new Map();
@@ -7,11 +7,11 @@ function call(op,args={}){if(!native)return Promise.reject(Error('Передач
 export function initGameShare({Chess,canUse,open,user,exportPgn,notice}){
  const say=t=>notice(t);let processing=false,current=null,checking=false,opened=null;
  $('sharePgnFile').hidden=!native;$('sharePgnText').hidden=!native;
- $('sharedInput').placeholder=isPages()?'PGN':'PGN или ссылка Chess.com / Lichess';
+ $('sharedInput').placeholder=isPages()?'PGN или ссылка Lichess':'PGN или ссылка Chess.com / Lichess';
  async function importValue(raw){
   const input=sharedInput(raw);let text=input.text;
-  if(input.type==='chesscom')text=(await call('chesscom',{...input,user:user().trim()})).pgn;
-  else if(input.type==='lichess')text=(await call('lichess',{gameId:input.gameId})).pgn;
+  if(input.type==='chesscom'){if(isPages())throw Error('Для Chess.com загрузи PGN или последние партии по нику.');text=(await call('chesscom',{...input,user:user().trim()})).pgn;}
+  else if(input.type==='lichess')text=isPages()?await webLichessPgn(input.gameId):(await call('lichess',{gameId:input.gameId})).pgn;
   const result=validatedSharedPgn(text,Chess);
   if(!canUse())throw Error('Заверши текущую работу перед импортом');
   if(!open(result.text))throw Error('Не удалось открыть PGN');
