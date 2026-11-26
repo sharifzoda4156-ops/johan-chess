@@ -1,0 +1,45 @@
+import {sharedInput,validatedSharedPgn} from './share-core.js';
+const native=globalThis.JohanShare,$=id=>document.getElementById(id);
+let seq=0;const pending=new Map();
+if(native)native.onmessage=e=>{try{const m=JSON.parse(e.data),p=pending.get(m.id);if(!p)return;clearTimeout(p.timer);pending.delete(m.id);m.error?p.reject(Error(m.error)):p.resolve(m.data);}catch{}};
+function call(op,args={}){if(!native)return Promise.reject(Error('Передача доступна в Android'));return new Promise((resolve,reject)=>{const id=String(++seq),timer=setTimeout(()=>{pending.delete(id);reject(Error('Не удалось получить партию'));},100000);pending.set(id,{resolve,reject,timer});try{native.postMessage(JSON.stringify({id,op,...args}));}catch(e){clearTimeout(timer);pending.delete(id);reject(e);}});}
+export function initGameShare({Chess,canUse,open,user,exportPgn,notice}){
+ const say=t=>notice(t);let processing=false,current=null,checking=false;
+ $('sharePgnFile').hidden=!native;$('sharePgnText').hidden=!native;
+ $('sharedInput').placeholder='PGN или ссылка Chess.com / Lichess';
+ async function importValue(raw){
+  const input=sharedInput(raw);let text=input.text;
+  if(input.type==='chesscom')text=(await call('chesscom',{...input,user:user().trim()})).pgn;
+  else if(input.type==='lichess')text=(await call('lichess',{gameId:input.gameId})).pgn;
+  const result=validatedSharedPgn(text,Chess);
+  if(!canUse())throw Error('Заверши текущую работу перед импортом');
+  if(!open(result.text))throw Error('Не удалось открыть PGN');
+  say('Импортировано партий: '+result.count+(result.skipped?' · пропущено: '+result.skipped:'')+'. Можно запустить анализ.');
+ }
+ async function process(raw,item){
+  if(processing||!canUse())return;processing=true;$('shareImport').disabled=true;
+  try{
+   await importValue(raw);
+   if(item){await call('ack',{itemId:item});current=null;}
+   $('sharedInput').value='';$('sharedPending').hidden=true;
+  }catch(e){say(e.message);$('sharedPending').hidden=!current; }
+  finally{processing=false;$('shareImport').disabled=false;}
+ }
+ async function poll(){
+  if(!native||checking||processing||current||document.hidden||!canUse())return;
+  checking=true;try{
+   const {item}=await call('peek');if(!item||!canUse())return;
+   current=item.id;
+   if(item.error){say(item.error);$('sharedPending').hidden=false;return;}
+   $('sharedInput').value=item.text; $('sharedPending').hidden=false;
+   await process(item.text,item.id);
+  }catch{}finally{checking=false;}
+ }
+ $('shareImport').onclick=()=>process($('sharedInput').value,current);
+ $('shareDiscard').onclick=async()=>{if(!current||processing||!canUse())return;try{await call('ack',{itemId:current});current=null;$('sharedPending').hidden=true;$('sharedInput').value='';}catch(e){say(e.message);}};
+ for(const [id,file] of [['sharePgnFile',true],['sharePgnText',false]])$(id).onclick=async()=>{
+  if(!canUse())return;const pgn=exportPgn();if(!pgn)return;
+  try{validatedSharedPgn(pgn,Chess);await call('share',{pgn,file});}catch(e){say(e.message);}
+ };
+ if(native){setInterval(poll,1500);document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll();});poll();}
+}

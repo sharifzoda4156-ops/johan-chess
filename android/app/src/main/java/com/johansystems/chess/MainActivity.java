@@ -18,6 +18,8 @@ public final class MainActivity extends Activity {
     private static final String ORIGIN = "https://appassets.androidplatform.net";
     private WebView web;
     private Coach coach;
+    private GameShare gameShare;
+    private final ExecutorService shareExecutor=Executors.newSingleThreadExecutor();
     private boolean resumed=false,confirmingExit=false;
     private volatile boolean protectedOnline=false;
     private Lichess lichess;
@@ -27,6 +29,8 @@ public final class MainActivity extends Activity {
         super.onCreate(b);
         protectedOnline=getSharedPreferences("lichess",0).getBoolean("onlineLock",false);
         if(protectedOnline)getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        gameShare=new GameShare(this);
+        receiveShare(getIntent());
         web = new WebView(this);
         setContentView(web);
         getWindow().setStatusBarColor(0xff131d29);
@@ -90,6 +94,29 @@ public final class MainActivity extends Activity {
                     runOnUiThread(()->{if(!isDestroyed())try{reply.postMessage(out.toString());}catch(Exception ignored){}});
                 });
             });
+            WebViewCompat.addWebMessageListener(web,"JohanShare",Collections.singleton(ORIGIN),(view,msg,origin,main,reply)->{
+                if(!main||!ORIGIN.equals(origin.toString()))return;
+                String raw=msg.getData();if(raw==null||raw.length()>GameShare.LIMIT*2)return;
+                shareExecutor.execute(()->{
+                    JSONObject out=new JSONObject();
+                    try{
+                        JSONObject req=new JSONObject(raw);out.put("id",req.getString("id"));
+                        if(protectedOnline||lichess!=null&&lichess.locked())throw new IOException("Передача партий недоступна во время онлайн-игры");
+                        JSONObject data;
+                        switch(req.getString("op")){
+                            case "peek":data=gameShare.peek();break;
+                            case "ack":data=gameShare.ack(req.getString("itemId"));break;
+                            case "lichess":data=new JSONObject().put("pgn",GameShare.lichess(req.getString("gameId")));break;
+                            case "chesscom":data=new JSONObject().put("pgn",ChessImport.sharedGame(req.getString("user"),req.getString("kind"),req.getString("gameId")));break;
+                            case "share":gameShare.share(req.getString("pgn"),req.optBoolean("file"));data=new JSONObject().put("ok",true);break;
+                            default:throw new IOException("Неизвестное действие");
+                        }
+                        if(protectedOnline||lichess!=null&&lichess.locked())throw new IOException("Передача партий недоступна во время онлайн-игры");
+                        out.put("data",data);
+                    }catch(Exception e){try{out.put("error",e.getMessage()==null?"Ошибка передачи":e.getMessage());}catch(Exception ignored){}}
+                    runOnUiThread(()->{if(!isDestroyed())try{reply.postMessage(out.toString());}catch(Exception ignored){}});
+                });
+            });
             WebViewCompat.addWebMessageListener(web,"JohanLichess",Collections.singleton(ORIGIN),(view,msg,origin,isMain,reply)->{
                 if(!isMain||!ORIGIN.equals(origin.toString()))return;
                 String raw=msg.getData();if(raw==null||raw.length()>30000)return;
@@ -107,6 +134,14 @@ public final class MainActivity extends Activity {
     private static WebResourceResponse response(int code,String body) {
         return new WebResourceResponse("application/json","UTF-8",code,code==200?"OK":code==403?"Forbidden":code==404?"Not Found":"Bad Gateway",Collections.singletonMap("Cache-Control","no-store"),new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
     }
+    private void receiveShare(Intent intent){
+        if(intent==null||gameShare==null)return;
+        String action=intent.getAction();
+        if(!Intent.ACTION_SEND.equals(action)&&!Intent.ACTION_VIEW.equals(action))return;
+        shareExecutor.execute(()->gameShare.receive(intent));
+    }
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);receiveShare(intent);}
+    void showGameShare(Intent intent){runOnUiThread(()->{if(!isDestroyed()&&!protectedOnline)startActivity(Intent.createChooser(intent,"Поделиться партией"));});}
     void openBrowser(String url) {
         runOnUiThread(()->{
             try { if(protectedOnline)return;startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url))); }
@@ -143,7 +178,7 @@ public final class MainActivity extends Activity {
     @Override protected void onDestroy() {
         if(lichess!=null)lichess.close();lichessExecutor.shutdownNow();
         if(coach!=null)coach.cancelLogin();
-        executor.shutdownNow();
+        executor.shutdownNow();shareExecutor.shutdownNow();
         if(web!=null)web.destroy();
         super.onDestroy();
     }
