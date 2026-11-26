@@ -1,5 +1,5 @@
 import {Chess} from './chess.js';
-import {pieceGraphic} from './piece-art.js';
+import {renderBoardView} from './board-view.js';
 export function renderMiniBoard(p){
  const el=document.createElement('section');el.className='mini-position';
  const title=document.createElement('h3');title.textContent=p.title+(p.label?' · '+p.label:'');el.append(title);
@@ -12,15 +12,9 @@ export function renderMiniBoard(p){
  function draw(mode){
   const move=mode==='before'?null:p[mode],c=new Chess(p.fen);
   if(move)c.move({from:move.from,to:move.to,...(move.promotion?{promotion:move.promotion}:{})});
-  const flip=p.orientation==='b',ranks=Array.from({length:8},(_,i)=>flip?7-i:i);
-  board.replaceChildren();
-  for(const [ri,r] of ranks.entries())for(const [fi,f] of ranks.entries()){
-   const sq='abcdefgh'[f]+(8-r),piece=c.get(sq),d=document.createElement('div');
-   d.className='square '+((r+f)%2?'dark':'light')+((move&&(sq===move.from||sq===move.to))?' mark':'');
-   if(piece)d.append(pieceGraphic(piece));
-   if(fi===0||ri===7){if(fi===0){const a=document.createElement('span');a.className='coord';a.textContent=8-r;d.append(a);}if(ri===7){const a=document.createElement('span');a.className='coord file';a.textContent='abcdefgh'[f];d.append(a);}}
-   board.append(d);
-  }
+  const flip=p.orientation==='b';
+  board.querySelector('.mini-arrows')?.remove();
+  renderBoardView(board,{rows:c.board(),flip,marked:move?[move.from,move.to]:[],animateMoves:move?[move]:[]});
   const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 800 800');svg.setAttribute('class','mini-arrows');
   const xy=s=>{let x='abcdefgh'.indexOf(s[0]),y=8-Number(s[1]);if(flip){x=7-x;y=7-y;}return [x*100+50,y*100+50];};
   function arrow(m,color){

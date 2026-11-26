@@ -1,6 +1,6 @@
 import {loadMorePuzzles} from './puzzle-remote.js';
 import {Chess} from './chess.js';
-import {pieceGraphic} from './piece-art.js';
+import {renderBoardView,clearBoardView} from './board-view.js';
 import {preparePuzzle,advancePuzzle,filterPuzzles,cleanProgress,finishAttempt} from './puzzle-core.js';
 import {normalizeTraining,recordOutcome,summarizeTraining,selectTrainingPuzzle} from './puzzle-training.js';
 import {parseUci} from './training-core.js';
@@ -32,23 +32,15 @@ export function initPuzzles(getUser){
  function record(outcome){if(!puzzle)return;training=recordOutcome(training,puzzle,outcome,progress.solved);if(!write('training',user,training))storageFailed=true;document.dispatchEvent(new CustomEvent('jc-puzzle-progress'));}
  function pick(list){return selectTrainingPuzzle(list,training,progress.solved,lastId,$('puzzleBand').value==='adaptive');}
  function save(){if(!write('progress',user,progress)){storageFailed=true;return false;}document.dispatchEvent(new CustomEvent('jc-puzzle-progress'));return true;}
- function draw(){
-  const board=$('puzzleBoard');board.replaceChildren();
+ function draw(animateMoves=[]){
+  const board=$('puzzleBoard');
   $('puzzleArea').hidden=!game;
   $('puzzleHint').disabled=!game||done||!!promotion.length;
   $('puzzleReveal').disabled=!game||done||!!promotion.length;
   $('puzzlePromotion').hidden=!promotion.length;
-  if(!game)return;
-  const flip=puzzle.color==='b',order=Array.from({length:8},(_,i)=>flip?7-i:i);
-  const moves=selected&&!done&&!promotion.length?game.moves({square:selected,verbose:true}):[];
-  for(const [ri,r] of order.entries())for(const [fi,f] of order.entries()){
-   const sq='abcdefgh'[f]+(8-r),piece=game.get(sq),cell=elem('button','square '+((r+f)%2?'dark':'light')+(sq===selected?' selected':'')+(moves.some(m=>m.to===sq)?' target':'')+(highlight?.includes(sq)?' puzzle-mark':''));
-   cell.type='button';cell.disabled=starting||done||!!promotion.length;cell.setAttribute('aria-label',sq+(piece?' '+piece.color+piece.type:''));
-   if(piece)cell.append(pieceGraphic(piece));
-   if(fi===0)cell.append(elem('span','coord',String(8-r)));
-   if(ri===7)cell.append(elem('span','coord file','abcdefgh'[f]));
-   cell.onclick=()=>click(sq);board.append(cell);
-  }
+  if(!game){clearBoardView(board);return;}
+  const targets=selected&&!done&&!promotion.length?game.moves({square:selected,verbose:true}).map(m=>m.to):[];
+  renderBoardView(board,{rows:game.board(),flip:puzzle.color==='b',interactive:true,disabled:starting||done||!!promotion.length,onClick:click,selected,targets,marked:highlight||[],markClass:'puzzle-mark',animateMoves});
  }
  async function start({reset=false}={}){
   if(starting)return;starting=true;pendingTheme=false;
@@ -74,19 +66,19 @@ export function initPuzzles(getUser){
   $('puzzleExplanation').hidden=true;$('puzzleExplanation').textContent='';
   status('Найди решение'+notice+'.');draw();stats();
  }
- function finish(reveal=false){
+ function finish(reveal=false,animateMoves=[]){
   if(done||!game)return;
   done=true;selected=null;promotion=[];
   if(!reveal){record(assisted?'assisted':'clean');progress=finishAttempt(progress,puzzle.id,assisted);status(save()?(assisted?'Верно! Решено с помощью.':'Верно! С первого раза.'):'Верно! Не удалось сохранить прогресс.','puzzle-success');}
   else{record('assisted');progress={...progress,streak:0};save();status('Решение показано · не засчитано','');}
   $('puzzleExplanation').textContent='Вариант из базы Lichess: '+puzzle.line.join(' ')+' · lichess.org/training/'+puzzle.id;
-  $('puzzleExplanation').hidden=false;$('puzzleNext').textContent='Следующая задача';draw();stats();
+  $('puzzleExplanation').hidden=false;$('puzzleNext').textContent='Следующая задача';draw(animateMoves);stats();
  }
  function tryMove(m){
   if(done||!game)return;
   promotion=[];selected=null;highlight=null;
   const next=advancePuzzle(puzzle,game,step,m,Chess);
-  if(next){game=next.game;step=next.index;const last=next.reply||next.played;highlight=[last.from,last.to];if(next.done){finish();return;}status('Верно! Соперник ответил '+next.reply.san+'. Продолжай.','puzzle-success');draw();return;}
+  if(next){game=next.game;step=next.index;const last=next.reply||next.played;highlight=[last.from,last.to];const animation=[next.played,...(next.reply?[next.reply]:[])];if(next.done){finish(false,animation);return;}status('Верно! Соперник ответил '+next.reply.san+'. Продолжай.','puzzle-success');draw(animation);return;}
   assisted=true;record('assisted');progress={...progress,streak:0};save();
   status('Не совпадает с решением Lichess. Попробуй ещё раз.','puzzle-wrong');draw();stats();
  }

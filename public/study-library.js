@@ -1,5 +1,5 @@
 import {Chess} from './chess.js';
-import {pieceGraphic} from './piece-art.js';
+import {renderBoardView} from './board-view.js';
 import {ENDGAMES,parseOpenings,searchOpenings,openingLine,historicalPgn} from './study-core.js';
 const $=id=>document.getElementById(id);
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
@@ -8,15 +8,10 @@ async function data(path,json=false){
 }
 export function initStudyLibrary({openGame,practiceEndgame,askOpening,playOpening}){
  let openings=[],line=null,selected=null,at=0,flip=false,loading=null;
- function draw(){
+ function draw(animateMoves=[]){
   $('studyOpeningArea').hidden=!line;if(!line)return;
-  const c=new Chess(line.positions[at]),rows=c.board(),order=Array.from({length:8},(_,i)=>flip?7-i:i),board=$('studyBoard'),last=line.moves[at-1];
-  board.replaceChildren();
-  for(const [ri,r] of order.entries())for(const [fi,f] of order.entries()){
-   const sq='abcdefgh'[f]+(8-r),p=rows[r][f],cell=el('div',undefined,'square '+((r+f)%2?'dark':'light')+(last&&[last.from,last.to].includes(sq)?' last':''));
-   cell.setAttribute('aria-label',sq+(p?' '+p.color+p.type:''));
-   if(p)cell.append(pieceGraphic(p));if(fi===0)cell.append(el('span',8-r,'coord'));if(ri===7)cell.append(el('span','abcdefgh'[f],'coord file'));board.append(cell);
-  }
+  const c=new Chess(line.positions[at]),last=line.moves[at-1];
+  renderBoardView($('studyBoard'),{rows:c.board(),flip,last,animateMoves});
   $('studyMove').textContent=at?line.moves[at-1].san+' · '+at+'/'+line.moves.length:'Начальная позиция';
   $('studyPrevious').disabled=at===0;$('studyNext').disabled=at===line.moves.length;
   for(const b of $('studyOpeningMoves').children)b.classList.toggle('active',Number(b.dataset.ply)===at);
@@ -37,7 +32,7 @@ export function initStudyLibrary({openGame,practiceEndgame,askOpening,playOpenin
  }
  $('studySearch').oninput=()=>{if(openings.length)search();};
  $('studyPrevious').onclick=()=>{if(line&&at>0){at--;draw();}};
- $('studyNext').onclick=()=>{if(line&&at<line.moves.length){at++;draw();}};
+ $('studyNext').onclick=()=>{if(line&&at<line.moves.length){at++;draw([line.moves[at-1]]);}};
  $('studyFlip').onclick=()=>{flip=!flip;draw();};
  $('studyOpeningAsk').onclick=()=>{if(selected)askOpening(selected);};
  $('studyOpeningPlay').onclick=()=>{if(line)playOpening(line.positions[at],flip?'b':'w');};
