@@ -16,7 +16,7 @@ export function initOnline({canStart,lock,review}){
  function controls(){
   const connected=snap.connected,blocked=working||uiLock;
   $('onlineLogin').hidden=connected;$('onlineLogout').hidden=!connected;$('onlineAccount').hidden=!connected;$('onlineSocial').hidden=!connected||uiLock;$('onlineLobby').hidden=!connected||!!(game&&!game.done)||snap.waiting;
-  text('onlineConnect',connected?'Lichess · '+snap.username:'Подключить Lichess');text('onlineProfileStatus',connected?'Профиль: '+snap.username:'Онлайн-игра и друзья');
+  text('onlineProfileStatus',connected?snap.username:'Подключить');
   $('onlineLogin').disabled=working||uiLock||!native;$('onlineLogout').disabled=blocked;$('onlineRefresh').disabled=working||!connected;
   $('onlineSeek').disabled=blocked||!snap.eventReady||!canStart();$('onlineChallenge').disabled=blocked||!snap.eventReady||!canStart();$('onlineCancel').hidden=!snap.waiting;$('onlineCancel').disabled=working;
   $('onlineGame').hidden=!game||snap.waiting;document.body.classList.toggle('online-board-focus',!!game&&!game.done&&!snap.waiting&&uiLock);$('onlineHistoryRefresh').disabled=blocked;$('onlineFriendSearch').disabled=blocked;$('onlineFriendsRefresh').disabled=blocked;

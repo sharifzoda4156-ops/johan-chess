@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {THEMES} from '../public/piece-art.js';
+import {BOARD_THEMES,PIECE_SETS} from '../public/piece-art.js';
 const css=readFileSync(new URL('../public/mobile-ui.css',import.meta.url),'utf8');
 const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
 const token=n=>css.match(new RegExp('--'+n+':(#[0-9a-f]{6})[;}]','i'))?.[1];
@@ -10,12 +10,12 @@ function contrast(a,b){const x=lum(a),y=lum(b);return (Math.max(x,y)+.05)/(Math.
 test('brand palette keeps accessible text and action contrast',()=>{
  for(const [a,b] of [['ink','surface'],['muted','surface'],['accent','surface'],['on-accent','accent'],['success','surface'],['danger','surface']]){
   assert.ok(token(a)&&token(b),a+' / '+b);
-  assert.ok(contrast(token(a),token(b))>=4.5,a+' / '+b);
+  assert.ok(contrast(token(a),token(b))>=4.5,a+' / '+b+' contrast='+contrast(token(a),token(b)).toFixed(2));
  }
  assert.ok(html.includes('name="theme-color" content="'+token('app-bg')+'"'));
 });
-test('board colors are independent of the brand',()=>{
- assert.deepEqual(Object.keys(THEMES),['chessnut','cburnett','spatial','celtic','rhosgfx']);
- assert.equal(THEMES.chessnut.dark,'#779653');
- assert.notEqual(THEMES.chessnut.dark,token('accent'));
+test('board palettes and piece sets are independent of brand chrome',()=>{
+ assert.deepEqual(Object.keys(BOARD_THEMES),['emerald','walnut','ice','obsidian']);
+ assert.deepEqual(Object.keys(PIECE_SETS),['maestro','staunty','merida','cburnett','spatial']);
+ assert.notEqual(BOARD_THEMES.emerald.dark,token('accent'));
 });
