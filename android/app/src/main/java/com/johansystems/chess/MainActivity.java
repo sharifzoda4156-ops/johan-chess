@@ -37,6 +37,10 @@ public final class MainActivity extends Activity {
                 Uri u=r.getUrl();
                 if (!"https".equals(u.getScheme()) || !"appassets.androidplatform.net".equals(u.getHost()) || u.getPort()!=-1)
                     return response(403, "{\"error\":\"Blocked\"}");
+                if (("/api/puzzle-data/catalog".equals(u.getPath()) || "/api/puzzle-data/pack".equals(u.getPath())) && "GET".equals(r.getMethod())) {
+                    try { return response(200, PuzzleDownload.get(u)); }
+                    catch(Exception e) { return response(502, "{\"error\":\"Puzzle data unavailable\"}"); }
+                }
                 if ("/api/games".equals(u.getPath()) && "GET".equals(r.getMethod())) {
                     try { return response(200, ChessImport.games(u.getQueryParameter("user")).toString()); }
                     catch(Exception e) { return response(502, "{\"error\":\"Не удалось импортировать партии. Вставь PGN вручную.\"}"); }

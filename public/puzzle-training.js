@@ -7,7 +7,7 @@ const outcomes=['clean','assisted','skipped'];
 export function normalizeTraining(raw){
  const records=[],seen=new Set();let target=INITIAL_TARGET;
  for(const r of Array.isArray(raw?.records)?raw.records:[]){
-  if(!validId(r?.id)||seen.has(r.id)||!outcomes.includes(r.outcome)||!Number.isInteger(r.rating)||r.rating<400||r.rating>2999)continue;
+  if(!validId(r?.id)||seen.has(r.id)||!outcomes.includes(r.outcome)||!Number.isInteger(r.rating)||r.rating<0||r.rating>9999)continue;
   if(records.length>=20000)break;
   seen.add(r.id);
   const tags=Array.isArray(r.tags)?[...new Set(r.tags.filter(t=>Object.hasOwn(TOPICS,t)))]:[];
