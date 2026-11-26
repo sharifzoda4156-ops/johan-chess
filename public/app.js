@@ -1,3 +1,4 @@
+import {displayName,profileStats} from './profile-core.js';
 import {pieceGraphic} from './piece-art.js';
 import {initNavigation} from './navigation.js';
 import {initTraining} from './training.js';
@@ -61,14 +62,26 @@ function coachContext(){
  return {user,game:{source:h.Site==='Johan Chess'?'training':'import',termination:h.Termination||'',timeControl:h.TimeControl||'',white:player('w'),black:player('b'),date:h.Date||'',result:h.Result||'*',color,startFen,position:positions[cursor],cursor,moves:moves.map(m=>m.san),depth:analysisDepth??Number($('depth').value),complete:results.length===moves.length,analysis:results}};
 }
 $('coachUnavailable').hidden=!!globalThis.JohanNative;
-function refreshHome(){
- const count=(key,predicate)=>{try{const x=JSON.parse(localStorage.getItem(key)||'[]');return Array.isArray(x)?x.filter(predicate).length:0;}catch{return 0;}};
- const user=$('user').value.trim().toLowerCase();
- $('homePlayed').textContent=String(count('jc-training-history-v1',r=>String(r?.user||'').toLowerCase()===user));
- $('homeReviewed').textContent=String(count('jc-coach-games:'+user,r=>!!r));
+let accountStatus=null;
+function readLocal(key){try{const rows=JSON.parse(localStorage.getItem(key)||'[]');return Array.isArray(rows)?rows:[];}catch{return [];}}
+function refreshProfile(){
+ const user=$('user').value.trim(),nick=user.toLowerCase();
+ const s=profileStats(readLocal('jc-training-history-v1'),readLocal('jc-coach-games:'+nick),user,Chess);
+ $('homePlayed').textContent=String(s.played);$('homeReviewed').textContent=String(s.reviewed);
+ const name=displayName(accountStatus,user);
+ $('profileName').textContent=name;$('profileAvatar').textContent=Array.from(name.trim())[0]?.toUpperCase()||'♟';
+ $('profileNick').textContent=user?'Chess.com · '+user:'';
+ $('profileConnection').textContent=accountStatus?.connected?(accountStatus.sharing?'ChatGPT подключён':'ChatGPT · требуется разрешение плана'):'ChatGPT не подключён';
+ $('profileConnect').textContent=accountStatus?.connected?'Настройки ChatGPT':'Подключить ChatGPT';
+ $('profilePlayed').textContent=String(s.played);$('profileReviewed').textContent=String(s.reviewed);
+ $('profileAccuracy').textContent=s.accuracy===null?'—':s.accuracy.toFixed(1)+'%';
+ for(const [id,n] of [['Wins',s.wins],['Draws',s.draws],['Losses',s.losses]])$('profile'+id).textContent=String(n);
+ for(const [id,n] of [['Win',s.wins],['Draw',s.draws],['Loss',s.losses]])$('profile'+id+'Bar').style.width=(s.played?100*n/s.played:0)+'%';
 }
-document.addEventListener('jc-screen',e=>{if(e.detail==='home')refreshHome();});
-refreshHome();
+document.addEventListener('jc-screen',e=>{if(['home','profile'].includes(e.detail))refreshProfile();});
+document.addEventListener('jc-account',e=>{accountStatus=e.detail;refreshProfile();});
+$('profileConnect').onclick=()=>{navigation.show('coach');const settings=document.querySelector('.coach-settings');if(settings)settings.open=true;};
+refreshProfile();
 initCoach(coachContext);
 training=initTraining({
  canStart:()=>!busy&&!importing,
