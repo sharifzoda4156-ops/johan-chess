@@ -1,3 +1,4 @@
+import {initPuzzles,rememberPersonal,getPuzzleProgress} from './puzzles.js';
 import {displayName,profileStats} from './profile-core.js';
 import {pieceGraphic} from './piece-art.js';
 import {initNavigation} from './navigation.js';
@@ -30,7 +31,7 @@ $('analyze').onclick=async()=>{
  const metrics=evaluateMove(best.score,played.score,isBest);const c=new Chess(m.before);let bestSan=best.best;try{bestSan=c.move({from:best.best.slice(0,2),to:best.best.slice(2,4),...(best.best.length>4?{promotion:best.best[4]}:{})}).san;}catch{};
  const continuation=new Chess(m.before),pv=[];for(const u of best.pv.slice(0,6)){try{pv.push(continuation.move({from:u.slice(0,2),to:u.slice(2,4),...(u.length>4?{promotion:u[4]}:{})}).san);}catch{break;}}
  results.push({index:i,color:m.color,san:m.san,move:actualMove,best:best.best,bestSan,pv,bestScore:best.score,playedScore:played.score,...metrics});prefix.push(actualMove);progress.value=i+1;renderReport();renderCoach();}
- rememberGame(coachContext());status('Анализ завершён. Выбери ошибку для разбора.');$('export').disabled=false;
+ const completedContext=coachContext();rememberGame(completedContext);rememberPersonal(completedContext);status('Анализ завершён. Выбери ошибку для разбора.');$('export').disabled=false;
  }catch(e){if(id===runId)status('Анализ прерван: '+e.message);}finally{if(id===runId){local?.close();engine=null;setBusy(false);render();$('export').disabled=!results.length;}}
 };
 $('stop').onclick=()=>{runId++;engine?.close();engine=null;setBusy(false);status('Анализ остановлен. Частичный отчёт сохранён на экране.');$('export').disabled=!results.length;render();};
@@ -67,6 +68,7 @@ function readLocal(key){try{const rows=JSON.parse(localStorage.getItem(key)||'[]
 function refreshProfile(){
  const user=$('user').value.trim(),nick=user.toLowerCase();
  const s=profileStats(readLocal('jc-training-history-v1'),readLocal('jc-coach-games:'+nick),user,Chess);
+ const puzzles=getPuzzleProgress(user);$('profilePuzzleSolved').textContent=String(puzzles.solved.length);$('profilePuzzleStreak').textContent=String(puzzles.bestStreak);
  $('homePlayed').textContent=String(s.played);$('homeReviewed').textContent=String(s.reviewed);
  const name=displayName(accountStatus,user);
  $('profileName').textContent=name;$('profileAvatar').textContent=Array.from(name.trim())[0]?.toUpperCase()||'♟';
@@ -82,6 +84,7 @@ document.addEventListener('jc-screen',e=>{if(['home','profile'].includes(e.detai
 document.addEventListener('jc-account',e=>{accountStatus=e.detail;refreshProfile();});
 $('profileConnect').onclick=()=>{navigation.show('coach');const settings=document.querySelector('.coach-settings');if(settings)settings.open=true;};
 refreshProfile();
+initPuzzles(()=>$('user').value.trim());
 initCoach(coachContext);
 training=initTraining({
  canStart:()=>!busy&&!importing,
