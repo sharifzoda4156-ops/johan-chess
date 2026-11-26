@@ -1,3 +1,4 @@
+import {isPages} from './platform-api.js';
 import {sharedInput,validatedSharedPgn} from './share-core.js';
 const native=globalThis.JohanShare,$=id=>document.getElementById(id);
 let seq=0;const pending=new Map();
@@ -6,7 +7,7 @@ function call(op,args={}){if(!native)return Promise.reject(Error('Передач
 export function initGameShare({Chess,canUse,open,user,exportPgn,notice}){
  const say=t=>notice(t);let processing=false,current=null,checking=false,opened=null;
  $('sharePgnFile').hidden=!native;$('sharePgnText').hidden=!native;
- $('sharedInput').placeholder='PGN или ссылка Chess.com / Lichess';
+ $('sharedInput').placeholder=isPages()?'PGN':'PGN или ссылка Chess.com / Lichess';
  async function importValue(raw){
   const input=sharedInput(raw);let text=input.text;
   if(input.type==='chesscom')text=(await call('chesscom',{...input,user:user().trim()})).pgn;
