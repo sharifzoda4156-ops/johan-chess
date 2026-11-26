@@ -1,3 +1,4 @@
+import {platformFetch} from './platform-api.js';
 import {gameHistory,ratingCards} from './profile-core.js';
 import {earnedAchievements,achievementCards} from './achievement-core.js';
 const $=id=>document.getElementById(id);
@@ -48,7 +49,7 @@ export function initProfileDashboard({Chess,getUser,setUser,openGame,canSync}){
   if(nick!==getUser()&&!setUser(nick)){$('profileUserStatus').textContent='Закончи текущую игру или анализ.';return;}
   $('profileUserStatus').textContent='Ник сохранён.';render();
  };
- async function get(path,user){const r=await fetch(path+'?user='+encodeURIComponent(user));if(!r.ok)throw Error('Chess.com недоступен');return r.json();}
+ async function get(path,user){const r=await platformFetch(path+'?user='+encodeURIComponent(user));if(!r.ok)throw Error('Chess.com недоступен');return r.json();}
  $('profileSync').onclick=async()=>{
   align();if(loading||!scope||!canSync())return;
   const id=++request,user=scope;loading=true;notice='Обновляю данные Chess.com…';render();

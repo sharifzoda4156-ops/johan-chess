@@ -1,0 +1,17 @@
+import {cp,mkdir,readFile,writeFile,rm,access} from 'node:fs/promises';
+const root=new URL('../',import.meta.url),out=new URL('dist/',root);
+await access(new URL('public/engine-path.js',root));
+await access(new URL('public/chess.js',root));
+await rm(out,{recursive:true,force:true});
+await mkdir(out,{recursive:true});
+await cp(new URL('public/',root),out,{recursive:true});
+const file=new URL('index.html',out);
+let html=await readFile(file,'utf8');
+if(!html.includes('<html lang="ru">'))throw Error('Expected HTML root');
+html=html.replace('<html lang="ru">','<html lang="ru" data-hosting="pages">')
+ .replace('В Chess.com или Lichess выбери «Поделиться» → Johan Chess. Или вставь PGN / ссылку ниже. Для ссылки Chess.com нужен ник участника в поле выше.','В веб-версии вставь PGN или загрузи файл. Передача из других приложений и импорт по ссылке пока доступны в Android.')
+ .replace('placeholder="PGN или ссылка"','placeholder="PGN"');
+await writeFile(file,html);
+await writeFile(new URL('.nojekyll',out),'');
+await cp(new URL('README.md',root),new URL('SOURCE-AND-LICENSES.md',out));
+console.log('GitHub Pages build: dist/');
