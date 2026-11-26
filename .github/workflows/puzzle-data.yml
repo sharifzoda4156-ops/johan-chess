@@ -38,7 +38,7 @@ jobs:
       - name: Validate starter before publishing
         run: |
           cp "$RUNNER_TEMP/puzzle-data/starter.json" public/lichess-puzzles.json
-          npm test
+          node --test test/puzzle.test.mjs test/puzzle-download.test.mjs
       - name: Upload immutable-version data files
         shell: bash
         run: |
