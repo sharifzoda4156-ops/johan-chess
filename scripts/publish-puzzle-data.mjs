@@ -37,6 +37,7 @@ for(const g of groups.values())flush(g);
 const puzzles=[...starter.values()].flat();
 if(total<1000000||puzzles.length!==1000)throw Error('Incomplete source or starter: '+total+' / '+puzzles.length);
 const catalog={schema:1,tag,source,license,total,rejected,packs};
-writeFileSync(join(dir,'catalog.json'),JSON.stringify(catalog));
+const catalogText=JSON.stringify(catalog);if(Buffer.byteLength(catalogText)>8*1024*1024||new Set(packs.map(p=>p.asset)).size>998)throw Error('Catalog exceeds client or release limits');
+writeFileSync(join(dir,'catalog.json'),catalogText);
 writeFileSync(join(dir,'starter.json'),JSON.stringify({source,license,puzzles}));
 console.log(JSON.stringify({total,rejected,starter:puzzles.length,packs:packs.length}));
