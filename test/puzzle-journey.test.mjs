@@ -34,3 +34,19 @@ test('daily completion is idempotent, streak and gap',()=>{
 test('timer counts only active time, repeated resume and pause are harmless',()=>{
  let now=0;const t=createPuzzleTimer(()=>now);t.resume();now=2000;t.resume();t.pause();now=7000;t.pause();assert.equal(t.seconds(),2);t.resume();now=8000;assert.equal(t.seconds(),3);t.reset();assert.equal(t.seconds(),0);
 });
+
+import {Chess} from 'chess.js';
+import {buildPuzzleReview} from '../public/puzzle-core.js';
+import {dailyPenalty} from '../public/puzzle-journey.js';
+test('daily hearts end at zero, free attempts start independently',()=>{
+ let hearts=5;for(let i=0;i<5;i++)hearts=dailyPenalty(hearts);assert.equal(hearts,0);assert.equal(dailyPenalty(0),0);assert.equal(dailyPenalty(5),4);
+});
+test('journey training repeats never affect XP or current streak',()=>{
+ const s=rewardJourney({},p,{day,seconds:10,target:1100,clean:true}).state;
+ for(const clean of [true,false]){const r=rewardJourney(s,p,{day,seconds:1,target:1100,clean,practice:true});assert.deepEqual(r.state,s);assert.equal(r.reward,null);}
+});
+test('published solution review includes start and legal moves without mutating live position',()=>{
+ const live=new Chess();const start=live.fen();const frames=buildPuzzleReview({startFen:start,solution:['e2e4','e7e5','g1f3']},Chess);
+ assert.equal(frames.length,4);assert.equal(frames[0].fen,start);assert.equal(frames[3].move.san,'Nf3');assert.equal(live.fen(),start);
+ const expected=new Chess();for(const m of ['e4','e5','Nf3'])expected.move(m);assert.equal(frames[3].fen,expected.fen());
+});

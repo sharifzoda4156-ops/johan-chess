@@ -199,3 +199,7 @@ input[type=checkbox]{width:20px;height:20px;min-height:0;vertical-align:middle;a
 #puzzleWorkspace [hidden],#puzzleDailyResult [hidden]{display:none!important}
 @media(max-width:700px){.puzzle-focus main{padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}.puzzle-focus-header{margin-top:env(safe-area-inset-top,0px)}}
 @media(orientation:landscape) and (max-height:550px){.puzzle-focus #puzzleBoard,.puzzle-focus #puzzleReviewBoard{max-width:calc(100dvh - 24px);margin:auto}.puzzle-focus-header{padding-block:4px;margin-bottom:4px}}
+
+/* Also use the original theme's progress style below the board. */
+.journey-session-score #journeyDelta:empty{display:none}
+.puzzle-focus #puzzleBoard .square[data-feedback]::after{inset:0 0 auto auto;transform:none}

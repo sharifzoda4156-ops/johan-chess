@@ -28,8 +28,9 @@ export const levelCost=n=>80+Math.max(0,n-1)*12+Math.floor((n-1)/20)*40;
 export function journeyLevel(xp){let rest=Math.max(0,Number.isFinite(xp)?Math.floor(xp):0),level=1;while(level<160&&rest>=levelCost(level)){rest-=levelCost(level);level++;}const cost=levelCost(level),rank=Math.floor((level-1)/20);return {level,rank,name:ranks[rank],position:(level-1)%20+1,cost,progress:Math.min(rest,cost),maxed:level===160&&rest>=cost};}
 export function targetSeconds(p,target){return Math.max(15,Math.min(120,Math.round(18+12*Math.max(1,Math.ceil((p.solution?.length||1)/2))+4*Math.max(-4,Math.min(8,(p.rating-target)/100)))));}
 export function breakJourney(raw){return {...normalizeJourney(raw),streak:0};}
-export function rewardJourney(raw,p,{day,seconds,target,clean}){
+export function rewardJourney(raw,p,{day,seconds,target,clean,practice=false}){
  const s=normalizeJourney(raw);
+ if(practice)return {state:s,reward:null};
  if(!clean)return {state:breakJourney(s),reward:null};
  if(!idOk(p?.id)||!Number.isFinite(dayNumber(day))||!Number.isFinite(seconds)||seconds<0||!Number.isFinite(target)||!Number.isInteger(p.rating)||p.rating<0||p.rating>9999||s.records.some(r=>r.id===p.id)||s.records.length>=50000)return {state:s,reward:null};
  const delta=p.rating-target,base=delta>=200?30:delta>=-100?22:15,limit=targetSeconds(p,target),speed=seconds<=limit/2?10:seconds<=limit?5:0;
@@ -39,3 +40,5 @@ export function rewardJourney(raw,p,{day,seconds,target,clean}){
 }
 export function formatDuration(n){n=Math.max(0,Math.floor(Number(n)||0));return Math.floor(n/60)+':'+String(n%60).padStart(2,'0');}
 export function createPuzzleTimer(now=()=>performance.now()){let total=0,since=null;return {reset(){total=0;since=null;},resume(){if(since===null)since=now();},pause(){if(since!==null){total+=Math.max(0,now()-since);since=null;}},seconds(){return (total+(since===null?0:Math.max(0,now()-since)))/1000;}};}
+
+export const dailyPenalty=hearts=>Math.max(0,Math.min(5,Number.isInteger(hearts)?hearts:0)-1);

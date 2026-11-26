@@ -1,10 +1,10 @@
 import {loadMorePuzzles} from './puzzle-remote.js';
 import {Chess} from './chess.js';
 import {renderBoardView,clearBoardView} from './board-view.js';
-import {preparePuzzle,advancePuzzle,filterPuzzles,cleanProgress,finishAttempt} from './puzzle-core.js';
+import {preparePuzzle,advancePuzzle,filterPuzzles,cleanProgress,finishAttempt,buildPuzzleReview} from './puzzle-core.js';
 import {normalizeTraining,recordOutcome,summarizeTraining,selectTrainingPuzzle} from './puzzle-training.js';
 import {parseUci} from './training-core.js';
-import {dayKey,shiftDay,dailyOrder,normalizeDaily,completeDaily,dailyStreak,normalizeJourney,journeyLevel,levelCost,rewardJourney,breakJourney,targetSeconds,formatDuration,createPuzzleTimer} from './puzzle-journey.js';
+import {dayKey,shiftDay,dailyOrder,normalizeDaily,completeDaily,dailyStreak,normalizeJourney,journeyLevel,levelCost,rewardJourney,breakJourney,targetSeconds,formatDuration,createPuzzleTimer,dailyPenalty} from './puzzle-journey.js';
 let pack=null,loading=null;
 async function loadPack(){if(pack)return pack;if(!loading)loading=fetch('./lichess-puzzles.json').then(r=>{if(!r.ok)throw Error('База задач недоступна');return r.json();}).then(d=>{if(d.license!=='CC0-1.0'||!Array.isArray(d.puzzles)||!d.puzzles.length)throw Error('Некорректная база Lichess');return pack=d.puzzles;}).finally(()=>{loading=null;});return loading;}
 const $=id=>document.getElementById(id),key=(kind,user)=>'jc-lichess-v1-'+kind+':'+String(user||'').trim().toLowerCase();
@@ -29,7 +29,7 @@ export function initPuzzles(getUser){
  function modeControls(){
   for(const [name,id] of Object.entries(modes)){$(id).setAttribute('aria-pressed',String(name===mode));$(id).disabled=starting;}
   $('journeyStart').disabled=$('dailyStart').disabled=$('classicStart').disabled=starting||!pack;
-  $('journeyBack').disabled=$('puzzleArchive').disabled=starting;
+  $('journeyBack').disabled=false;$('puzzleArchive').disabled=false;
   document.body.classList.toggle('puzzle-focus',active&&!map);
   $('puzzleMenuHeading').hidden=$('modeJourney').parentElement.hidden=!map;
   $('journeyMap').hidden=mode!=='journey'||!map;$('dailyHeader').hidden=mode!=='daily'||!map;
@@ -50,7 +50,7 @@ export function initPuzzles(getUser){
   $('journeyProgressLabel').textContent=l.maxed?'Максимальный ранг':l.progress+' / '+l.cost+' XP';
   $('journeySeries').textContent='Серия: '+journey.streak+' · рекорд '+journey.bestStreak;
   $('journeyQuest').textContent='Сегодня: '+Math.min(3,journey.records.filter(r=>r.day===today).length)+'/3';
-  $('journeySessionXP').textContent=journey.xp.toLocaleString('ru-RU')+' XP';$('journeySessionLevel').textContent='Ур. '+l.position+'/20';$('journeyRun').textContent='↗ '+journey.streak;$('sessionProgress').max=l.cost;$('sessionProgress').value=l.progress;
+  $('journeySessionXP').textContent=journey.xp.toLocaleString('ru-RU')+' XP';$('journeySessionLevel').textContent='Ур. '+l.position+'/20';if(mode==='journey')$('sessionKicker').textContent='РАНГ · '+l.name.toUpperCase();$('journeyRun').textContent='↗ '+journey.streak;$('sessionProgress').max=l.cost;$('sessionProgress').value=l.progress;
   if(!$('journeyMap').hidden){
    const path=$('journeyPath'),key=l.rank+':'+l.position+':'+l.maxed;
    if(path.dataset.level!==key){
@@ -131,9 +131,9 @@ export function initPuzzles(getUser){
   previousFeedback=feedback?.square||null;
  }
  async function start({reset=false}={}){
-  if(starting)return;starting=true;pendingTheme=false;timer.pause();view='solve';dailyOutcome=null;feedback=null;retryPractice=false;$('journeyDelta').textContent='';$('dailyShareText').hidden=true;
+  if(starting)return;starting=true;pendingTheme=false;timer.pause();const wasPractice=retryPractice;view='solve';dailyOutcome=null;feedback=null;retryPractice=false;$('journeyDelta').textContent='';$('dailyShareText').hidden=true;
   $('puzzleNext').disabled=$('puzzleTheme').disabled=$('puzzleBand').disabled=true;
-  if(!reset&&puzzle&&!done&&mode!=='daily'){record('skipped');progress={...progress,streak:0};save();if(mode==='journey'){journey=breakJourney(journey);saveMode('journey',journey);}}
+  if(!reset&&puzzle&&!done&&mode!=='daily'&&!wasPractice){record('skipped');progress={...progress,streak:0};save();if(mode==='journey'){journey=breakJourney(journey);saveMode('journey',journey);}}
   puzzle=null;game=null;step=0;selected=null;highlight=null;promotion=[];done=false;assisted=false;hearts=5;timer.reset();attemptTarget=training.target;
   $('journeyReward').hidden=true;$('puzzleTitle').textContent='';$('puzzleTurn').textContent='Загрузка';status('Подготавливаю задачу…');modeControls();stats();
   let notice='';
@@ -154,7 +154,7 @@ export function initPuzzles(getUser){
   finally{starting=false;$('puzzleNext').disabled=$('puzzleTheme').disabled=$('puzzleBand').disabled=false;modeControls();if(pendingTheme||userNow()!==user)queueMicrotask(()=>enter());}
   if(pendingTheme||userNow()!==user){puzzle=null;game=null;return;}
   $('puzzleCacheInfo').textContent='В памяти: '+new Set([...(pack||[]),...remotePacks.flatMap(p=>p.rows)].map(p=>p.id)).size+' задач · кэш до 50 МБ';
-  if(!puzzle){$('puzzleTurn').textContent='';$('puzzleExplanation').hidden=true;$('puzzleTitle').textContent='Нет задач';$('puzzleNext').disabled=false;$('puzzleNext').textContent='Повторить загрузку';status('В этой категории пока нет доступных задач'+notice+'. Попробуй снова или выбери другую тему.');draw();stats();return;}
+  if(!puzzle){$('puzzleTurn').textContent='';$('puzzleExplanation').textContent='';$('puzzleTitle').textContent='Нет задач';$('puzzleNext').disabled=false;$('puzzleNext').textContent='Повторить загрузку';status('В этой категории пока нет доступных задач'+notice+'. Попробуй снова или выбери другую тему.');draw();stats();return;}
   lastId=puzzle.id;game=new Chess(puzzle.startFen);$('puzzleNext').disabled=mode==='daily';$('puzzleNext').textContent=mode==='daily'?'Решай задачу':'Пропустить';
   $('puzzleTimeTarget').textContent=formatDuration(targetSeconds(puzzle,attemptTarget));$('journeyDifficulty').textContent=String(puzzle.rating);
   $('puzzleTitle').textContent='Lichess #'+puzzle.id+' · '+puzzle.rating;
@@ -168,10 +168,11 @@ export function initPuzzles(getUser){
   if(mode==='daily'){
    if(!reveal){daily=completeDaily(daily,date,{id:puzzle.id,seconds:timer.seconds(),hearts});saveMode('daily',daily);status('Задача дня решена!','puzzle-success');dailyOutcome='solved';}
    else{status('Решение показано · серия не засчитана');dailyOutcome='failed';}
-  }else if(!reveal){record(assisted?'assisted':'clean');progress=finishAttempt(progress,puzzle.id,assisted);status(save()?(assisted?'Верно! Решено с помощью.':'Верно! С первого раза.'):'Верно! Не удалось сохранить прогресс.','puzzle-success');}
+  }else if(retryPractice){status(reveal?'Решение показано':'Тренировочный повтор завершён',reveal?'':'puzzle-success');}
+  else if(!reveal){record(assisted?'assisted':'clean');progress=finishAttempt(progress,puzzle.id,assisted);status(save()?(assisted?'Верно! Решено с помощью.':'Верно! С первого раза.'):'Верно! Не удалось сохранить прогресс.','puzzle-success');}
   else{record('assisted');progress={...progress,streak:0};save();status('Решение показано · не засчитано','');}
   if(mode==='journey'){
-   const result=rewardJourney(journey,puzzle,{day:dayKey(),seconds:timer.seconds(),target:attemptTarget,clean:!reveal&&!assisted&&!retryPractice});journey=result.state;saveMode('journey',journey);
+   const result=rewardJourney(journey,puzzle,{day:dayKey(),seconds:timer.seconds(),target:attemptTarget,clean:!reveal&&!assisted,practice:retryPractice});journey=result.state;saveMode('journey',journey);
    const r=result.reward;const details=r?[['База',r.base],['Скорость',r.speed],['Серия',r.series],['Дневной бонус',r.daily],['Рекорд',r.record],['Рубеж',r.milestone]].filter(x=>x[1]>0).map(x=>x[0]+' +'+x[1]).join(' · '):'';
    $('journeyDelta').textContent=r?'+'+r.points:'';
    $('journeyReward').textContent=r?'+'+r.points+' XP · '+formatDuration(timer.seconds())+' · '+details:'0 XP · '+formatDuration(timer.seconds())+(retryPractice?' · тренировочный повтор':reveal||assisted?' · нужна чистая попытка':' · эта задача уже принесла очки');$('journeyReward').hidden=false;
@@ -198,13 +199,14 @@ export function initPuzzles(getUser){
   feedback=null;const p=game.get(sq);selected=p?.color===game.turn()&&selected!==sq?sq:null;highlight=null;draw();
  }
  function penalty(){
-  if(mode==='daily'){hearts=Math.max(0,hearts-1);return;}
+  if(mode==='daily'){hearts=dailyPenalty(hearts);return;}
+  if(retryPractice)return;
   record('assisted');progress={...progress,streak:0};save();
   if(mode==='journey'){journey=breakJourney(journey);saveMode('journey',journey);}
  }
  function abandon(){
   timer.pause();
-  if(mode==='journey'&&puzzle&&!done){journey=breakJourney(journey);saveMode('journey',journey);record('skipped');progress={...progress,streak:0};save();}
+  if(mode==='journey'&&puzzle&&!done&&!retryPractice){journey=breakJourney(journey);saveMode('journey',journey);record('skipped');progress={...progress,streak:0};save();}
   puzzle=null;game=null;promotion=[];selected=null;done=false;lastId=null;view='solve';dailyOutcome=null;feedback=null;draw();
  }
  function switchMode(next){
@@ -212,11 +214,11 @@ export function initPuzzles(getUser){
   abandon();mode=next;map=true;date=dayKey();calendarDay=date;hearts=5;modeControls();stats();
  }
  function openSession(){if(starting||!pack)return;map=false;modeControls();if(!puzzle)start({reset:true});else syncTimer();}
- function backToMenu(){if(starting)return;if(view==='review'){closeReview();return;}map=true;modeControls();stats();window.scrollTo(0,0);}
+ function backToMenu(){if(view==='review'){closeReview();return;}map=true;modeControls();stats();window.scrollTo(0,0);}
  for(const [name,id] of Object.entries(modes))$(id).onclick=()=>switchMode(name);
  $('journeyStart').onclick=$('dailyStart').onclick=$('classicStart').onclick=openSession;
  $('journeyBack').onclick=backToMenu;
- $('puzzleArchive').onclick=()=>{if(!starting){map=true;modeControls();stats();}};
+ $('puzzleArchive').onclick=()=>{map=true;modeControls();stats();};
  $('puzzleNext').onclick=()=>start({reset:mode==='daily'});
  $('puzzleTheme').onchange=$('puzzleBand').onchange=()=>{if(puzzle)abandon();lastId=null;modeControls();stats();};
  $('puzzleHint').onclick=()=>{if(done||!game)return;assisted=true;feedback=null;penalty();if(mode==='daily'&&hearts===0){failDaily();return;}highlight=[puzzle.solution[step].slice(0,2)];selected=null;status('Подсказка: начни с выделенной фигуры.');draw();stats();};
@@ -242,7 +244,7 @@ export function initPuzzles(getUser){
  }
  function retryCurrent(){
   if(starting||!puzzle)return;
-  view='solve';dailyOutcome=null;feedback=null;previousFeedback=null;game=new Chess(puzzle.startFen);step=0;selected=null;highlight=null;promotion=[];done=false;hearts=5;
+  view='solve';dailyOutcome=null;feedback=null;game=new Chess(puzzle.startFen);step=0;selected=null;highlight=null;promotion=[];done=false;hearts=5;
   retryPractice=mode==='journey';assisted=retryPractice;timer.reset();attemptTarget=training.target;
   $('journeyDelta').textContent='';$('journeyReward').hidden=true;$('puzzleExplanation').textContent='';$('puzzleNext').disabled=mode==='daily';$('puzzleNext').textContent=mode==='daily'?'Решай задачу':'Пропустить';
   $('puzzleTurn').textContent=game.turn()==='w'?'Ход белых':'Ход чёрных';status(retryPractice?'Тренировочный повтор · без XP':'Найди решение.');
@@ -257,8 +259,7 @@ export function initPuzzles(getUser){
  }
  function openReview(){
   if(!done||!puzzle)return;
-  const c=new Chess(puzzle.startFen);reviewFrames=[{fen:c.fen(),move:null}];
-  for(const u of puzzle.solution){const move=c.move(parseUci(u));reviewFrames.push({fen:c.fen(),move});}
+  reviewFrames=buildPuzzleReview(puzzle,Chess);
   reviewAt=0;view='review';modeControls();$('puzzleExplanation').textContent='Опубликованное решение Lichess: '+puzzle.line.join(' ')+' · lichess.org/training/'+puzzle.id;drawReview();if(active)window.scrollTo(0,0);
  }
  function closeReview(){if(mode==='daily'){showDailyResult();return;}view='solve';modeControls();draw();}
