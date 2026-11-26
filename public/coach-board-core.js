@@ -23,7 +23,7 @@ export function resolveBoards(answer,game,Chess){
    if(!game||!['1-0','0-1','1/2-1/2'].includes(game.result)||!r||count>=3||index>=game.moves.length)throw Error('Unknown board');
    const fen=getPositions()[index],played=legal(fen,r.move),best=legal(fen,r.best);
    if(played.fen!==getPositions()[index+1])throw Error('Mismatched played move');
-   const fields=fen.split(' ');parts.push({board:{fen,played,best,label:fields[5]+(fields[1]==='w'?'. ':'... ')+played.san,orientation:game.color==='b'?'b':'w',classification:r.label||''}});count++;
+   const fields=fen.split(' ');parts.push({board:{fen,played,best,label:fields[5]+(fields[1]==='w'?'. ':'... ')+played.san,orientation:game.color==='b'?'b':'w',classification:r.label||'',historical:game.source==='historical'}});count++;
   }catch{parts.push({text:'[Позиция недоступна]'});}
  }
  if(at<answer.length)parts.push({text:answer.slice(at)});
