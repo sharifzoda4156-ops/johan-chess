@@ -58,9 +58,17 @@ function coachContext(){
  if(!game||training?.active())return {user,game:null};
  const h=game.getHeaders();
  const color=h.White?.toLowerCase()===user.toLowerCase()?'w':h.Black?.toLowerCase()===user.toLowerCase()?'b':null;
- return {user,game:{source:h.Site==='Johan Chess'?'training':'import',termination:h.Termination||'',timeControl:h.TimeControl||'',white:player('w'),black:player('b'),date:h.Date||'',result:h.Result||'*',color,startFen,position:positions[cursor],cursor,moves:moves.map(m=>m.san),depth:Number($('depth').value),complete:results.length===moves.length,analysis:results}};
+ return {user,game:{source:h.Site==='Johan Chess'?'training':'import',termination:h.Termination||'',timeControl:h.TimeControl||'',white:player('w'),black:player('b'),date:h.Date||'',result:h.Result||'*',color,startFen,position:positions[cursor],cursor,moves:moves.map(m=>m.san),depth:analysisDepth??Number($('depth').value),complete:results.length===moves.length,analysis:results}};
 }
 $('coachUnavailable').hidden=!!globalThis.JohanNative;
+function refreshHome(){
+ const count=(key,predicate)=>{try{const x=JSON.parse(localStorage.getItem(key)||'[]');return Array.isArray(x)?x.filter(predicate).length:0;}catch{return 0;}};
+ const user=$('user').value.trim().toLowerCase();
+ $('homePlayed').textContent=String(count('jc-training-history-v1',r=>String(r?.user||'').toLowerCase()===user));
+ $('homeReviewed').textContent=String(count('jc-coach-games:'+user,r=>!!r));
+}
+document.addEventListener('jc-screen',e=>{if(e.detail==='home')refreshHome();});
+refreshHome();
 initCoach(coachContext);
 training=initTraining({
  canStart:()=>!busy&&!importing,
