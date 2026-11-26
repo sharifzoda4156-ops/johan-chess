@@ -48,7 +48,7 @@ test('selection retains cells and piece nodes; moves only update changed squares
  }finally{if(old===undefined)delete globalThis.document;else globalThis.document=old;}
 });
 
-import {MOVE_SPEEDS,normalizeMotion,moveDuration,replyDelay,roundMotionFactor,motionProgress,motionFrames} from '../public/board-view.js';
+import {MOVE_SPEEDS,normalizeMotion,moveDuration,replyDelay,roundMotionFactor,motionProgress,motionFrames,squareAtPoint} from '../public/board-view.js';
 test('classic medium animation is consistent, configurable and respects accessibility',()=>{
  assert.equal(normalizeMotion('unknown'),'medium');assert.equal(normalizeMotion('none'),'none');assert.equal(moveDuration(),250);assert.deepEqual(MOVE_SPEEDS,{slow:500,medium:250,fast:120,none:0});assert.equal(replyDelay(),375);
  const previous=globalThis.matchMedia;globalThis.matchMedia=()=>({matches:true});try{assert.equal(moveDuration(),0);assert.equal(replyDelay(),0);}finally{if(previous===undefined)delete globalThis.matchMedia;else globalThis.matchMedia=previous;}
@@ -76,4 +76,30 @@ test('Lichess cubic interpolation, speed threshold and clock scaling',()=>{
  assert.equal(motionProgress(0),0);assert.equal(motionProgress(.25),.0625);assert.equal(motionProgress(.5),.5);assert.equal(motionProgress(.75),.9375);assert.equal(motionProgress(1),1);
  const frames=motionFrames(200,-100);assert.equal(frames.length,121);assert.deepEqual(frames[30],{offset:.25,transform:'translate(12.5%,-6.25%)'});assert.equal(frames.at(-1).transform,'translate(200%,-100%)');
  assert.equal(roundMotionFactor(600000,0),1.2);assert.equal(roundMotionFactor(180000,0),.4);assert.equal(roundMotionFactor(60000,0),0);assert.equal(roundMotionFactor(180000,2000,true),1);assert.equal(moveDuration(.2),0);assert.equal(moveDuration(1.2),300);
+});
+
+test('squareAtPoint maps pointer coordinates for normal and flipped boards',()=>{
+ const rect={left:100,top:50,width:400,height:400};
+ assert.equal(squareAtPoint(rect,110,60,false),'a8');
+ assert.equal(squareAtPoint(rect,490,440,false),'h1');
+ assert.equal(squareAtPoint(rect,110,60,true),'h1');
+ assert.equal(squareAtPoint(rect,490,440,true),'a8');
+ assert.equal(squareAtPoint(rect,99,60,false),null);
+ assert.equal(squareAtPoint(rect,501,60,false),null);
+});
+
+test('checkSquare applies and clears in-check class on king square',()=>{
+ const doc={createElement(tag){return new El(tag,doc);},createDocumentFragment(){return new El('fragment',doc);}};
+ const old=globalThis.document;globalThis.document=doc;
+ try{
+  const board=doc.createElement('div');
+  const r=rows({e1:'wK',e8:'bK',e7:'wQ'});
+  renderBoardView(board,{rows:r,checkSquare:'e8'});
+  const e8=board.children.find(c=>c.dataset.square==='e8');
+  const e1=board.children.find(c=>c.dataset.square==='e1');
+  assert.match(e8.className,/in-check/);
+  assert.doesNotMatch(e1.className,/in-check/);
+  renderBoardView(board,{rows:r,checkSquare:null});
+  assert.doesNotMatch(e8.className,/in-check/);
+ }finally{if(old===undefined)delete globalThis.document;else globalThis.document=old;}
 });

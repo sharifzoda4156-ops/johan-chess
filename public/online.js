@@ -1,5 +1,7 @@
 import {Chess} from './chess.js';
 import {renderBoardView,clearBoardView,roundMotionFactor} from './board-view.js';
+import {findKingSquare,renderMaterial} from './material.js';
+import {playSound,soundForMove} from './sound.js';
 import {confirmDialog} from './dialog.js';
 import {matchControl,validNick,validGameId,readOnlineGame,serverClock,resultText,completedPgn} from './online-core.js';
 const $=id=>document.getElementById(id),native=globalThis.JohanLichess;
@@ -36,7 +38,10 @@ export function initOnline({canStart,lock,review}){
   if(!game){clearBoardView($('onlineBoard'));return;}
   const mine=game.color,turn=game.game.turn(),playable=!game.done&&turn===mine&&!snap.needsSync&&!sending&&!awaiting&&!working&&!promotion.length;
   const targets=[]; // No assistance or legal-move dots in rated or casual online play.
-  renderBoardView($('onlineBoard'),{rows:game.game.board(),flip:mine==='b',interactive:true,disabled:!playable,onClick:click,selected,targets,last:game.game.history({verbose:true}).at(-1),animateMoves,motionFactor:roundMotionFactor(snap.full?.clock?.initial,snap.full?.clock?.increment,game.done)});
+  const rows=game.game.board(),checkSquare=game.game.isCheck()?findKingSquare(rows,turn):null;
+  renderBoardView($('onlineBoard'),{rows,flip:mine==='b',interactive:true,disabled:!playable,onClick:click,selected,targets,last:game.game.history({verbose:true}).at(-1),checkSquare,animateMoves,motionFactor:roundMotionFactor(snap.full?.clock?.initial,snap.full?.clock?.increment,game.done)});
+  renderMaterial($('onlineTopMat'),rows,mine==='w'?'b':'w');
+  renderMaterial($('onlineBottomMat'),rows,mine);
   $('onlinePromotion').hidden=!promotion.length;
   const player=c=>c==='w'?game.white:game.black,label=p=>[p?.name||p?.id||'Игрок',p?.rating].filter(Boolean).join(' · ');
   text('onlineTop',label(player(mine==='w'?'b':'w')));text('onlineBottom',label(player(mine)));
@@ -56,7 +61,7 @@ export function initOnline({canStart,lock,review}){
   if(s.username!==lastAccount){lastAccount=s.username;history=[];friendRows=[];renderHistory();renderFriends();$('onlinePlayer').replaceChildren();}
   const sig=JSON.stringify([s.gameId,s.full?.id,s.state]);
   if(sig!==signature){signature=sig;const old=game;game=null;selected=null;promotion=[];awaiting=false;
-   if(s.full&&s.state){try{game=readOnlineGame(s.full,s.state,s.username,Chess);receivedAt=performance.now();const moves=old&&lastGame===s.gameId&&game.moves.length===old.moves.length+1&&old.moves.every((u,i)=>u===game.moves[i])?[game.game.history({verbose:true}).at(-1)]:[];lastGame=s.gameId;draw(moves);}catch(e){say(e.message+' · открой Lichess для этой партии');}}else clearBoardView($('onlineBoard'));
+   if(s.full&&s.state){try{game=readOnlineGame(s.full,s.state,s.username,Chess);receivedAt=performance.now();const moves=old&&lastGame===s.gameId&&game.moves.length===old.moves.length+1&&old.moves.every((u,i)=>u===game.moves[i])?[game.game.history({verbose:true}).at(-1)]:[];lastGame=s.gameId;draw(moves);if(moves.length)playSound(soundForMove(moves[0],game.game));else if(old&&!old.done&&game.done)playSound('end');}catch(e){say(e.message+' · открой Lichess для этой партии');}}else clearBoardView($('onlineBoard'));
   }else if(previous.needsSync!==s.needsSync||previous.locked!==s.locked)draw();
   const ck=JSON.stringify([s.incoming,s.locked,s.eventReady]);if(ck!==challengeKey){challengeKey=ck;challenges();}
   if(s.notice&&!error)text('onlineStatus',s.notice);else if(!error)text('onlineStatus','');if(!s.needsSync)syncAttempt='';controls();

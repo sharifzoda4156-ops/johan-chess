@@ -1,5 +1,6 @@
 import {Chess} from './chess.js';
 import {renderBoardView} from './board-view.js';
+import {findKingSquare} from './material.js';
 import {ENDGAMES,parseOpenings,searchOpenings,openingLine,historicalPgn} from './study-core.js';
 const $=id=>document.getElementById(id);
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
@@ -10,8 +11,8 @@ export function initStudyLibrary({openGame,practiceEndgame,askOpening,playOpenin
  let openings=[],line=null,selected=null,at=0,flip=false,loading=null;
  function draw(animateMoves=[]){
   $('studyOpeningArea').hidden=!line;if(!line)return;
-  const c=new Chess(line.positions[at]),last=line.moves[at-1];
-  renderBoardView($('studyBoard'),{rows:c.board(),flip,last,animateMoves});
+  const c=new Chess(line.positions[at]),rows=c.board(),last=line.moves[at-1];
+  renderBoardView($('studyBoard'),{rows,flip,last,checkSquare:c.isCheck()?findKingSquare(rows,c.turn()):null,animateMoves});
   $('studyMove').textContent=at?line.moves[at-1].san+' · '+at+'/'+line.moves.length:'Начальная позиция';
   $('studyPrevious').disabled=at===0;$('studyNext').disabled=at===line.moves.length;
   for(const b of $('studyOpeningMoves').children)b.classList.toggle('active',Number(b.dataset.ply)===at);

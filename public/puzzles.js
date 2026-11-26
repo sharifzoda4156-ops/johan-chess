@@ -1,6 +1,8 @@
 import {loadMorePuzzles} from './puzzle-remote.js';
 import {Chess} from './chess.js';
 import {renderBoardView,clearBoardView,replyDelay} from './board-view.js';
+import {findKingSquare} from './material.js';
+import {playSound,soundForMove} from './sound.js';
 import {preparePuzzle,advancePuzzle,filterPuzzles,cleanProgress,finishAttempt,buildPuzzleReview} from './puzzle-core.js';
 import {normalizeTraining,recordOutcome,summarizeTraining,selectTrainingPuzzle} from './puzzle-training.js';
 import {parseUci} from './training-core.js';
@@ -124,8 +126,9 @@ export function initPuzzles(getUser){
   $('puzzleNext').hidden=mode==='daily'&&!!game&&!done;
   $('puzzlePromotion').hidden=!promotion.length;
   if(!game){clearBoardView(board);previousFeedback=null;return;}
+  const rows=game.board(),checkSquare=game.isCheck()?findKingSquare(rows,game.turn()):null;
   const targets=selected&&!done&&!promotion.length?game.moves({square:selected,verbose:true}).map(m=>m.to):[];
-  renderBoardView(board,{rows:game.board(),flip:puzzle.color==='b',interactive:true,disabled:starting||done||replying||!!promotion.length,onClick:click,selected,targets,marked:highlight||[],markClass:'puzzle-mark',animateMoves});
+  renderBoardView(board,{rows,flip:puzzle.color==='b',interactive:true,disabled:starting||done||replying||!!promotion.length,onClick:click,selected,targets,marked:highlight||[],markClass:'puzzle-mark',checkSquare,animateMoves});
   if(previousFeedback)board.querySelector('[data-square="'+previousFeedback+'"]')?.removeAttribute('data-feedback');
   if(feedback)board.querySelector('[data-square="'+feedback.square+'"]')?.setAttribute('data-feedback',feedback.kind);
   previousFeedback=feedback?.square||null;
@@ -184,10 +187,10 @@ export function initPuzzles(getUser){
   if(done||replying||!game)return;
   promotion=[];selected=null;highlight=null;
   const next=advancePuzzle(puzzle,game,step,m,Chess);
-  if(next){feedback={square:next.played.to,kind:'correct'};const applyReply=animation=>{game=next.game;step=next.index;const last=next.reply||next.played;highlight=[last.from,last.to];if(next.done){finish(false,animation);return;}status('Верно! Соперник ответил '+next.reply.san+'. Продолжай.','puzzle-success');draw(animation);syncTimer();};
-   if(next.reply&&replyDelay()>0){const current=puzzle,intermediate=new Chess(next.played.after);game=intermediate;replying=true;highlight=[next.played.from,next.played.to];$('puzzleNext').disabled=true;status('Верно! Ответ соперника…','puzzle-success');draw([next.played]);syncTimer();setTimeout(()=>{if(puzzle!==current||game!==intermediate)return;replying=false;if(userNow()!==user){enter();return;}$('puzzleNext').disabled=mode==='daily';applyReply(active?[next.reply]:[]);},replyDelay());}
-   else applyReply([next.played,...(next.reply?[next.reply]:[])]);return;}
-  assisted=true;feedback={square:m.to,kind:'wrong'};penalty();
+  if(next){feedback={square:next.played.to,kind:'correct'};const applyReply=animation=>{game=next.game;step=next.index;const last=next.reply||next.played;highlight=[last.from,last.to];if(next.done){playSound('end');finish(false,animation);return;}if(next.reply)playSound(soundForMove(next.reply,game));status('Верно! Соперник ответил '+next.reply.san+'. Продолжай.','puzzle-success');draw(animation);syncTimer();};
+   if(next.reply&&replyDelay()>0){const current=puzzle,intermediate=new Chess(next.played.after);game=intermediate;replying=true;highlight=[next.played.from,next.played.to];$('puzzleNext').disabled=true;status('Верно! Ответ соперника…','puzzle-success');playSound(soundForMove(next.played,intermediate));draw([next.played]);syncTimer();setTimeout(()=>{if(puzzle!==current||game!==intermediate)return;replying=false;if(userNow()!==user){enter();return;}$('puzzleNext').disabled=mode==='daily';applyReply(active?[next.reply]:[]);},replyDelay());}
+   else{playSound(soundForMove(next.played,next.game));applyReply([next.played,...(next.reply?[next.reply]:[])]);}return;}
+  playSound('illegal');assisted=true;feedback={square:m.to,kind:'wrong'};penalty();
   if(mode==='daily'&&hearts===0){failDaily();return;}
   status('Не совпадает с решением Lichess. Попробуй ещё раз.','puzzle-wrong');draw();stats();
  }
@@ -254,8 +257,8 @@ export function initPuzzles(getUser){
  }
  function drawReview(animate=false){
   const f=reviewFrames[reviewAt];if(!f)return;
-  const c=new Chess(f.fen);
-  renderBoardView($('puzzleReviewBoard'),{rows:c.board(),flip:puzzle.color==='b',last:f.move,animateMoves:animate&&f.move?[f.move]:[]});
+  const c=new Chess(f.fen),rows=c.board();
+  renderBoardView($('puzzleReviewBoard'),{rows,flip:puzzle.color==='b',last:f.move,checkSquare:c.isCheck()?findKingSquare(rows,c.turn()):null,animateMoves:animate&&f.move?[f.move]:[]});
   $('reviewPuzzleMove').textContent=reviewAt?f.move.san+' · '+reviewAt+'/'+(reviewFrames.length-1):'Начальная позиция';
   $('reviewPuzzlePrev').disabled=reviewAt===0;$('reviewPuzzleNext').disabled=reviewAt===reviewFrames.length-1;
  }
