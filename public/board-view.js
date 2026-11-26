@@ -5,13 +5,31 @@ const boards=new WeakMap();
 const key=p=>p?p.color+p.type.toUpperCase():'';
 export const reducedMotion=()=>globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches===true;
 export const scrollBehavior=()=>reducedMotion()?'auto':'smooth';
-// Original timings inspired by the ordinary Chess.com Medium setting, not proprietary constants.
-export const MOVE_SPEEDS=Object.freeze({slow:360,medium:250,fast:130,none:0});
+// Lichess user preferences (lila Pref.animationMillis); Chessground disables durations below 70 ms.
+export const MOVE_SPEEDS=Object.freeze({slow:500,medium:250,fast:120,none:0});
 const MOTION_KEY='jc-board-motion-v1';
 let motionStyle='medium';
 export const normalizeMotion=value=>Object.hasOwn(MOVE_SPEEDS,value)?value:'medium';
-export const moveDuration=()=>reducedMotion()?0:MOVE_SPEEDS[motionStyle];
-export const replyDelay=()=>moveDuration()?moveDuration()+65:0;
+export function roundMotionFactor(initialMs,incrementMs,finished=false){
+ if(finished)return 1;
+ const total=Number.isFinite(initialMs)&&initialMs>=0&&Number.isFinite(incrementMs)&&incrementMs>=0?(initialMs+40*incrementMs)/1000:1200;
+ return Math.max(0,Math.min(1.2,((total-60)/60)*0.2));
+}
+export function moveDuration(factor=1){
+ const duration=reducedMotion()?0:MOVE_SPEEDS[motionStyle]*factor;
+ return duration>=70?duration:0;
+}
+// Lichess puzzles with manual next use 1.5 times the selected animation duration.
+export const replyDelay=()=>moveDuration()*1.5;
+// Sample the cubic ease-in-out curve at 120 uniform intervals for compositor animation.
+// This is the same mathematical curve used by Chessground, not a CSS Bezier approximation.
+export const motionProgress=t=>t<0.5?4*t*t*t:1-4*(1-t)**3;
+export function motionFrames(dx,dy){
+ return Array.from({length:121},(_,i)=>{
+  const t=i/120,p=motionProgress(t);
+  return {offset:t,transform:'translate('+(dx*p)+'%,'+(dy*p)+'%)'};
+ });
+}
 export function initBoardMotion(storage=globalThis.localStorage){
  const select=document.getElementById('boardMotion');
  if(!select)return;
@@ -88,7 +106,7 @@ function showMotion(board,state,order,before,moves,motion,duration){
    holder.classList.add('board-motion-moving');
    if(!holder.animate){stop(state);return;}
    img.style.visibility='hidden';run.hidden.push(img);
-   const anim=holder.animate([{transform:'translate(0,0)'},{transform:'translate('+((b.fi-a.fi)*100)+'%,'+((b.ri-a.ri)*100)+'%)'}],{duration,easing:'cubic-bezier(.25,.46,.45,.94)',fill:'forwards'});
+   const anim=holder.animate(motionFrames((b.fi-a.fi)*100,(b.ri-a.ri)*100),{duration,easing:'linear',fill:'forwards'});
    run.animations.push(anim);
   }
   if(!run.animations.length){stop(state);return;}
@@ -99,7 +117,7 @@ export function clearBoardView(board){
  const state=boards.get(board);if(state)stop(state);
  boards.delete(board);board.replaceChildren();
 }
-export function renderBoardView(board,{rows,flip=false,interactive=false,disabled=false,onClick=null,selected=null,targets=[],last=null,marked=[],markClass='mark',animateMoves=[]}){
+export function renderBoardView(board,{rows,flip=false,interactive=false,disabled=false,onClick=null,selected=null,targets=[],last=null,marked=[],markClass='mark',animateMoves=[],motionFactor=1}){
  const doc=board.ownerDocument,order=squareOrder(flip),next=positionKeys(rows);
  let state=boards.get(board);
  if(!state||state.flip!==flip||state.interactive!==interactive){
@@ -119,7 +137,7 @@ export function renderBoardView(board,{rows,flip=false,interactive=false,disable
  }
  state.onClick=onClick;
  const changed=!state.positions||[...next].some(([sq,p])=>state.positions.get(sq)!==p);
- const before=state.positions,duration=moveDuration();
+ const before=state.positions,duration=moveDuration(motionFactor);
  // Multi-ply jumps are immediate; callers showing replies render each ply separately.
  const motion=changed&&duration&&animateMoves.length===1?planMotion(before,next,animateMoves):[];
  if(changed)stop(state);

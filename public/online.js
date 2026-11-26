@@ -1,5 +1,5 @@
 import {Chess} from './chess.js';
-import {renderBoardView,clearBoardView} from './board-view.js';
+import {renderBoardView,clearBoardView,roundMotionFactor} from './board-view.js';
 import {matchControl,validNick,validGameId,readOnlineGame,serverClock,resultText,completedPgn} from './online-core.js';
 const $=id=>document.getElementById(id),native=globalThis.JohanLichess;
 const pending=new Map();let seq=0;
@@ -34,7 +34,7 @@ export function initOnline({canStart,lock,review}){
   if(!game){clearBoardView($('onlineBoard'));return;}
   const mine=game.color,turn=game.game.turn(),playable=!game.done&&turn===mine&&!snap.needsSync&&!sending&&!awaiting&&!working&&!promotion.length;
   const targets=[]; // No assistance or legal-move dots in rated or casual online play.
-  renderBoardView($('onlineBoard'),{rows:game.game.board(),flip:mine==='b',interactive:true,disabled:!playable,onClick:click,selected,targets,last:game.game.history({verbose:true}).at(-1),animateMoves});
+  renderBoardView($('onlineBoard'),{rows:game.game.board(),flip:mine==='b',interactive:true,disabled:!playable,onClick:click,selected,targets,last:game.game.history({verbose:true}).at(-1),animateMoves,motionFactor:roundMotionFactor(snap.full?.clock?.initial,snap.full?.clock?.increment,game.done)});
   $('onlinePromotion').hidden=!promotion.length;
   const player=c=>c==='w'?game.white:game.black,label=p=>[p?.name||p?.id||'Игрок',p?.rating].filter(Boolean).join(' · ');
   text('onlineTop',label(player(mine==='w'?'b':'w')));text('onlineBottom',label(player(mine)));

@@ -1,4 +1,4 @@
-import {renderBoardView,clearBoardView,scrollBehavior,replyDelay} from './board-view.js';
+import {renderBoardView,clearBoardView,scrollBehavior,moveDuration,roundMotionFactor} from './board-view.js';
 import {Chess} from './chess.js';
 import {Engine} from './engine.js';
 import {enginePath} from './engine-path.js';
@@ -22,7 +22,7 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
  function draw(animateMoves=[]){
   const s=session;if(!s)return;
   const targets=selected&&!s.thinking&&!s.starting&&s.game.turn()===s.color?s.game.moves({square:selected,verbose:true}).map(m=>m.to):[];
-  renderBoardView($('playBoard'),{rows:s.game.board(),flip:s.color==='b',interactive:true,disabled:s.starting||s.thinking||s.game.turn()!==s.color||promotions.length>0,onClick:click,selected,targets,last:s.last,animateMoves});
+  renderBoardView($('playBoard'),{rows:s.game.board(),flip:s.color==='b',interactive:true,disabled:s.starting||s.thinking||s.game.turn()!==s.color||promotions.length>0,onClick:click,selected,targets,last:s.last,animateMoves,motionFactor:roundMotionFactor(CONTROLS[s.control]?.base,CONTROLS[s.control]?.increment)});
   if(s.renderedPly!==s.sans.length){
    const list=$('playMoves');list.textContent=s.sans.map((m,i)=>i%2===0?Math.floor(i/2)+1+'. '+m:m).join(' ');
    list.scrollTop=list.scrollHeight;s.renderedPly=s.sans.length;
@@ -67,7 +67,7 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
    const r=remaining(s.clock,performance.now())[s.game.turn()];
    const budget=r===null?1000:Math.max(10,Math.min(1000,r-50));
    const began=performance.now();const best=await s.engine.choose(s.startFen,s.game.history({verbose:true}).map(m=>m.from+m.to+(m.promotion||'')),budget);
-   const wait=Math.max(0,replyDelay()-(performance.now()-began));
+   const wait=Math.max(0,moveDuration(roundMotionFactor(CONTROLS[s.control]?.base,CONTROLS[s.control]?.increment))-(performance.now()-began));
    if(wait&& (r===null||r>700))await new Promise(resolve=>setTimeout(resolve,wait));
    if(session!==s||id!==serial)return;
    s.thinking=false;
@@ -93,7 +93,7 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
   const control=$('playTime').value;if(!CONTROLS[control])return false;
   const color=overrides.color??($('playColor').value==='random'?(Math.random()<.5?'w':'b'):$('playColor').value);
   const level=LEVELS[levelIndex],id=++serial,standard=game.fen()===new Chess().fen();
-  const s={id,game,user,color,level,levelIndex,adaptive,standard,replay:!!overrides.replay,startFen:game.fen(),clock:null,engine:null,starting:true,thinking:false,last:null,sans:[],renderedPly:-1};
+  const s={id,game,user,color,level,levelIndex,adaptive,standard,control,replay:!!overrides.replay,startFen:game.fen(),clock:null,engine:null,starting:true,thinking:false,last:null,sans:[],renderedPly:-1};
   game.setHeader('Event',overrides.replay?'Johan Chess · повтор позиции':'Johan Chess · тренировка');
   game.setHeader('Site','Johan Chess');game.setHeader('Date',new Date().toISOString().slice(0,10).replaceAll('-','.'));
   game.setHeader('White',color==='w'?user:'Stockfish '+level);game.setHeader('Black',color==='b'?user:'Stockfish '+level);
