@@ -22,6 +22,15 @@ try{
   await page.locator('#puzzleBoard [data-square]').first().waitFor({timeout:30000});
   assert.equal(await page.locator('#puzzleBoard [data-square]').count(),64);
   await page.locator('#journeyBack').click();
+  await page.locator('#rushLaunch').click();
+  await page.locator('#rushStart').click();
+  await page.locator('#rushBoard [data-square]').first().waitFor({timeout:30000});
+  assert.equal(await page.locator('#rushBoard [data-square]').count(),64);
+  page.once('dialog',d=>d.accept());
+  await page.locator('#rushStop').click();
+  await page.locator('#rushResult').waitFor();
+  await page.locator('#rushResultBack').click();
+  await page.locator('#rushBack').click();
   await page.locator('[data-tab="coach"]').click();
   await page.locator('#coachUnavailable').waitFor();
   await page.locator('[data-go="library"]').click();
@@ -37,6 +46,7 @@ try{
   assert.equal(await page.locator('#board [data-square]').count(),64);
   await page.locator('#next').click();
   await page.locator('#flip').click();
+  await page.locator('#reviewCloseBoard').click();
   await page.locator('[data-tab="home"]').click();
   await page.locator('[data-go="play"]').click();
   await page.locator('#playTime').selectOption('free');

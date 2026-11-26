@@ -1,6 +1,7 @@
 import {platformFetch} from './platform-api.js';
 import {initStudyLibrary} from './study-library.js';
 import {TOPICS} from './puzzle-training.js';
+import {initRush} from './rush.js';
 import {initPuzzles,getPuzzleProgress,getPuzzleTraining} from './puzzles.js';
 import {displayName,profileStats} from './profile-core.js';
 import {initProfileDashboard} from './profile-dashboard.js';
@@ -157,6 +158,7 @@ document.addEventListener('jc-account',e=>{accountStatus=e.detail;refreshProfile
 $('profileConnect').onclick=()=>{if(onlineLocked)return;navigation.show('account');if(!accountStatus?.connected&&!coachBusy())$('aiLogin').click();};
 refreshProfile();
 const puzzleUI=initPuzzles(()=>$('user').value.trim());
+initRush({getUser:()=>$('user').value.trim(),back:()=>navigation.show('puzzles')});
 initCoach(coachContext,{Engine,enginePath,onlineLocked:()=>onlineLocked,canAnalyze:()=>!onlineLocked&&!busy&&!importing&&!training?.active()});
 training=initTraining({
  canStart:()=>!onlineLocked&&!busy&&!importing,
