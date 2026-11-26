@@ -38,7 +38,7 @@ export function normalizeMemory(raw,Chess){
   const pair=[user,assistant],size=JSON.stringify(pair).length*2;if(bytes+size>MAX_BYTES)break;
   bytes+=size;history.unshift(...pair);
  }
- return {history,notes:cut(r.notes,3000),goal:cut(r.goal,300),focus:cut(r.focus,500),minutes:[15,30,45,60,90,120].includes(r.minutes)?r.minutes:60,plan:cut(r.plan,4000)};
+ return {history,notes:cut(r.notes,3000),goal:cut(r.goal,300),focus:cut(r.focus,500),minutes:[15,30,45,60,90,120].includes(r.minutes)?r.minutes:60,plan:cut(r.plan,4000),shareHistory:r.shareHistory!==false};
 }
 export function loadMemory(storage,key,Chess){
  if(!key)return normalizeMemory(null,Chess);
