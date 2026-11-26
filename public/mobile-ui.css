@@ -203,3 +203,41 @@ input[type=checkbox]{width:20px;height:20px;min-height:0;vertical-align:middle;a
 /* Also use the original theme's progress style below the board. */
 .journey-session-score #journeyDelta:empty{display:none}
 .puzzle-focus #puzzleBoard .square[data-feedback]::after{inset:0 0 auto auto;transform:none}
+
+/* Profile dashboard — independent layout, shared Midnight & Brass tokens. */
+.profile-screen{max-width:680px;margin-inline:auto}
+.profile-hero{overflow:hidden;position:relative}
+.profile-cover{display:grid;grid-template-columns:repeat(5,1fr);height:94px;overflow:hidden;margin:-16px -16px 16px;background:var(--surface-inset);color:var(--accent);opacity:.7}
+.profile-cover span{display:grid;place-items:center;font-size:42px;line-height:1;background:#35435755}
+.profile-cover span:nth-child(even){background:#d8b77d18}
+.profile-hero .profile-heading{position:relative;margin-top:-42px;align-items:flex-end}
+.profile-hero .profile-avatar{border:4px solid var(--surface);background:var(--surface-inset);width:76px;height:76px;border-radius:18px;color:var(--accent)}
+.profile-hero .profile-heading h2{margin-bottom:3px;overflow-wrap:anywhere}
+.profile-hero .profile-heading>div{min-width:0}
+.profile-hero .profile-connection{display:block;font-size:12px;margin-bottom:4px;color:var(--muted)}
+.profile-settings label{display:block;margin-top:12px;font-size:13px;color:var(--muted)}
+.profile-section-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+.profile-section-head h2{margin:0;font-size:20px}
+.profile-section-head button{font-size:13px;min-height:44px;padding:8px 12px}
+.profile-count{font-size:12px;color:var(--muted);background:var(--surface-inset);padding:3px 7px;border-radius:8px;vertical-align:middle}
+.profile-rating-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.profile-rating-grid>p{grid-column:1/-1;margin:3px 0}
+.profile-rating,.profile-award{display:grid;gap:5px;padding:12px;background:var(--surface-inset);border:1px solid var(--line);border-radius:12px;min-width:0}
+.profile-rating strong{font-size:26px;color:var(--accent);font-variant-numeric:tabular-nums}
+.profile-rating small,.profile-award small,.profile-game small{letter-spacing:0;line-height:1.35}
+.profile-history{margin-bottom:10px}
+.profile-game{display:grid;grid-template-columns:34px minmax(0,1fr) auto 12px;align-items:center;gap:9px;width:100%;padding:10px 2px;background:none;border:0;border-bottom:1px solid var(--line);border-radius:0;text-align:left;min-height:65px}
+.profile-game-info{display:grid;gap:3px;min-width:0;overflow-wrap:anywhere}
+.profile-game-info strong{font-size:15px}
+.profile-game-score{font-size:13px;font-variant-numeric:tabular-nums;color:var(--muted)}
+.profile-game-chevron{color:var(--muted);font-size:21px}
+.profile-game-result{display:grid;place-items:center;width:31px;height:31px;border-radius:9px;background:var(--surface-inset);font-size:20px;color:var(--muted)}
+.profile-game-result.win{color:var(--success)}.profile-game-result.loss{color:var(--danger)}
+.profile-awards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.profile-award{text-align:center;justify-items:center;padding:10px 5px;overflow-wrap:anywhere}
+.profile-award-icon{font-size:27px;line-height:1.3;color:var(--muted)}
+.profile-award.earned{border-color:var(--accent)}.profile-award.earned .profile-award-icon{color:var(--accent)}
+.profile-award strong{font-size:12px;line-height:1.25}
+@media(max-width:380px){.profile-cover{margin:-12px -12px 16px}.profile-awards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.profile-award-icon{display:block;opacity:.55;filter:grayscale(1)}.profile-award.earned .profile-award-icon{opacity:1;filter:none}.profile-award.earned .profile-award-state{color:var(--success)}

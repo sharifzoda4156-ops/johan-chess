@@ -20,6 +20,10 @@ const server=http.createServer(async(req,res)=>{
   if(u.pathname.startsWith('/api/puzzle-data/')){
    try{const spec=requestSpec(u.pathname,u.searchParams);if(!spec)return respond(res,404,{error:'Unknown puzzle endpoint'});const bytes=await downloadPuzzleData(spec);res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});return res.end(bytes);}catch{return respond(res,502,{error:'Puzzle data unavailable'});}
   }
+  if(u.pathname==='/api/player-stats'){
+   const user=(u.searchParams.get('user')||'').toLowerCase();if(!/^[a-z0-9_-]{1,40}$/.test(user))return respond(res,400,{error:'Некорректный ник'});
+   try{return respond(res,200,await api(user+'/stats'));}catch{return respond(res,502,{error:'Рейтинги Chess.com недоступны'});}
+  }
   if(u.pathname==='/api/games'){
    const user=(u.searchParams.get('user')||'').toLowerCase();if(!/^[a-z0-9_-]{1,40}$/.test(user))return respond(res,400,{error:'Некорректный ник'});
    try{const {archives}=await api(user+'/games/archives');const games=[];
