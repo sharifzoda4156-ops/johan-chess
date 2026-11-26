@@ -1,3 +1,4 @@
+import {snapshotBoards,renderCoachContent} from './coach-board.js';
 const $=id=>document.getElementById(id);
 const native=globalThis.JohanNative;
 const pending=new Map();
@@ -26,7 +27,7 @@ export function rememberGame(context){
 }
 function showHistory(){
  const list=$('aiHistory');list.replaceChildren();
- for(const m of history){const el=document.createElement('div');el.className='ai-message '+m.role;const name=document.createElement('b');name.textContent=m.role==='assistant'?'Тренер':'Ты';const body=document.createElement('div');body.textContent=m.content;el.append(name,body);list.append(el);}
+ for(const m of history){const el=document.createElement('div');el.className='ai-message '+m.role;const name=document.createElement('b');name.textContent=m.role==='assistant'?'Тренер':'Ты';const body=document.createElement('div');renderCoachContent(body,m);el.append(name,body);list.append(el);}
  list.scrollTop=list.scrollHeight;
 }
 function syncStatus(s){
@@ -75,9 +76,9 @@ export function initCoach(provider){
   const context={user:ctx.user,profile:{goal:'Стабильные 1500 как первый этап; исследовать достижимый уровень',focus:'Расчёт ответных угроз и безопасность короля',notes:$('aiNotes').value.slice(0,3000)},game:include?ctx.game:null,recentGames:include?getGames(ctx.user).slice(0,20):[]};
   if(context.game&&!['1-0','0-1','1/2-1/2'].includes(context.game.result)){say('Загрузи завершённую партию или отключи отправку партии.');return;}
   if(JSON.stringify(context).length>160000){say('Слишком большой контекст. Отключи отправку партии или сократи анализ.');return;}
-  const previous=history.slice(-12);say('Тренер анализирует…');
+  const previous=history.slice(-12).map(({role,content})=>({role,content:content.slice(0,16000)}));say('Тренер анализирует…');
   const result=await call('ask',{model,context,history:previous,question});
-  history.push({role:'user',content:question},{role:'assistant',content:result.answer});
+  history.push({role:'user',content:question},{role:'assistant',content:result.answer,parts:snapshotBoards(result.answer,context.game)});
   history=history.slice(-20);$('aiQuestion').value='';showHistory();say('Ответ получен.');
  });
  try{$('aiNotes').value=localStorage.getItem('jc-coach-notes')||'';}catch{}
