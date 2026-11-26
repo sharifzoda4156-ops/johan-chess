@@ -37,7 +37,7 @@ function updateStudyFields(){
 function switchMemory(force=false){
  const next=memoryKey(account,contextProvider?.().user);
  if(next===scopeKey&&!force)return;
- scopeKey=next;memory=loadMemory(localStorage,scopeKey,Chess);history=memory.history;visibleMessages=20;
+ $('aiCacheStatus').textContent='';scopeKey=next;memory=loadMemory(localStorage,scopeKey,Chess);history=memory.history;visibleMessages=20;
  $('aiQuestion').value='';updateStudyFields();showHistory();
 }
 function persist(){
@@ -106,11 +106,13 @@ export function initCoach(provider,options){
   const fullGame=include&&ctx.game&&['1-0','0-1','1/2-1/2'].includes(ctx.game.result)?ctx.game:null;
   const game=fullGame?{...fullGame,analysis:(fullGame.analysis||[]).filter(r=>r.loss>=5).sort((a,b)=>b.loss-a.loss).slice(0,6)}:null;
   const profile={goal:memory.goal,focus:memory.focus,minutesPerDay:memory.minutes,notes:memory.notes,studyPlan:memory.plan,summary:memory.shareHistory?memory.summary:''};
-  const context={user:ctx.user,game,toolsAllowed:!!(include&&toolOptions?.canAnalyze()),recentGames:include?getGames(ctx.user).slice(0,5).map(({errors,id,...r})=>({...r,errors:errors?.slice(0,2)})):[],puzzleTraining:include?getPuzzleTraining(ctx.user):null};
+  const allowed=!!(include&&toolOptions?.canAnalyze());
+  const context={user:ctx.user,game:allowed?game:null,toolsAllowed:allowed,recentGames:allowed?getGames(ctx.user).slice(0,5).map(({errors,id,...r})=>({...r,errors:errors?.slice(0,2)})):[],puzzleTraining:allowed?getPuzzleTraining(ctx.user):null};
   if(include&&ctx.game&&!fullGame){say('Загрузи завершённую партию или отключи отправку партии.');return;}
-  if(JSON.stringify(context).length>160000){say('Слишком большой контекст. Отключи отправку партии или сократи анализ.');return;}
+  if(JSON.stringify(context).length>70000){say('Слишком большой контекст. Отключи отправку партии или сократи анализ.');return;}
   const compact=shouldCompact(memory,history),previous=coachHistory(memory,history);say('Тренер анализирует…');
-  const execute=createCoachTools({...toolOptions,Chess,storage:localStorage,user:ctx.user,game:fullGame,allow:context.toolsAllowed,stats:()=>({tactics:getPuzzleTraining(ctx.user),recentGames:getGames(ctx.user).slice(0,12).map(({id,...r})=>r)})});
+  const execute=createCoachTools({...toolOptions,Chess,storage:localStorage,user:ctx.user,game:fullGame,allow:context.toolsAllowed,canAnalyze:()=>!!(toolOptions?.canAnalyze()&&$('aiShare').checked&&requestKey===memoryKey(account,contextProvider().user)),stats:()=>({tactics:getPuzzleTraining(ctx.user),recentGames:getGames(ctx.user).slice(0,12).map(({id,...r})=>r)})});
+  $('aiCacheStatus').textContent='';
   let result=await call('ask',{model,context,profile,history:previous,question,compact}),totalInput=0,totalCached=0,reported=false;
   for(let round=0;;round++){
    if(Number.isFinite(result.usage?.input)&&Number.isFinite(result.usage?.cached)){totalInput+=result.usage.input;totalCached+=result.usage.cached;reported=true;}
@@ -124,11 +126,12 @@ export function initCoach(provider,options){
     const value=await execute(tool.name,args);
     outputs.push({call_id:tool.call_id,output:JSON.stringify(value)});
    }
+   if(requestKey!==memoryKey(account,contextProvider().user)||!$('aiShare').checked||!toolOptions?.canAnalyze())throw Error('Доступ к данным изменился');
    result=await call('continueCoach',{turn:result.turn,outputs});
   }
   $('aiCacheStatus').textContent=reported?'Контекст: '+totalInput+' токенов · из кэша '+totalCached:'Статистика кэша не предоставлена';
   const parsed=splitCoachAnswer(result.answer,compact);if(!parsed.answer.trim())throw Error('Пустой ответ');
-  const pair=[{role:'user',content:question},{role:'assistant',content:parsed.answer,parts:snapshotBoards(parsed.answer,game)}];
+  const pair=[{role:'user',content:question},{role:'assistant',content:parsed.answer,parts:snapshotBoards(parsed.answer,context.game)}];
   if(requestKey!==memoryKey(account,contextProvider().user)){const saved=loadMemory(localStorage,requestKey,Chess);const stored=saveMemory(localStorage,requestKey,{...recordCoachTurn(saved,parsed.summary),history:[...saved.history,...pair]},Chess);switchMemory();say(stored.saved?'Ответ сохранён в предыдущем профиле.':'Не удалось сохранить ответ предыдущего профиля.');return;}
   memory=recordCoachTurn(memory,parsed.summary);history.push(...pair);const saved=persist();$('aiSummary').value=memory.summary;$('aiQuestion').value='';showHistory();say(saved?'Ответ получен.':'Ответ получен, но сохранение не удалось.');
  });
