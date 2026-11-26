@@ -52,7 +52,8 @@ try{
    const $=id=>document.getElementById(id);
    for(const el of document.querySelectorAll('[data-screen]'))el.hidden=el.dataset.screen!=='puzzles';
    document.body.className='puzzle-focus';
-   $('puzzleModes').hidden=true;$('puzzleFocus').hidden=false;$('puzzleWorkspace').hidden=false;
+   $('puzzleMenuHeading').hidden=true;document.querySelector('.puzzle-mode-tabs').hidden=true;$('journeyMap').hidden=true;
+   $('puzzleSession').hidden=false;$('puzzleWorkspace').hidden=false;$('puzzleArea').hidden=false;
    const board=$('puzzleBoard');for(let i=0;i<64;i++){const c=document.createElement('div');c.className='square '+((i+Math.floor(i/8))%2?'dark':'light');board.append(c);}
   });
   const pbox=await page.evaluate(()=>{
