@@ -213,6 +213,35 @@ input[type=checkbox]{width:20px;height:20px;min-height:0;vertical-align:middle;a
 .square.target:has(.piece)::after{
  width:86%;height:86%;background:none;border:4px solid rgba(11,14,20,.34);
 }
+.square.in-check::before{
+ content:'';position:absolute;inset:0;pointer-events:none;z-index:1;
+ background:radial-gradient(circle,rgba(239,68,68,.92) 0%,rgba(220,38,38,.58) 52%,rgba(185,28,28,0) 76%);
+}
+.square.drag-over::after{
+ content:'';position:absolute;inset:0;border:3px solid var(--accent);
+ background:rgba(34,197,94,.18);pointer-events:none;z-index:4;
+}
+.board-drag-ghost{
+ position:fixed;left:0;top:0;z-index:90;pointer-events:none;
+ display:grid;place-items:center;will-change:transform;
+}
+.board-drag-ghost .piece-image{
+ width:96%;height:96%;object-fit:contain;
+ filter:drop-shadow(0 8px 14px rgba(0,0,0,.55));
+}
+.player-meta{display:flex;flex-direction:column;min-width:0;flex:1;line-height:1.2;gap:2px}
+.player-meta>span:first-child,.player-meta>strong:first-child{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.mat-strip{font-size:11px;color:var(--muted);letter-spacing:.4px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-height:0}
+.mat-strip:empty{display:none}
+.side-filter{
+ display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;
+ padding:4px;background:var(--surface-inset);border:1px solid var(--line);
+ border-radius:10px;margin:0 0 12px;
+}
+.side-filter button{min-height:36px;padding:6px 4px;font-size:12px;background:transparent;border:1px solid transparent;color:var(--muted)}
+.side-filter button[aria-pressed=true]{background:rgba(34,197,94,.16);color:var(--accent);border-color:rgba(34,197,94,.38)}
+.sound-setting{display:flex;align-items:center;gap:10px;margin:10px 0 4px;font-size:14px;color:var(--ink);cursor:pointer}
+
 #playBoard .square:disabled,#puzzleBoard .square:disabled,#onlineBoard .square:disabled{opacity:1}
 #playBoard .square:not(:disabled):active,#puzzleBoard .square:not(:disabled):active{transform:none}
 #playBoard .square.light:not(:disabled):active,#puzzleBoard .square.light:not(:disabled):active{background:var(--light-square)}

@@ -6,6 +6,8 @@ import {displayName,profileStats} from './profile-core.js';
 import {initProfileDashboard} from './profile-dashboard.js';
 import {initThemes} from './piece-art.js';
 import {renderBoardView,scrollBehavior,initBoardMotion} from './board-view.js';
+import {findKingSquare,renderMaterial} from './material.js';
+import {initSoundSetting,playSound,soundForMove} from './sound.js';
 import {initNavigation} from './navigation.js';
 import {initTraining} from './training.js';
 import {initOnline} from './online.js';
@@ -18,8 +20,8 @@ import {Engine,setEngineOnlineLock} from './engine.js';
 import {enginePath} from './engine-path.js';
 import {evaluateMove,displayScore,scoreValue} from './metrics.js';
 const $=id=>document.getElementById(id), status=t=>{$('status').textContent=t;$('reviewBoardStatus').textContent=t;};
-let training=null,importing=false,analysisDepth=null,game=null, moves=[], positions=[], results=[], cursor=0, flipped=false, engine=null, busy=false, runId=0, imported=[], startFen='', pgn='', historical=null,onlineLocked=false,onlineReviewName='';
-initThemes();initBoardMotion();
+let training=null,importing=false,analysisDepth=null,game=null, moves=[], positions=[], results=[], cursor=0, flipped=false, engine=null, busy=false, runId=0, imported=[], startFen='', pgn='', historical=null,onlineLocked=false,onlineReviewName='',sideFilter='both';
+initThemes();initBoardMotion();initSoundSetting();
 const navigation=initNavigation();
 const isDesktop=()=>globalThis.matchMedia?.('(min-width: 900px)').matches===true;
 let reviewFocus=false,reviewStripMoves=null;
@@ -30,12 +32,16 @@ globalThis.matchMedia?.('(min-width: 900px)').addEventListener?.('change',syncRe
 globalThis.JohanHandleBack=()=>{if(hasOpenDialog()){closeOpenDialog();return true;}if(onlineLocked)return true;if(training?.active()){if(!$('playCancel').disabled)$('playCancel').click();return true;}if(document.body.classList.contains('review-board-focus')){openReviewBoard(false);return true;}return false;};
 $('reviewOpenBoard').onclick=()=>openReviewBoard(true);$('reviewCloseBoard').onclick=()=>openReviewBoard(false);$('reviewAnalyze').onclick=()=>{if(busy)$('stop').click();else $('analyze').click();};
 const player=c=>game?.getHeaders()[c==='w'?'White':'Black']|| (c==='w'?'Белые':'Чёрные');
-const own=()=>player('b').toLowerCase()===(onlineReviewName||$('user').value.trim()).toLowerCase()?'b':'w';
+const matchedSide=()=>{const nick=(onlineReviewName||$('user').value.trim()).toLowerCase();if(!nick)return null;if(player('w').toLowerCase()===nick)return 'w';if(player('b').toLowerCase()===nick)return 'b';return null;};
+const own=()=>matchedSide()||'w';
+function matchesSideFilter(r){if(sideFilter==='both')return true;if(sideFilter==='w'||sideFilter==='b')return r.color===sideFilter;const m=matchedSide();return m?r.color===m:true;}
+function syncSideFilterUI(){const box=$('reviewSideFilter');if(!box)return;for(const btn of box.querySelectorAll('button[data-side]'))btn.setAttribute('aria-pressed',String(btn.dataset.side===sideFilter));}
+if($('reviewSideFilter'))for(const btn of $('reviewSideFilter').querySelectorAll('button[data-side]'))btn.onclick=()=>{sideFilter=btn.dataset.side;syncSideFilterUI();renderReport();};
 const uci=m=>m.from+m.to+(m.promotion||'');
 function load(text,study=null){
  if(busy||onlineLocked||training?.active())return false;
  try{const c=new Chess();c.loadPgn(normalizePgn(text));const h=c.history({verbose:true});if(!h.length)throw Error('В PGN нет ходов. Экспортируй полную партию.');
- historical=study;onlineReviewName='';game=c;moves=h;startFen=h[0].before;positions=[startFen,...h.map(m=>m.after)];pgn=text;results=[];analysisDepth=null;cursor=0;flipped=historical?historical.result==='0-1':own()==='b';$('review').hidden=false;$('analyze').disabled=false;$('export').disabled=true;$('progress').hidden=true;if(isDesktop()&&$('importSource'))$('importSource').open=false;openReviewBoard(true);render();if(isDesktop())$('review').scrollIntoView({behavior:'auto',block:'start'});status((historical?historical.title+' · '+historical.year:'Партия загружена')+': '+h.length+' полуходов.');return true;
+ historical=study;onlineReviewName='';game=c;moves=h;startFen=h[0].before;positions=[startFen,...h.map(m=>m.after)];pgn=text;results=[];analysisDepth=null;cursor=0;const mine=historical?null:matchedSide();sideFilter=mine?'mine':'both';syncSideFilterUI();flipped=historical?historical.result==='0-1':mine==='b';$('review').hidden=false;$('analyze').disabled=false;$('export').disabled=true;$('progress').hidden=true;if(isDesktop()&&$('importSource'))$('importSource').open=false;openReviewBoard(true);render();if(isDesktop())$('review').scrollIntoView({behavior:'auto',block:'start'});status((historical?historical.title+' · '+historical.year:'Партия загружена')+': '+h.length+' полуходов.');return true;
  }catch(e){status('Не удалось прочитать PGN: '+e.message);return false;}
 }
 function loadText(text){
@@ -70,8 +76,10 @@ $('analyze').onclick=async()=>{
 };
 $('stop').onclick=()=>{runId++;engine?.close();engine=null;setBusy(false);status('Анализ остановлен. Частичный отчёт сохранён на экране.');$('export').disabled=!results.length;render();};
 function render(){if(!game)return;syncPgnButtons();renderBoard();renderCoach();renderReport();}
-function renderBoard(animateMoves=[]){const c=new Chess(positions[cursor]);renderBoardView($('board'),{rows:c.board(),flip:flipped,last:moves[cursor-1],animateMoves});
- $('top').textContent=player(flipped?'w':'b');$('bottom').textContent=player(flipped?'b':'w');$('moveNumber').textContent=cursor?label(cursor-1):'Старт';syncReviewStrip();$('first').disabled=$('back').disabled=cursor===0;$('next').disabled=$('last').disabled=cursor===moves.length;
+function renderBoard(animateMoves=[]){const c=new Chess(positions[cursor]),rows=c.board();renderBoardView($('board'),{rows,flip:flipped,last:moves[cursor-1],checkSquare:c.isCheck()?findKingSquare(rows,c.turn()):null,animateMoves});
+ $('top').textContent=player(flipped?'w':'b');$('bottom').textContent=player(flipped?'b':'w');
+ renderMaterial($('reviewTopMat'),rows,flipped?'w':'b');renderMaterial($('reviewBottomMat'),rows,flipped?'b':'w');
+ $('moveNumber').textContent=cursor?label(cursor-1):'Старт';syncReviewStrip();$('first').disabled=$('back').disabled=cursor===0;$('next').disabled=$('last').disabled=cursor===moves.length;
 }
 function syncReviewStrip(){
  const strip=$('reviewMoveStrip');
@@ -80,7 +88,7 @@ function syncReviewStrip(){
  if(current){current.setAttribute('aria-current','step');strip.scrollLeft=Math.max(0,current.offsetLeft-strip.offsetLeft-(strip.clientWidth-current.offsetWidth)/2);}else strip.scrollLeft=0;
 }
 function label(i){const m=moves[i];return m.before.split(' ')[5]+(m.color==='w'?'. ':'... ')+m.san;}
-function go(n){const previous=cursor;cursor=Math.max(0,Math.min(n,moves.length));if(cursor===previous)return;renderBoard(cursor===previous+1?[moves[previous]]:[]);renderCoach();updateActiveMove();chart();}
+function go(n){const previous=cursor;cursor=Math.max(0,Math.min(n,moves.length));if(cursor===previous)return;const step=cursor===previous+1?[moves[previous]]:[];renderBoard(step);if(step.length)playSound(soundForMove(step[0]));renderCoach();updateActiveMove();chart();}
 $('first').onclick=()=>go(0);$('back').onclick=()=>go(cursor-1);$('next').onclick=()=>go(cursor+1);$('last').onclick=()=>go(moves.length);$('flip').onclick=()=>{flipped=!flipped;renderBoard();};
 function elem(tag,text,cls){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;}
 function renderCoach(){const el=$('coach');el.replaceChildren();const r=results[cursor-1];if(!cursor){el.textContent='Начальная позиция. Выбери ход или запусти анализ.';return;}if(!r){el.textContent=label(cursor-1)+' · оценка пока отсутствует';return;}
@@ -109,13 +117,72 @@ function renderMoveList(){
  }
  updateActiveMove();
 }
-function renderReport(){const sum=$('summary');sum.replaceChildren();const scores=elem('div',undefined,'scores');for(const c of ['w','b']){const rs=results.filter(r=>r.color===c),box=elem('div',undefined,'score');box.append(elem('span',player(c)),elem('strong',rs.length?(rs.reduce((a,r)=>a+r.accuracy,0)/rs.length).toFixed(1)+'%':'—'),elem('span','Точность JC · '+rs.length+' ходов'));scores.append(box);}sum.append(scores);if(results.length){const stats=elem('div',undefined,'muted');stats.textContent=['Лучший','Отличный','Хороший','Неточность','Ошибка','Грубая ошибка'].map(l=>l+': '+results.filter(r=>(historical||r.color===own())&&r.label===l).length).join(' · ');sum.append(stats);}
+function renderReport(){const sum=$('summary');sum.replaceChildren();const scores=elem('div',undefined,'scores');for(const c of ['w','b']){const rs=results.filter(r=>r.color===c),box=elem('div',undefined,'score');box.append(elem('span',player(c)),elem('strong',rs.length?(rs.reduce((a,r)=>a+r.accuracy,0)/rs.length).toFixed(1)+'%':'—'),elem('span','Точность JC · '+rs.length+' ходов'));scores.append(box);}sum.append(scores);if(results.length){const stats=elem('div',undefined,'muted');stats.textContent=['Лучший','Отличный','Хороший','Неточность','Ошибка','Грубая ошибка'].map(l=>l+': '+results.filter(r=>matchesSideFilter(r)&&r.label===l).length).join(' · ');sum.append(stats);}
  renderMoveList();chart();
- $('askReview').hidden=!globalThis.JohanNative;$('askReview').disabled=!results.length;const t=$('training');t.replaceChildren();const errors=results.filter(r=>(historical||r.color===own())&&r.loss>=5).sort((a,b)=>b.loss-a.loss).slice(0,5);if(!errors.length)t.textContent=results.length?'Пока существенных ошибок по нашей шкале нет.':'После анализа здесь появятся самые важные ошибки.';else for(const r of errors){const d=elem('div',undefined,'training-row');d.append(elem('div',label(r.index)+' · '+r.label+' · потеря '+r.loss.toFixed(1)+' п.п. шанса на победу (модель)'));const b=elem('button','Открыть позицию до ошибки');b.onclick=()=>{go(r.index);openReviewBoard(true);};d.append(b);const replay=elem('button','Переиграть со Stockfish');replay.onclick=()=>{if(!busy&&!importing&&!training?.active())training.startReplay(positions[r.index],r.color);};replay.disabled=busy;d.append(replay);t.append(d);}
+ $('askReview').hidden=!globalThis.JohanNative;$('askReview').disabled=!results.length;const t=$('training');t.replaceChildren();const errors=results.filter(r=>matchesSideFilter(r)&&r.loss>=5).sort((a,b)=>b.loss-a.loss).slice(0,5);if(!errors.length)t.textContent=results.length?'Пока существенных ошибок по нашей шкале нет.':'После анализа здесь появятся самые важные ошибки.';else for(const r of errors){const d=elem('div',undefined,'training-row');d.append(elem('div',label(r.index)+' · '+r.label+' · потеря '+r.loss.toFixed(1)+' п.п. шанса на победу (модель)'));const b=elem('button','Открыть позицию до ошибки');b.onclick=()=>{go(r.index);openReviewBoard(true);};d.append(b);const replay=elem('button','Переиграть со Stockfish');replay.onclick=()=>{if(!busy&&!importing&&!training?.active())training.startReplay(positions[r.index],r.color);};replay.disabled=busy;d.append(replay);t.append(d);}
 }
-function chart(){const canvas=$('chart'),ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;ctx.clearRect(0,0,w,h);ctx.strokeStyle='#75869b';ctx.beginPath();ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();if(!results.length)return;const y=s=>h/2-Math.max(-1,Math.min(1,s/600))*(h/2-8);const x=i=>i/Math.max(1,moves.length)*(w-12)+6;const vals=[scoreValue(results[0].bestScore)*(results[0].color==='w'?1:-1),...results.map(r=>scoreValue(r.playedScore)*(r.color==='w'?1:-1))];ctx.strokeStyle='#d8b77d';ctx.lineWidth=3;ctx.beginPath();vals.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.stroke();ctx.strokeStyle='#e6e7e7';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x(cursor),0);ctx.lineTo(x(cursor),h);ctx.stroke();}
+function chart(){
+ const canvas=$('chart'),ctx=canvas.getContext('2d');
+ const rect=canvas.getBoundingClientRect(),dpr=Math.min(globalThis.devicePixelRatio||1,2);
+ const w=Math.max(240,Math.round(rect.width||680)),h=Math.max(100,Math.round(rect.height||128));
+ if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);}
+ ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+ const mid=h/2,padX=8,padY=10;
+ ctx.strokeStyle='rgba(148,163,184,.28)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,mid);ctx.lineTo(w,mid);ctx.stroke();
+ if(!results.length)return;
+ const y=s=>mid-Math.max(-1,Math.min(1,s/600))*(mid-padY);
+ const x=i=>padX+(i/Math.max(1,moves.length))*(w-padX*2);
+ const vals=[scoreValue(results[0].bestScore)*(results[0].color==='w'?1:-1),...results.map(r=>scoreValue(r.playedScore)*(r.color==='w'?1:-1))];
+ // Fill White advantage above midline (light tint) and Black advantage below (dark tint)
+ ctx.save();
+ ctx.beginPath();ctx.moveTo(x(0),mid);vals.forEach((v,i)=>ctx.lineTo(x(i),y(v)));ctx.lineTo(x(vals.length-1),mid);ctx.closePath();
+ const grad=ctx.createLinearGradient(0,0,0,h);
+ grad.addColorStop(0,'rgba(248,250,252,.22)');grad.addColorStop(.5,'rgba(248,250,252,.04)');
+ grad.addColorStop(.5,'rgba(15,23,42,.42)');grad.addColorStop(1,'rgba(2,6,23,.65)');
+ ctx.fillStyle=grad;ctx.fill();ctx.restore();
+ // Crisp evaluation line
+ ctx.strokeStyle='#22c55e';ctx.lineWidth=2.25;ctx.lineJoin='round';ctx.beginPath();
+ vals.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.stroke();
+ // Error & blunder markers
+ for(const r of results){
+  if(r.loss<5)continue;
+  const px=x(r.index+1),py=y(vals[r.index+1]);
+  ctx.fillStyle=r.loss>=20?'#ef4444':r.loss>=10?'#f97316':'#fbbf24';
+  ctx.beginPath();ctx.arc(px,py,r.loss>=20?4.2:3.2,0,Math.PI*2);ctx.fill();
+ }
+ // Active cursor playhead
+ const cx=x(Math.min(cursor,vals.length-1)),cy=y(vals[Math.min(cursor,vals.length-1)]);
+ ctx.strokeStyle='rgba(248,250,252,.75)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,h);ctx.stroke();
+ ctx.fillStyle='#f8fafc';ctx.beginPath();ctx.arc(cx,cy,4,0,Math.PI*2);ctx.fill();
+}
+if(typeof ResizeObserver==='function')new ResizeObserver(()=>{if(game)chart();}).observe($('chart'));
 $('chart').onclick=e=>{const r=$('chart').getBoundingClientRect();go(Math.round((e.clientX-r.left)/r.width*moves.length));openReviewBoard(true);};
 $('export').onclick=()=>{const blob=new Blob([JSON.stringify({version:'0.1.0',pgn,user:$('user').value,depth:analysisDepth??Number($('depth').value),complete:results.length===moves.length,results},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='johan-chess-review.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+document.addEventListener('keydown',e=>{
+ if(e.metaKey||e.ctrlKey||e.altKey||hasOpenDialog())return;
+ const tag=e.target?.tagName;if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||e.target?.isContentEditable)return;
+ const reviewVisible=!document.querySelector('[data-screen="review"]').hidden;
+ if(reviewVisible&&game){
+  if(e.key==='ArrowLeft'){e.preventDefault();go(cursor-1);}
+  else if(e.key==='ArrowRight'){e.preventDefault();go(cursor+1);}
+  else if(e.key==='Home'){e.preventDefault();go(0);}
+  else if(e.key==='End'){e.preventDefault();go(moves.length);}
+  else if(e.key==='f'||e.key==='F'){e.preventDefault();flipped=!flipped;renderBoard();}
+  return;
+ }
+ const puzzleReviewVisible=!document.querySelector('[data-screen="puzzles"]').hidden&&!$('puzzleReview').hidden;
+ if(puzzleReviewVisible){
+  if(e.key==='ArrowLeft'){e.preventDefault();$('reviewPuzzlePrev').click();}
+  else if(e.key==='ArrowRight'){e.preventDefault();$('reviewPuzzleNext').click();}
+  return;
+ }
+ const libraryVisible=!document.querySelector('[data-screen="library"]').hidden&&!$('studyOpeningArea').hidden;
+ if(libraryVisible){
+  if(e.key==='ArrowLeft'){e.preventDefault();$('studyPrevious').click();}
+  else if(e.key==='ArrowRight'){e.preventDefault();$('studyNext').click();}
+  else if(e.key==='f'||e.key==='F'){e.preventDefault();$('studyFlip').click();}
+ }
+});
 
 function coachContext(){
  const user=$('user').value.trim();

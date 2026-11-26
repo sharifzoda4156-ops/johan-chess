@@ -1,4 +1,6 @@
 import {renderBoardView,clearBoardView,moveDuration,roundMotionFactor} from './board-view.js';
+import {findKingSquare,renderMaterial} from './material.js';
+import {playSound,soundForMove} from './sound.js';
 import {confirmDialog} from './dialog.js';
 import {Chess} from './chess.js';
 import {Engine} from './engine.js';
@@ -22,8 +24,12 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
  function renderClock(){if(!session?.clock)return;const r=remaining(session.clock,performance.now());for(const [id,c] of [['playTopClock',opposite(session.color)],['playBottomClock',session.color]]){const el=$(id);const text=clockText(r[c]);if(el.textContent!==text)el.textContent=text;el.classList.toggle('running',session.clock.turn===c);}}
  function draw(animateMoves=[]){
   const s=session;if(!s)return;
+  const rows=s.game.board();
+  const checkSquare=s.game.isCheck()?findKingSquare(rows,s.game.turn()):null;
   const targets=selected&&!s.thinking&&!s.starting&&s.game.turn()===s.color?s.game.moves({square:selected,verbose:true}).map(m=>m.to):[];
-  renderBoardView($('playBoard'),{rows:s.game.board(),flip:s.color==='b',interactive:true,disabled:s.starting||s.thinking||s.game.turn()!==s.color||promotions.length>0,onClick:click,selected,targets,last:s.last,animateMoves,motionFactor:roundMotionFactor(CONTROLS[s.control]?.base,CONTROLS[s.control]?.increment)});
+  renderBoardView($('playBoard'),{rows,flip:s.color==='b',interactive:true,disabled:s.starting||s.thinking||s.game.turn()!==s.color||promotions.length>0,onClick:click,selected,targets,last:s.last,checkSquare,animateMoves,motionFactor:roundMotionFactor(CONTROLS[s.control]?.base,CONTROLS[s.control]?.increment)});
+  renderMaterial($('playTopMat'),rows,opposite(s.color));
+  renderMaterial($('playBottomMat'),rows,s.color);
   if(s.renderedPly!==s.sans.length){
    const list=$('playMoves');list.textContent=s.sans.map((m,i)=>i%2===0?Math.floor(i/2)+1+'. '+m:m).join(' ');
    list.scrollLeft=list.scrollWidth;s.renderedPly=s.sans.length;
@@ -58,6 +64,7 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
   if(!clock){finish(flagResult(s.game,s.clock.turn));return false;}
   try{s.last=s.game.move(m);s.sans.push(s.last.san);}catch{return false;}
   s.clock=clock;selected=null;promotions=[];draw([s.last]);
+  playSound(soundForMove(s.last,s.game));
   const end=terminal(s.game);if(end){finish(end);return true;}
   return true;
  }
