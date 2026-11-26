@@ -1,3 +1,4 @@
+import {getPuzzleTraining} from './puzzles.js';
 import {snapshotBoards,renderCoachContent} from './coach-board.js';
 const $=id=>document.getElementById(id);
 const native=globalThis.JohanNative;
@@ -74,7 +75,7 @@ export function initCoach(provider){
   const question=$('aiQuestion').value.trim(),model=$('aiModel').value;if(!question||!model)return;
   const ctx=contextProvider();
   const include=$('aiShare').checked;
-  const context={user:ctx.user,profile:{goal:'Стабильные 1500 как первый этап; исследовать достижимый уровень',focus:'Расчёт ответных угроз и безопасность короля',notes:$('aiNotes').value.slice(0,3000)},game:include?ctx.game:null,recentGames:include?getGames(ctx.user).slice(0,20):[]};
+  const context={user:ctx.user,profile:{goal:'Стабильные 1500 как первый этап; исследовать достижимый уровень',focus:'Расчёт ответных угроз и безопасность короля',notes:$('aiNotes').value.slice(0,3000)},game:include?ctx.game:null,recentGames:include?getGames(ctx.user).slice(0,20):[],puzzleTraining:include?getPuzzleTraining(ctx.user):null};
   if(context.game&&!['1-0','0-1','1/2-1/2'].includes(context.game.result)){say('Загрузи завершённую партию или отключи отправку партии.');return;}
   if(JSON.stringify(context).length>160000){say('Слишком большой контекст. Отключи отправку партии или сократи анализ.');return;}
   const previous=history.slice(-12).map(({role,content})=>({role,content:content.slice(0,16000)}));say('Тренер анализирует…');
