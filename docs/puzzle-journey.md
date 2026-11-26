@@ -7,3 +7,6 @@ Inspired by [Chess.com Puzzle points](https://support.chess.com/en/articles/9681
 - Device verification: exercise mode switching, returning to ladder mid-attempt, background timer, offline daily, date change, wrong move/hint/reveal, local progress reload, remote loading, promotion and endgame link from library. No measured device performance claim.
 
 The compact route scrolls internally to the active level. If the local date rolls over, a finished daily advances to today; an in-progress daily within the archive stays available, with the new day selectable in the calendar.
+
+## Focused solving and result screens
+A separate workspace hides app navigation while solving, with an original knight emblem (not an AI response), full-width board, correctness marker, XP/timer/series and level progress below the board. Daily has five hearts per attempt; on exhaustion the attempt ends without a completion record, and a free retry or published-line review is available. Daily share uses the device share sheet when supported, otherwise a selectable text field. Review is an offline step-by-step replay of the published Lichess line, not a Stockfish evaluation. Journey repeat is practice-only and earns no XP. Menus provide calendar, filters, and explicit start/resume.
