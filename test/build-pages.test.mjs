@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import {mkdir,mkdtemp,readFile,rm,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -25,21 +25,37 @@ test('stampJsImports stamps root module imports while preserving ./engine/* work
 });
 
 test('buildPages produces cache-busted dist with intact engine-path.js',async()=>{
- const dir=await mkdtemp(join(tmpdir(),'jc-pages-test-'));
+ const base=await mkdtemp(join(tmpdir(),'jc-pages-test-'));
+ const fakeRoot=join(base,'repo'),fakePub=join(fakeRoot,'public'),fakeOut=join(base,'dist');
  try{
-  const {version}=await buildPages({out:pathToFileURL(dir+'/')});
+  await mkdir(join(fakePub,'engine'),{recursive:true});
+  await writeFile(join(fakeRoot,'README.md'),'# Johan Chess\n');
+  await writeFile(join(fakePub,'index.html'),'<!doctype html><html lang="ru"><head><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="mobile-ui.css"><link rel="icon" href="favicon.svg"></head><body><img src="logo.svg"><img src="knight-mark.svg"><script type="module" src="app.js"></script></body></html>');
+  await writeFile(join(fakePub,'style.css'),'body{color:#fff}');
+  await writeFile(join(fakePub,'mobile-ui.css'),':root{--ink:#fff}');
+  await writeFile(join(fakePub,'logo.svg'),'<svg/>');
+  await writeFile(join(fakePub,'knight-mark.svg'),'<svg/>');
+  await writeFile(join(fakePub,'favicon.svg'),'<svg/>');
+  await writeFile(join(fakePub,'chess.js'),'export class Chess{}');
+  await writeFile(join(fakePub,'training.js'),'export function initTraining(){}');
+  await writeFile(join(fakePub,'engine-path.js'),"export const enginePath = './engine/stockfish-18-lite-single.js';\n");
+  await writeFile(join(fakePub,'app.js'),"import {initTraining} from './training.js';\nimport {enginePath} from './engine-path.js';\nconsole.log(initTraining,enginePath);\n");
+  await writeFile(join(fakePub,'engine','stockfish-18-lite-single.js'),'// worker');
+
+  const {version}=await buildPages({root:pathToFileURL(fakeRoot+'/'),out:pathToFileURL(fakeOut+'/')});
   assert.match(version,/^[0-9a-f]{8}$/);
-  const html=await readFile(join(dir,'index.html'),'utf8');
+  const html=await readFile(join(fakeOut,'index.html'),'utf8');
   assert.ok(html.includes(`href="style.css?v=${version}"`));
   assert.ok(html.includes(`href="mobile-ui.css?v=${version}"`));
   assert.ok(html.includes(`src="app.js?v=${version}"`));
   assert.ok(html.includes(`src="knight-mark.svg?v=${version}"`));
-  const appJs=await readFile(join(dir,'app.js'),'utf8');
+  const appJs=await readFile(join(fakeOut,'app.js'),'utf8');
   assert.ok(appJs.includes(`from './training.js?v=${version}'`));
-  const enginePathJs=await readFile(join(dir,'engine-path.js'),'utf8');
+  assert.ok(appJs.includes(`from './engine-path.js?v=${version}'`));
+  const enginePathJs=await readFile(join(fakeOut,'engine-path.js'),'utf8');
   assert.ok(enginePathJs.includes('./engine/stockfish-18-lite-single.js'));
   assert.ok(!enginePathJs.includes('?v='));
  }finally{
-  await rm(dir,{recursive:true,force:true});
+  await rm(base,{recursive:true,force:true});
  }
 });
