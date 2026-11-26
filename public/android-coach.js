@@ -18,10 +18,10 @@ function key(user){return 'jc-coach-games:'+String(user||'').toLowerCase().trim(
 function getGames(user){try{return JSON.parse(localStorage.getItem(key(user))||'[]');}catch{return [];}}
 export function rememberGame(context){
  if(!context?.game||!context.user||!context.game.complete||!['1-0','0-1','1/2-1/2'].includes(context.game.result))return;
- const g=context.game, own=g.color;
+ const g=context.game, own=g.color;if(!['w','b'].includes(own))return;
  const rs=(g.analysis||[]).filter(r=>r.color===own);
  const fingerprint=g.white+'|'+g.black+'|'+g.date+'|'+g.moves.join(' ');
- const record={id:fingerprint,date:g.date,white:g.white,black:g.black,result:g.result,color:own,depth:g.depth,accuracy:rs.length?rs.reduce((a,r)=>a+r.accuracy,0)/rs.length:null,errors:rs.filter(r=>r.loss>=5).sort((a,b)=>b.loss-a.loss).slice(0,5).map(r=>({index:r.index,san:r.san,best:r.bestSan,loss:r.loss,label:r.label,pv:r.pv}))};
+ const record={id:fingerprint,source:g.source||'import',date:g.date,white:g.white,black:g.black,result:g.result,color:own,depth:g.depth,accuracy:rs.length?rs.reduce((a,r)=>a+r.accuracy,0)/rs.length:null,errors:rs.filter(r=>r.loss>=5).sort((a,b)=>b.loss-a.loss).slice(0,5).map(r=>({index:r.index,san:r.san,best:r.bestSan,loss:r.loss,label:r.label,pv:r.pv}))};
  try{const saved=getGames(context.user).filter(r=>r.id!==fingerprint);localStorage.setItem(key(context.user),JSON.stringify([record,...saved].slice(0,30)));}catch{}
 }
 function showHistory(){
