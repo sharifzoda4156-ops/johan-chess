@@ -18,6 +18,7 @@ public final class MainActivity extends Activity {
     private static final String ORIGIN = "https://appassets.androidplatform.net";
     private WebView web;
     private Coach coach;
+    private boolean resumed=false,confirmingExit=false;
     private Lichess lichess;
     private final ExecutorService lichessExecutor=Executors.newSingleThreadExecutor();
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -115,14 +116,19 @@ public final class MainActivity extends Activity {
         });
     }
     void runLichessMaintenance(Runnable task){if(!lichessExecutor.isShutdown())lichessExecutor.execute(task);}
-    @Override protected void onResume(){super.onResume();if(lichess!=null)lichess.foreground(true);}
-    @Override protected void onPause(){if(lichess!=null)lichess.foreground(false);super.onPause();}
+    private void syncForeground(){if(lichess!=null)lichess.foreground(resumed&&(hasWindowFocus()||confirmingExit));}
+    @Override protected void onResume(){super.onResume();resumed=true;syncForeground();}
+    @Override protected void onPause(){resumed=false;syncForeground();super.onPause();}
+    @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);syncForeground();}
     @Override public void onBackPressed(){
         if(lichess!=null&&lichess.liveGame()){
-            new AlertDialog.Builder(this).setTitle("Покинуть онлайн-партию?")
+            if(confirmingExit)return;
+            confirmingExit=true;
+            AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Покинуть онлайн-партию?")
                 .setMessage("Выход считается сдачей. Остаться можно без штрафа.")
                 .setNegativeButton("Продолжить игру",null)
-                .setPositiveButton("Сдаться",(dialog,which)->lichess.forfeitNow()).show();
+                .setPositiveButton("Сдаться",(d,which)->lichess.forfeitNow()).create();
+            dialog.setOnDismissListener(d->{confirmingExit=false;syncForeground();});dialog.show();
             return;
         }
         if(lichess!=null&&lichess.locked())return;

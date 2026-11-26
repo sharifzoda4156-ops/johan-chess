@@ -303,7 +303,7 @@ final class Lichess {
     }
     private JSONObject action(JSONObject r)throws Exception{
         String target=id(r.getString("gameId")),action=r.getString("action"),suffix;
-        synchronized(this){updateAbsence();if(!target.equals(gameId)||terminal||absence.pending()||!foreground||needsSync||full==null||state==null||game==null||!game.ready)throw new IOException("Нет активной подключённой партии");}
+        synchronized(this){updateAbsence();if(!target.equals(gameId)||terminal||absence.pending()||absence.remaining(SystemClock.elapsedRealtime())>=0||!foreground||needsSync||full==null||state==null||game==null||!game.ready)throw new IOException("Нет активной подключённой партии");}
         if("move".equals(action)){String m=r.getString("move");if(!m.matches("[a-h][1-8][a-h][1-8][qrbn]?"))throw new IOException("Неверный ход");suffix="move/"+m;}
         else if(Arrays.asList("resign","draw/yes","draw/no").contains(action))suffix=action;
         else throw new IOException("Неизвестное действие");
