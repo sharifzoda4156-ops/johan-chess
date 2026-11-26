@@ -54,6 +54,8 @@ jobs:
     permissions:
       pages: write
       id-token: write
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -61,3 +63,26 @@ jobs:
       - uses: actions/configure-pages@v5
       - uses: actions/deploy-pages@v4
         id: deployment
+  verify-live:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: deploy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --ignore-scripts playwright@1.65.1
+      - run: npx playwright install --with-deps chromium
+      - name: Verify public HTTPS deployment in Chromium
+        env:
+          WEB_URL: ${{ needs.deploy.outputs.page_url }}
+        run: |
+          test -n "$WEB_URL"
+          export WEB_URL="${WEB_URL%/}/"
+          for i in {1..15}; do
+            if curl -fsS --max-time 15 "$WEB_URL" | grep -q 'data-hosting="pages"'; then break; fi
+            sleep 4
+          done
+          node scripts/web-smoke.mjs
