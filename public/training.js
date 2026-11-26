@@ -1,4 +1,4 @@
-import {renderBoardView,clearBoardView,scrollBehavior,moveDuration,roundMotionFactor} from './board-view.js';
+import {renderBoardView,clearBoardView,moveDuration,roundMotionFactor} from './board-view.js';
 import {Chess} from './chess.js';
 import {Engine} from './engine.js';
 import {enginePath} from './engine-path.js';
@@ -10,7 +10,7 @@ function storeHistory(record){try{localStorage.setItem(STORAGE,JSON.stringify([r
 function adaptiveIndex(user){try{const v=localStorage.getItem('jc-bot-level:'+user.toLowerCase());const n=v===null?DEFAULT_ADAPTIVE:Number(v);return Number.isInteger(n)&&n>=0&&n<LEVELS.length?n:DEFAULT_ADAPTIVE;}catch{return DEFAULT_ADAPTIVE;}}
 export function initTraining({canStart,lock,unlock,review,getUser}){
  let session=null,serial=0,selected=null,promotions=[],timer=null,finished=null;
- const status=t=>$('playStatus').textContent=t;
+ const status=t=>{$('playStatus').textContent=t;$('playGameStatus').textContent=t;};
  function historyList(){
   const select=$('playHistory');select.replaceChildren();
   const all=readHistory();
@@ -25,7 +25,7 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
   renderBoardView($('playBoard'),{rows:s.game.board(),flip:s.color==='b',interactive:true,disabled:s.starting||s.thinking||s.game.turn()!==s.color||promotions.length>0,onClick:click,selected,targets,last:s.last,animateMoves,motionFactor:roundMotionFactor(CONTROLS[s.control]?.base,CONTROLS[s.control]?.increment)});
   if(s.renderedPly!==s.sans.length){
    const list=$('playMoves');list.textContent=s.sans.map((m,i)=>i%2===0?Math.floor(i/2)+1+'. '+m:m).join(' ');
-   list.scrollTop=list.scrollHeight;s.renderedPly=s.sans.length;
+   list.scrollLeft=list.scrollWidth;s.renderedPly=s.sans.length;
   }
   $('playPromotion').hidden=!promotions.length;renderClock();
  }
@@ -118,5 +118,5 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
  $('promote-cancel').onclick=()=>{promotions=[];draw();};
  document.addEventListener('visibilitychange',()=>{if(session)tick();});
  historyList();
- return {active:()=>!!session,interrupt:()=>{if(session)cancel('Тренировка остановлена: онлайн-партия');},startReplay:(fen,color)=>{if(session||!canStart())return; $('playFen').value=fen;$('playPanel').scrollIntoView({behavior:scrollBehavior()});return start({fen,color,replay:true});}};
+ return {active:()=>!!session,interrupt:()=>{if(session)cancel('Тренировка остановлена: онлайн-партия');},startReplay:(fen,color)=>{if(session||!canStart())return; $('playFen').value=fen;return start({fen,color,replay:true});}};
 }

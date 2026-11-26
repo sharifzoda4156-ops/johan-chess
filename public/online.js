@@ -18,10 +18,11 @@ export function initOnline({canStart,lock,review}){
   text('onlineConnect',connected?'Lichess · '+snap.username:'Подключить Lichess');text('onlineProfileStatus',connected?'Профиль: '+snap.username:'Онлайн-игра и друзья');
   $('onlineLogin').disabled=working||uiLock||!native;$('onlineLogout').disabled=blocked;$('onlineRefresh').disabled=working||!connected;
   $('onlineSeek').disabled=blocked||!snap.eventReady||!canStart();$('onlineChallenge').disabled=blocked||!snap.eventReady||!canStart();$('onlineCancel').hidden=!snap.waiting;$('onlineCancel').disabled=working;
-  $('onlineGame').hidden=!game||snap.waiting;$('onlineHistoryRefresh').disabled=blocked;$('onlineFriendSearch').disabled=blocked;$('onlineFriendsRefresh').disabled=blocked;
+  $('onlineGame').hidden=!game||snap.waiting;document.body.classList.toggle('online-board-focus',!!game&&!game.done&&!snap.waiting&&uiLock);$('onlineHistoryRefresh').disabled=blocked;$('onlineFriendSearch').disabled=blocked;$('onlineFriendsRefresh').disabled=blocked;
   $('onlineWaiting').hidden=!snap.waiting;$('onlineReconnect').hidden=!(snap.locked&&!snap.waiting&&(!game||snap.needsSync||awaiting));$('onlineOpponentGone').hidden=!snap.opponentGone||!game||game.done;
   $('onlineClaimActions').hidden=!snap.claimReady||!game||game.done||snap.needsSync;
   for(const id of ['onlineClaimVictory','onlineClaimDraw'])$(id).disabled=working||sending||!snap.claimReady;
+  $('onlineGameNotice').hidden=!(game&&!game.done&&(snap.needsSync||awaiting||error));$('onlineGameNoticeText').textContent=error|| (snap.needsSync?'Связь потеряна':awaiting?'Ожидаю подтверждения Lichess':'');$('onlineGameReconnect').hidden=!(snap.needsSync||awaiting);
  }
  function profileView(){text('onlineName',snap.username||'');const perf=snap.account?.perfs||{};for(const [type,id] of [['blitz','onlineBlitzRating'],['rapid','onlineRapidRating'],['classical','onlineClassicalRating']]){const r=perf[type];text(id,Number.isFinite(r?.rating)?r.rating+(r.prov?'?':''):'—');}}
  function tick(){
@@ -40,7 +41,9 @@ export function initOnline({canStart,lock,review}){
   text('onlineTop',label(player(mine==='w'?'b':'w')));text('onlineBottom',label(player(mine)));
   text('onlineTurn',game.done?resultText(game):snap.needsSync?'Связь потеряна · обнови':awaiting?'Ожидаю подтверждение Lichess':resultText(game));
   $('onlineGameActions').hidden=game.done;$('onlineReviewGame').hidden=!game.done||!game.moves.length||snap.locked;
-  $('onlineDrawNo').hidden=!game.drawOffer;text('onlineDraw',game.drawOffer?'Принять ничью':'Предложить ничью');
+  $('onlineDrawNo').hidden=!game.drawOffer;$('onlineDraw').querySelector('span').textContent=game.drawOffer?'Принять':'Ничья';
+  const list=$('onlineMoveStrip'),sans=game.game.history().map((m,i)=>i%2===0?Math.floor(i/2)+1+'. '+m:m).join(' ');if(list.textContent!==sans){list.textContent=sans;list.scrollLeft=list.scrollWidth;}
+  $('onlineTopClock').classList.toggle('running',!game.done&&turn!==mine);$('onlineBottomClock').classList.toggle('running',!game.done&&turn===mine);
   for(const id of ['onlineResign','onlineDraw','onlineDrawNo'])$(id).disabled=working||sending||game.done||snap.needsSync;
   tick();
  }
@@ -70,7 +73,7 @@ export function initOnline({canStart,lock,review}){
  function openReview(id){if(!validGameId(id)||uiLock||!canStart())return;action(async()=>{const r=await call('pgn',{gameId:id});if(!completedPgn(r.pgn,Chess))throw Error('Нужна завершённая партия с ходами');review(r.pgn,snap.username);});}
  $('onlineLogin').onclick=()=>action(async()=>{say('Продолжи вход в браузере.');apply(await call('login'));});
  $('onlineLogout').onclick=()=>action(async()=>{if(confirm('Отключить аккаунт Lichess?'))apply(await call('logout'));});
- $('onlineRefresh').onclick=()=>action(refresh);$('onlineReconnect').onclick=()=>action(refresh);
+ $('onlineRefresh').onclick=()=>action(refresh);$('onlineReconnect').onclick=()=>action(refresh);$('onlineGameReconnect').onclick=()=>action(refresh);
  $('onlineSeek').onclick=()=>{const p=params();if(!matchControl(p.minutes,p.increment,false)){say('Для блица нужен прямой вызов. Выбери рапид или классику.');return;}begin('seek',p);};
  $('onlineChallenge').onclick=()=>{const p=params(),user=$('onlineFriendNick').value.trim();if(!validNick(user)||!matchControl(p.minutes,p.increment,true)){say('Проверь ник и контроль времени');return;}begin('challenge',{...p,user});};
  $('onlineCancel').onclick=()=>action(async()=>apply(await call('cancel')));
