@@ -6,7 +6,7 @@ import {preparePuzzle,advancePuzzle,filterPuzzles,finishAttempt,choosePuzzle} fr
 import {parseUci} from '../public/training-core.js';
 const pack=JSON.parse(readFileSync(new URL('../public/lichess-puzzles.json',import.meta.url)));
 test('all imported rows retain published IDs and legal complete lines',()=>{
- assert.equal(pack.license,'CC0-1.0');assert.equal(new Set(pack.puzzles.map(p=>p.id)).size,pack.puzzles.length);
+ assert.equal(pack.license,'CC0-1.0');assert.equal(pack.puzzles.length,1000);assert.equal(new Set(pack.puzzles.map(p=>p.id)).size,pack.puzzles.length);
  for(const row of pack.puzzles){const p=preparePuzzle(row,Chess);assert.ok(p,row.id);}
 });
 test('published first move is opponent setup; solution alternates',()=>{
