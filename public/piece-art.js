@@ -1,16 +1,62 @@
-// Original local vector artwork. No remote images or fonts.
-const NS='http://www.w3.org/2000/svg';
-const shapes={
- p:['M20 42 C20 34 25 31 25 25 A9 9 0 1 1 39 25 C39 31 44 34 44 42 L49 48 H15 Z','M12 49 H52 L55 56 H9 Z'],
- r:['M13 10 H23 V18 H28 V10 H36 V18 H41 V10 H51 V27 L44 33 L46 45 H18 L20 33 L13 27 Z','M16 45 H48 L51 49 H13 Z','M11 50 H53 L56 56 H8 Z','M20 27 H44'],
- n:['M16 45 C15 35 19 25 29 20 L27 12 L36 16 L44 10 L45 22 C52 30 50 39 47 45 Z','M27 19 C22 21 14 28 12 35 L20 39 L30 32 L35 35 L27 45','M14 46 H50 L54 56 H10 Z','M36 24 L38 24'],
- b:['M32 7 L34 10 C48 18 48 27 39 34 L43 45 H21 L25 34 C16 27 16 18 30 10 Z','M35 14 L27 26','M18 45 H46 L50 49 H14 Z','M12 50 H52 L55 56 H9 Z'],
- q:['M10 15 L23 29 L23 14 L32 27 L41 14 L41 29 L54 15 L46 44 H18 Z','M18 44 H46 L50 49 H14 Z','M12 50 H52 L55 56 H9 Z','M10 12 A3 3 0 1 0 10 18 A3 3 0 1 0 10 12','M23 10 A3 3 0 1 0 23 16 A3 3 0 1 0 23 10','M32 4 A3 3 0 1 0 32 10 A3 3 0 1 0 32 4','M41 10 A3 3 0 1 0 41 16 A3 3 0 1 0 41 10','M54 12 A3 3 0 1 0 54 18 A3 3 0 1 0 54 12'],
- k:['M29 5 H35 V11 H42 V17 H35 V23 H29 V17 H22 V11 H29 Z','M32 23 C18 13 9 25 16 34 L23 44 H41 L48 34 C55 25 46 13 32 23 Z','M32 23 V38','M19 44 H45 L50 49 H14 Z','M12 50 H52 L55 56 H9 Z']
-};
-export function pieceGraphic(piece){
- const svg=document.createElementNS(NS,'svg');svg.setAttribute('viewBox','0 0 64 64');svg.setAttribute('aria-hidden','true');svg.setAttribute('class','piece '+(piece.color==='w'?'white':'black'));
- const paths=shapes[piece.type]||[];
- paths.forEach(d=>{const path=document.createElementNS(NS,'path');path.setAttribute('d',d);path.setAttribute('stroke-linejoin','round');path.setAttribute('stroke-linecap','round');svg.append(path);});
- return svg;
+import chessnut from './pieces/chessnut.js';
+import cburnett from './pieces/cburnett.js';
+import spatial from './pieces/spatial.js';
+import celtic from './pieces/celtic.js';
+import rhosgfx from './pieces/rhosgfx.js';
+export const THEMES=Object.freeze({
+ chessnut:{name:'Classic',description:'Классический зелёный',light:'#ebebd0',dark:'#779653',pieces:chessnut,credit:'Alexis Luengas · Apache 2.0'},
+ cburnett:{name:'Tournament',description:'Строгий сине-серый',light:'#e6edf3',dark:'#7594aa',pieces:cburnett,credit:'Colin M. L. Burnett · GPLv2+'},
+ spatial:{name:'Spatial',description:'Объёмные фигуры, тёплое дерево',light:'#ead8b6',dark:'#a77c56',pieces:spatial,credit:'Maurizio Monge · MIT'},
+ celtic:{name:'Celtic',description:'Орнамент, тёмный камень',light:'#e3dfd5',dark:'#777c83',pieces:celtic,credit:'Maurizio Monge · MIT'},
+ rhosgfx:{name:'Rhos',description:'Графичный стиль, фиолетовая доска',light:'#eee1f2',dark:'#9880af',pieces:rhosgfx,credit:'RhosGFX · CC0'}
+});
+export const DEFAULT_THEME='chessnut';
+export const normalizeTheme=id=>Object.hasOwn(THEMES,id)?id:DEFAULT_THEME;
+const KEY='jc-board-theme-v1';
+export function readTheme(storage){try{return normalizeTheme(storage.getItem(KEY));}catch{return DEFAULT_THEME;}}
+export function saveTheme(storage,id){try{storage.setItem(KEY,normalizeTheme(id));return true;}catch{return false;}}
+let current=DEFAULT_THEME;
+const urls=new Map();
+export function pieceUrl(theme,key){
+ const id=normalizeTheme(theme),asset=THEMES[id].pieces[key];
+ if(!asset)return '';
+ const cacheKey=id+':'+key;
+ if(!urls.has(cacheKey))urls.set(cacheKey,'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(asset.svg));
+ return urls.get(cacheKey);
+}
+export function pieceGraphic(piece,previewTheme=null){
+ const img=document.createElement('img'),key=piece.color+piece.type.toUpperCase();
+ img.className='piece piece-image';img.alt='';img.draggable=false;img.setAttribute('aria-hidden','true');
+ if(!previewTheme)img.dataset.piece=key;
+ img.src=pieceUrl(previewTheme||current,key);
+ return img;
+}
+export function applyTheme(id){
+ current=normalizeTheme(id);
+ const t=THEMES[current],style=document.documentElement.style;
+ style.setProperty('--light-square',t.light);style.setProperty('--dark-square',t.dark);
+ document.documentElement.dataset.boardTheme=current;
+ for(const img of document.querySelectorAll('img[data-piece]'))img.src=pieceUrl(current,img.dataset.piece);
+ return current;
+}
+export function initThemes(){
+ const list=document.getElementById('boardThemes'),status=document.getElementById('boardThemeStatus');
+ let selected=applyTheme(readTheme(localStorage));
+ if(!list)return;
+ function select(id,save){
+  selected=applyTheme(id);
+  for(const b of list.querySelectorAll('button[data-theme]'))b.setAttribute('aria-pressed',String(b.dataset.theme===selected));
+  if(save)status.textContent=saveTheme(localStorage,selected)?'Оформление сохранено':'Оформление применено, но сохранить настройку не удалось';
+ }
+ for(const [id,t] of Object.entries(THEMES)){
+  const b=document.createElement('button');b.type='button';b.className='theme-option';b.dataset.theme=id;
+  const preview=document.createElement('span');preview.className='theme-preview';preview.style.setProperty('--preview-light',t.light);preview.style.setProperty('--preview-dark',t.dark);
+  for(const [i,p] of [{color:'w',type:'n'},{color:'b',type:'q'},{color:'b',type:'p'},{color:'w',type:'k'}].entries()){
+   const cell=document.createElement('span');cell.className=(Math.floor(i/2)+i%2)%2?'preview-dark':'preview-light';cell.append(pieceGraphic(p,id));preview.append(cell);
+  }
+  const info=document.createElement('span');info.className='theme-info';
+  const title=document.createElement('strong');title.textContent=t.name;const desc=document.createElement('small');desc.textContent=t.description;const credit=document.createElement('small');credit.className='theme-credit';credit.textContent=t.credit;
+  info.append(title,desc,credit);b.append(preview,info);b.onclick=()=>select(id,true);list.append(b);
+ }
+ select(selected,false);
 }
