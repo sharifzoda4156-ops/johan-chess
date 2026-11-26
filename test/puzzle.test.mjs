@@ -1,24 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {Chess} from 'chess.js';
-import {PACK,solutions,personalPuzzles,mergePersonal,finishAttempt,choosePuzzle,cleanProgress} from '../public/puzzle-core.js';
-test('every bundled exercise has at least one legal solution and does not mutate input',()=>{
- for(const p of PACK){const s=solutions(p,Chess);assert.ok(s.length,p.id);}
- assert.equal(new Set(PACK.map(p=>p.id)).size,PACK.length);
+import {preparePuzzle,advancePuzzle,filterPuzzles,finishAttempt,choosePuzzle} from '../public/puzzle-core.js';
+import {parseUci} from '../public/training-core.js';
+const pack=JSON.parse(readFileSync(new URL('../public/lichess-puzzles.json',import.meta.url)));
+test('all imported rows retain published IDs and legal complete lines',()=>{
+ assert.equal(pack.license,'CC0-1.0');assert.equal(new Set(pack.puzzles.map(p=>p.id)).size,pack.puzzles.length);
+ for(const row of pack.puzzles){const p=preparePuzzle(row,Chess);assert.ok(p,row.id);}
 });
-test('mate objective accepts every legal mating move, including black',()=>{
- for(const p of PACK.filter(p=>p.goal==='mate'))for(const m of solutions(p,Chess)){const c=new Chess(p.fen);c.move(m);assert.ok(c.isCheckmate());}
+test('published first move is opponent setup; solution alternates',()=>{
+ const row=pack.puzzles.find(p=>p.moves.length>=4),p=preparePuzzle(row,Chess);
+ const start=new Chess(row.fen);start.move(parseUci(row.moves[0]));assert.equal(p.startFen,start.fen());
+ let g=new Chess(p.startFen),i=0;while(i<p.solution.length){const n=advancePuzzle(p,g,i,parseUci(p.solution[i]),Chess);assert.ok(n);g=n.game;i=n.index;assert.equal(n.done,i===p.solution.length);}
 });
-test('personal exercises only derive from real completed game and legal best move',()=>{
- const c=new Chess(),g={complete:true,result:'1-0',color:'w',startFen:c.fen(),moves:['e4','e5'],analysis:[{index:0,color:'w',move:'e2e4',best:'d2d4',loss:10},{index:1,color:'b',move:'e7e5',best:'c7c5',loss:15}]};
- const ps=personalPuzzles({game:g},Chess);assert.equal(ps.length,1);assert.equal(ps[0].best,'d2d4');assert.equal(solutions(ps[0],Chess)[0].san,'d4');
- assert.equal(personalPuzzles({game:{...g,result:'*'}},Chess).length,0);
- assert.equal(personalPuzzles({game:{...g,analysis:[{...g.analysis[0],best:'e2e8'}]}},Chess).length,0);
- assert.equal(mergePersonal(ps,ps).length,1);
+test('wrong move preserves position and invalid lines rejected',()=>{
+ const row=pack.puzzles.find(p=>p.moves.length>=4),p=preparePuzzle(row,Chess),g=new Chess(p.startFen),fen=g.fen();
+ const wrong=g.moves({verbose:true}).find(m=>m.from+m.to+(m.promotion||'')!==p.solution[0]);assert.ok(wrong);assert.equal(advancePuzzle(p,g,0,wrong,Chess),null);assert.equal(g.fen(),fen);
+ assert.equal(preparePuzzle({...row,moves:['a1a1','a2a2']},Chess),null);
 });
-test('progress distinguishes clean and assisted solves, skips current when possible',()=>{
- let p=finishAttempt({},'a',false);assert.equal(p.clean,1);assert.equal(p.streak,1);
- p=finishAttempt(p,'b',true);assert.equal(p.completed,2);assert.equal(p.streak,0);assert.equal(p.bestStreak,1);
- assert.equal(choosePuzzle([{id:'a'},{id:'c'}],p,'a').id,'c');
- assert.deepEqual(cleanProgress(null).solved,[]);
+test('filtering and progress use source rating and tags',()=>{
+ const rows=filterPuzzles(pack.puzzles,'mateIn1','400-1199');assert.ok(rows.every(p=>p.rating<1200&&p.themes.includes('mateIn1')));
+ let s=finishAttempt({},'002Q2',false);s=finishAttempt(s,'002X3',true);assert.equal(s.bestStreak,1);assert.equal(s.streak,0);assert.equal(choosePuzzle([{id:'002Q2'},{id:'other'}],s,'002Q2').id,'other');
 });
