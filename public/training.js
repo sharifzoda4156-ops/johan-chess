@@ -20,7 +20,8 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
   all.forEach((g,i)=>{const o=document.createElement('option');o.value=String(i);o.textContent=g.date+' · '+g.result+' · SF '+g.level;select.append(o);});
   select.disabled=!all.length||!!session;$('playOpenHistory').disabled=select.disabled;
  }
- function settings(enabled){for(const id of ['playColor','playLevel','playTime','playFen','playStart','playHistory','playOpenHistory'])$(id).disabled=!enabled;}
+ function settings(enabled){for(const id of ['playColor','playLevel','playTime','playFen','playStart','playHistory','playOpenHistory'])$(id).disabled=!enabled;for(const b of document.querySelectorAll('#playColorGroup button'))b.disabled=!enabled;}
+ function syncColorGroup(){const v=$('playColor').value;for(const b of document.querySelectorAll('#playColorGroup button'))b.setAttribute('aria-pressed',String(b.dataset.color===v));}
  function renderClock(){if(!session?.clock)return;const r=remaining(session.clock,performance.now());for(const [id,c] of [['playTopClock',opposite(session.color)],['playBottomClock',session.color]]){const el=$(id);const text=clockText(r[c]);if(el.textContent!==text)el.textContent=text;el.classList.toggle('running',session.clock.turn===c);}}
  function draw(animateMoves=[]){
   const s=session;if(!s)return;
@@ -125,6 +126,9 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
  for(const p of ['q','r','b','n'])$('promote-'+p).onclick=()=>{const m=promotions.find(x=>x.promotion===p);if(m)human(m);};
  $('promote-cancel').onclick=()=>{promotions=[];draw();};
  document.addEventListener('visibilitychange',()=>{if(session)tick();});
+ for(const b of document.querySelectorAll('#playColorGroup button'))b.onclick=()=>{if(session)return;$('playColor').value=b.dataset.color;syncColorGroup();};
+ $('playColor').onchange=syncColorGroup;
+ syncColorGroup();
  historyList();
  return {active:()=>!!session,interrupt:()=>{if(session)cancel('Тренировка остановлена: онлайн-партия');},startReplay:(fen,color)=>{if(session||!canStart())return; $('playFen').value=fen;return start({fen,color,replay:true});}};
 }
