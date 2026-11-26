@@ -27,3 +27,14 @@ test('history bounds, consent and complete pairs',()=>{
  assert.equal(normalizeMemory({history:[...pair,{role:'assistant',content:'orphan'}]},Chess).history.length,0);
  assert.equal(saveMemory({setItem(){throw Error('quota');}},key,{history:pair},Chess).saved,false);
 });
+
+import {shouldCompact,coachHistory,splitCoachAnswer,recordCoachTurn} from '../public/coach-memory.js';
+test('compact memory is bounded and only sent with history consent',()=>{
+ let m=normalizeMemory({summary:'a'.repeat(5000),summaryPending:5},Chess);assert.equal(m.summary.length,2400);assert.ok(shouldCompact(m,[]));
+ assert.equal(coachHistory({...m,shareHistory:false},pair).length,0);
+ assert.equal(shouldCompact({...m,shareHistory:false},pair),false);
+ const x=splitCoachAnswer('Ответ\n[[memory_update]]Новая сводка[[/memory_update]]',true);assert.equal(x.answer,'Ответ');assert.equal(x.summary,'Новая сводка');
+ assert.equal(splitCoachAnswer('Ответ\n[[memory_update]]Новая сводка[[/memory_update]]',false).summary,null);
+ assert.equal(recordCoachTurn(m,null).summary,m.summary);assert.equal(recordCoachTurn(m,x.summary).summaryPending,0);
+ assert.equal(recordCoachTurn({...m,shareHistory:false},x.summary).summary,m.summary);
+});

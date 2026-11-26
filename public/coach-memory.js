@@ -38,7 +38,7 @@ export function normalizeMemory(raw,Chess){
   const pair=[user,assistant],size=JSON.stringify(pair).length*2;if(bytes+size>MAX_BYTES)break;
   bytes+=size;history.unshift(...pair);
  }
- return {history,notes:cut(r.notes,3000),goal:cut(r.goal,300),focus:cut(r.focus,500),minutes:[15,30,45,60,90,120].includes(r.minutes)?r.minutes:60,plan:cut(r.plan,4000),shareHistory:r.shareHistory!==false};
+ return {history,notes:cut(r.notes,3000),goal:cut(r.goal,300),focus:cut(r.focus,500),minutes:[15,30,45,60,90,120].includes(r.minutes)?r.minutes:60,plan:cut(r.plan,4000),shareHistory:r.shareHistory!==false,summary:cut(r.summary,2400),summaryPending:Number.isSafeInteger(r.summaryPending)?Math.max(0,Math.min(100,r.summaryPending)):0};
 }
 export function loadMemory(storage,key,Chess){
  if(!key)return normalizeMemory(null,Chess);
@@ -59,4 +59,26 @@ export function recentConversation(history,enabled){
   used+=n;out.unshift(...pair);
  }
  return out;
+}
+
+export function shouldCompact(memory,history){
+ return memory.shareHistory!==false&&(memory.summaryPending>=5||(!memory.summary&&history.length>=10));
+}
+export function coachHistory(memory,history){
+ if(memory.shareHistory===false)return [];
+ const rows=history.slice(-(shouldCompact(memory,history)?12:8));let chars=0;const out=[];
+ for(let i=rows.length-2;i>=0;i-=2){
+  const pair=rows.slice(i,i+2).map(m=>({role:m.role,content:cut(m.content,3000)}));
+  const n=pair.reduce((s,m)=>s+m.content.length,0);if(chars+n>12000)break;chars+=n;out.unshift(...pair);
+ }return out;
+}
+export function splitCoachAnswer(answer,requested){
+ const m=String(answer||'').match(/\n?\[\[memory_update\]\]([\s\S]*?)\[\[\/memory_update\]\]\s*$/);
+ if(!m)return {answer:String(answer||''),summary:null};
+ const body=answer.slice(0,m.index).trim(),summary=m[1].trim();
+ return {answer:body,summary:requested&&body&&summary&&summary.length<=2400?summary:null};
+}
+export function recordCoachTurn(memory,summary){
+ if(!memory.shareHistory)return memory;
+ return {...memory,summary:summary===null?memory.summary:summary,summaryPending:summary===null?Math.min(100,memory.summaryPending+1):0};
 }
