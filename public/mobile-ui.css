@@ -346,7 +346,7 @@ body.review-board-focus #reviewBoardShell{grid-template-rows:48px 32px minmax(0,
 :is(body.is-playing,body.is-online-playing.online-board-focus,body.review-board-focus) .game-stage>.game-player{
  width:min(100%,720px);align-self:end}
 :is(body.is-playing,body.is-online-playing.online-board-focus,body.review-board-focus) .game-stage>.game-player-bottom{align-self:start}
-:is(body.is-playing,body.is-online-playing.online-board-focus,body.review-board-focus) .game-stage>.game-board{
+:is(body.is-playing,body.is-online-playing.online-board-focus,body.review-board-focus) .game-stage>:is(#playBoard,#onlineBoard,#board){
  width:min(100%,720px,max(0px,calc(100dvh - 300px)));width:min(100cqw,720px,max(0px,calc(100cqh - 96px)));
  max-width:none;height:auto;aspect-ratio:1;margin:0;border-radius:0;touch-action:none;grid-template-columns:repeat(8,minmax(0,1fr));grid-template-rows:repeat(8,minmax(0,1fr));overflow:hidden}
 .game-stage .square{min-width:0;min-height:0;touch-action:none}
@@ -359,7 +359,7 @@ body.review-board-focus #coach{height:58px;min-height:0;margin:0;padding:5px 12p
 .sr-game{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 @media(orientation:landscape) and (max-height:550px){
  :is(body.is-playing,body.is-online-playing.online-board-focus,body.review-board-focus) .game-stage{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);grid-template-rows:1fr 1fr}
- :is(body.is-playing,body.is-online-playing.online-board-focus,body.review-board-focus) .game-stage>.game-board{grid-column:1;grid-row:1/3;width:min(100%,100cqh)}
+ :is(body.is-playing,body.is-online-playing.online-board-focus,body.review-board-focus) .game-stage>:is(#playBoard,#onlineBoard,#board){grid-column:1;grid-row:1/3;width:min(100%,100cqh)}
  :is(body.is-playing,body.is-online-playing.online-board-focus,body.review-board-focus) .game-stage>.game-player-top{grid-column:2;grid-row:1;align-self:end}
  :is(body.is-playing,body.is-online-playing.online-board-focus,body.review-board-focus) .game-stage>.game-player-bottom{grid-column:2;grid-row:2;align-self:start}
  body.is-playing #playArea,body.is-online-playing.online-board-focus #onlineGame{grid-template-rows:36px 26px minmax(0,1fr) 48px}
