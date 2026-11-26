@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {requestSpec,downloadPuzzleData} from './lib/puzzle-download.mjs';
 import {readFile,stat} from 'node:fs/promises';
 import {resolve,extname,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -16,6 +17,9 @@ const server=http.createServer(async(req,res)=>{
  try{
   const u=new URL(req.url,'http://localhost');
   if(req.method!=='GET'){res.writeHead(405);return res.end();}
+  if(u.pathname.startsWith('/api/puzzle-data/')){
+   try{const spec=requestSpec(u.pathname,u.searchParams);if(!spec)return respond(res,404,{error:'Unknown puzzle endpoint'});const bytes=await downloadPuzzleData(spec);res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});return res.end(bytes);}catch{return respond(res,502,{error:'Puzzle data unavailable'});}
+  }
   if(u.pathname==='/api/games'){
    const user=(u.searchParams.get('user')||'').toLowerCase();if(!/^[a-z0-9_-]{1,40}$/.test(user))return respond(res,400,{error:'Некорректный ник'});
    try{const {archives}=await api(user+'/games/archives');const games=[];
