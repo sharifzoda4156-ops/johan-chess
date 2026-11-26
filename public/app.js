@@ -239,7 +239,8 @@ training=initTraining({
 initOnline({
  canStart:()=>!onlineLocked&&!busy&&!importing&&!training?.active()&&!coachBusy(),
  lock:value=>{onlineLocked=value;setEngineOnlineLock(value);if(value){if(busy)$('stop').click();training?.interrupt();}navigation.setOnline(value);},
- review:(text,nick)=>{if(onlineLocked||busy||importing||training?.active())return;navigation.show('review');if(load(text)){onlineReviewName=nick;flipped=own()==='b';render();$('games').hidden=true;$('analyze').click();}}
+ review:(text,nick)=>{if(onlineLocked||busy||importing||training?.active())return;navigation.show('review');if(load(text)){onlineReviewName=nick;flipped=own()==='b';render();$('games').hidden=true;$('analyze').click();}},
+ openOnline:()=>navigation.show('online')
 });
 initGameShare({Chess,canUse:()=>!onlineLocked&&!busy&&!importing&&!training?.active()&&!coachBusy(),user:()=>$('user').value,open:text=>{navigation.show('review');return loadText(text);},exportPgn:()=>game?currentPgn():null,notice:t=>{navigation.show('review');status(t);}});
 initStudyLibrary({
