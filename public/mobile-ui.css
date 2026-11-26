@@ -248,3 +248,39 @@ body.is-online-playing .app-header,body.is-online-playing .bottom-nav,body.is-on
 @media(orientation:landscape) and (max-height:550px){#onlineBoard{max-width:calc(100dvh - 24px)}}
 
 .online-absence{color:var(--accent);border:1px solid var(--line);padding:10px 12px;border-radius:10px;font-variant-numeric:tabular-nums;text-align:center}
+
+/* Account and study are separate screens; compact chat first. */
+.profile-hero .profile-cover{height:64px;margin-bottom:12px}
+.profile-hero .profile-heading{margin-top:0;align-items:center;gap:12px}
+.profile-hero .profile-avatar{width:62px;height:62px;border:0;border-radius:14px}
+.profile-hero .profile-heading h2{font-size:23px;margin:0 0 3px;line-height:1.18}
+.profile-hero .profile-heading p{margin:2px 0}
+.profile-connections{margin-top:16px;border-top:1px solid var(--line)}
+.profile-link{width:100%;display:flex;align-items:center;gap:8px;justify-content:space-between;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:12px 0;min-height:48px;font-size:15px}
+.profile-link small{margin-left:auto;letter-spacing:0;color:var(--muted);font-weight:500}
+[data-screen=account]{max-width:650px;margin:auto}
+.account-panel>label,.account-panel .study-fields label{display:grid;gap:6px;margin:12px 0}
+.account-panel select{width:100%}
+.account-panel label.account-check{display:flex;align-items:flex-start;gap:10px;line-height:1.4}
+.account-check input{min-height:0;margin-top:3px;accent-color:var(--accent);width:18px;height:18px;flex:none}
+.account-panel .wide{margin:8px 0}
+.account-panel #aiAccountStatus{overflow-wrap:anywhere}
+.coach-chat{padding:12px;min-height:340px}
+.coach-chat-head{display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.coach-chat-head>div{flex:1;min-width:0}
+.coach-chat-head h2{font-size:19px;margin:0 0 3px}
+.coach-chat-head small{font-size:12px;letter-spacing:0}
+.coach-gear{min-width:44px;padding:6px;font-size:20px;background:transparent;border:0}
+.coach-empty{padding:24px 4px;text-align:center}
+.coach-empty h3{font-size:17px;margin:0 0 6px}
+.coach-empty p{margin:6px 0 14px}
+#aiHistory{max-height:none;overflow:visible;display:flex;flex-direction:column;gap:10px;margin:12px 0}
+#aiHistory .ai-message{margin:0;padding:11px 12px;max-width:100%;border-radius:12px}
+#aiHistory .ai-message.user{align-self:flex-end;max-width:88%;background:var(--surface-raised)}
+#aiHistory .ai-message.assistant{align-self:stretch;background:var(--surface-inset)}
+.coach-quick{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.coach-quick button{font-size:12px;min-height:36px;padding:7px 10px}
+.chat-composer{display:flex;align-items:flex-end;gap:8px;padding:10px 0 0}
+#aiQuestion{flex:1;min-width:0;width:100%;margin:0;resize:none;font-size:15px}
+#aiAsk{width:46px;height:46px;min-height:46px;padding:0;font-size:24px;flex:none;border-radius:12px}
+#aiStatus:empty,#aiCacheStatus:empty{display:none}

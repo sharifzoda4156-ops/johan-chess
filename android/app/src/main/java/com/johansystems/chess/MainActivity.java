@@ -78,6 +78,7 @@ public final class MainActivity extends Activity {
                 if(!main||!ORIGIN.equals(origin.toString()))return;
                 String raw=msg.getData();
                 if(raw==null||raw.length()>350000)return;
+                try{JSONObject req=new JSONObject(raw);if("cancelLogin".equals(req.optString("op"))){if(coach!=null)coach.cancelLogin();reply.postMessage(new JSONObject().put("id",req.getString("id")).put("data",new JSONObject().put("ok",true)).toString());return;}}catch(Exception ignored){}
                 executor.execute(()->{
                     JSONObject out=new JSONObject();
                     try {
@@ -142,6 +143,18 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);receiveShare(intent);}
     void showGameShare(Intent intent){runOnUiThread(()->{if(!isDestroyed()&&!protectedOnline)startActivity(Intent.createChooser(intent,"Поделиться партией"));});}
+    // Called on a worker. Report browser launch failure immediately instead of waiting five minutes.
+    void openOAuthBrowser(String url)throws Exception{
+        FutureTask<Void> task=new FutureTask<>(()->{
+            if(isDestroyed()||protectedOnline||lichess!=null&&lichess.locked())throw new IOException("Вход недоступен во время онлайн-партии");
+            try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));}
+            catch(android.content.ActivityNotFoundException e){throw new IOException("Не найден браузер. Установи или включи браузер.");}
+            return null;
+        });
+        runOnUiThread(task);
+        try{task.get(10,TimeUnit.SECONDS);}catch(ExecutionException e){Throwable cause=e.getCause();if(cause instanceof Exception)throw (Exception)cause;throw new IOException("Не удалось открыть браузер");}
+        catch(TimeoutException e){task.cancel(false);throw new IOException("Не удалось открыть браузер");}
+    }
     void openBrowser(String url) {
         runOnUiThread(()->{
             try { if(protectedOnline)return;startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url))); }

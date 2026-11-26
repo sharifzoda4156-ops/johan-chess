@@ -66,7 +66,9 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
   try{
    const r=remaining(s.clock,performance.now())[s.game.turn()];
    const budget=r===null?1000:Math.max(10,Math.min(1000,r-50));
-   const best=await s.engine.choose(s.startFen,s.game.history({verbose:true}).map(m=>m.from+m.to+(m.promotion||'')),budget);
+   const began=performance.now();const best=await s.engine.choose(s.startFen,s.game.history({verbose:true}).map(m=>m.from+m.to+(m.promotion||'')),budget);
+   const wait=Math.max(0,450-(performance.now()-began));
+   if(wait&& (r===null||r>700))await new Promise(resolve=>setTimeout(resolve,wait));
    if(session!==s||id!==serial)return;
    s.thinking=false;
    if(!move(parseUci(best))&&session===s)throw Error('Stockfish вернул нелегальный ход.');

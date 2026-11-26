@@ -129,7 +129,7 @@ function refreshProfile(){
  $('profileName').textContent=name;$('profileAvatar').textContent=Array.from(name.trim())[0]?.toUpperCase()||'♟';
  $('profileNick').textContent=user?'Chess.com · '+user:'';
  $('profileConnection').textContent=accountStatus?.connected?(accountStatus.sharing?'ChatGPT подключён':'ChatGPT · требуется разрешение плана'):'ChatGPT не подключён';
- $('profileConnect').textContent=accountStatus?.connected?'Настройки ChatGPT':'Подключить ChatGPT';
+ $('profileChatLink').textContent=accountStatus?.connected?(accountStatus.sharing?'Подключён':'Нужно разрешение'):'Подключить';
  $('profileConnect').hidden=!globalThis.JohanNative;
  if(!globalThis.JohanNative)$('profileConnection').textContent='ChatGPT доступен в Android';
  $('profilePlayed').textContent=String(s.played);$('profileReviewed').textContent=String(s.reviewed);
@@ -141,7 +141,7 @@ function refreshProfile(){
 document.addEventListener('jc-screen',e=>{if(['home','profile'].includes(e.detail))refreshProfile();});
 document.addEventListener('jc-puzzle-progress',refreshProfile);
 document.addEventListener('jc-account',e=>{accountStatus=e.detail;refreshProfile();});
-$('profileConnect').onclick=()=>{navigation.show('coach');const settings=document.querySelector('.coach-settings');if(settings)settings.open=true;};
+$('profileConnect').onclick=()=>{if(onlineLocked)return;navigation.show('account');if(!accountStatus?.connected&&!coachBusy())$('aiLogin').click();};
 refreshProfile();
 const puzzleUI=initPuzzles(()=>$('user').value.trim());
 initCoach(coachContext,{Engine,enginePath,onlineLocked:()=>onlineLocked,canAnalyze:()=>!onlineLocked&&!busy&&!importing&&!training?.active()});
@@ -161,12 +161,12 @@ initGameShare({Chess,canUse:()=>!onlineLocked&&!busy&&!importing&&!training?.act
 initStudyLibrary({
  openGame:(pgn,row)=>{if(busy||importing||training?.active()){$('studyLibraryStatus').textContent='Дождись завершения текущей игры или анализа.';return;}navigation.show('review');if(load(pgn,row))$('review').scrollIntoView({behavior:scrollBehavior()});},
  practiceEndgame:theme=>{puzzleUI.selectTheme(theme);navigation.show('puzzles');},
- askOpening:row=>{navigation.show('coach');if(!globalThis.JohanNative)return;$('aiShare').checked=false;$('aiQuestion').value='Объясни идеи и типичные планы дебютной линии Lichess '+row.eco+' '+row.name+': '+row.pgn+'. Не придумывай дополнительные проверенные варианты.';$('aiQuestion').focus();},
+ askOpening:row=>{navigation.show('coach');if(!globalThis.JohanNative)return;$('aiQuestion').value='Объясни идеи и типичные планы дебютной линии Lichess '+row.eco+' '+row.name+': '+row.pgn+'. Не придумывай дополнительные проверенные варианты.';$('aiQuestion').focus();},
  playOpening:(fen,color)=>{if(!busy&&!importing&&!training?.active())training.startReplay(fen,color);else $('studyLibraryStatus').textContent='Дождись окончания текущей работы.';}
 });
 $('askReview').onclick=()=>{
  if(onlineLocked||!game||training.active()||!results.length||!globalThis.JohanNative)return;
- navigation.show('coach');$('aiShare').checked=true;
+ navigation.show('coach');
  $('aiQuestion').value=historical?'Разбери историческую партию '+historical.title+'. Объясни ключевые идеи, сильные ходы и критические ошибки обеих сторон по анализу Stockfish. Покажи мини-доски и выводы для моей игры.':'Разбери мою партию по данным Stockfish. Выдели главные ошибки, объясни их причины и предложи конкретную тренировку. Задай мне вопрос о том, что я рассчитывал в критической позиции.';
  $('aiPanel').scrollIntoView({behavior:scrollBehavior()});$('aiQuestion').focus();
 };

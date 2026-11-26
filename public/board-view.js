@@ -5,6 +5,8 @@ const boards=new WeakMap();
 const key=p=>p?p.color+p.type.toUpperCase():'';
 export const reducedMotion=()=>globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches===true;
 export const scrollBehavior=()=>reducedMotion()?'auto':'smooth';
+export function moveDuration(from,to){const d=Math.hypot(from.charCodeAt(0)-to.charCodeAt(0),Number(from[1])-Number(to[1]));return Math.round(Math.min(320,210+18*d));}
+export const replyDelay=()=>reducedMotion()?0:360;
 export function squareOrder(flip=false){
  const order=Array.from({length:8},(_,i)=>flip?7-i:i);
  return order.flatMap((r,ri)=>order.map((f,fi)=>({r,f,ri,fi,sq:'abcdefgh'[f]+(8-r)})));
@@ -94,7 +96,7 @@ export function renderBoardView(board,{rows,flip=false,interactive=false,disable
    if(!img?.animate)continue;
    const a=order.find(x=>x.sq===m.from),b=order.find(x=>x.sq===m.to);
    const x=(a.fi-b.fi)*size,y=(a.ri-b.ri)*size;
-   const animation=img.animate([{transform:'translate('+x+'px,'+y+'px)',zIndex:4},{transform:'translate(0,0)',zIndex:4}],{duration:135,easing:'cubic-bezier(.2,.75,.25,1)'});
+   const animation=img.animate([{transform:'translate('+x+'px,'+y+'px)',zIndex:4},{transform:'translate(0,0)',zIndex:4}],{duration:moveDuration(m.from,m.to),easing:'cubic-bezier(.25,.65,.35,1)'});
    state.animations.push(animation);
   }
  }

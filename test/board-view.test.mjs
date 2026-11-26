@@ -47,3 +47,6 @@ test('selection retains cells and piece nodes; moves only update changed squares
   clearBoardView(board);assert.equal(board.children.length,0);
  }finally{if(old===undefined)delete globalThis.document;else globalThis.document=old;}
 });
+
+import {moveDuration} from '../public/board-view.js';
+test('move motion has a natural bounded duration',()=>{assert.ok(moveDuration('e2','e4')>=240);assert.ok(moveDuration('a1','h8')<=320);assert.ok(moveDuration('a1','h8')>moveDuration('a1','a2'));});

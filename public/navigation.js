@@ -1,5 +1,5 @@
-export function normalizeScreen(requested,playing){return playing?'play':['home','puzzles','play','review','coach','profile','library','online'].includes(requested)?requested:'home';}
-export function parentTab(screen){return ['play','review','online'].includes(screen)?'home':screen==='library'?'coach':screen;}
+export function normalizeScreen(requested,playing){return playing?'play':['home','puzzles','play','review','coach','profile','library','online','account'].includes(requested)?requested:'home';}
+export function parentTab(screen){return ['play','review','online'].includes(screen)?'home':screen==='library'?'coach':screen==='account'?'profile':screen;}
 export function initNavigation(){
  let playing=false,online=false,screen='home';
  const buttons=[...document.querySelectorAll('[data-tab]')],links=[...document.querySelectorAll('[data-go]')],screens=[...document.querySelectorAll('[data-screen]')];

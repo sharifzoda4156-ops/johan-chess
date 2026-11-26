@@ -125,7 +125,7 @@ final class Coach {
     }
     void cancelLogin(){ServerSocket s=listener;if(s!=null)try{s.close();}catch(Exception ignored){}}
     private static void browserReply(Socket s,boolean ok)throws Exception{
-        byte[] b=(ok?"Login received. Return to Johan Chess.":"Invalid login callback.").getBytes(StandardCharsets.UTF_8);
+        byte[] b=(ok?"Код получен. Вернись в Johan Chess, чтобы завершить вход.":"Недействительный callback.").getBytes(StandardCharsets.UTF_8);
         OutputStream out=s.getOutputStream();
         out.write(("HTTP/1.1 "+(ok?"200 OK":"400 Bad Request")+"\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: "+b.length+"\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));out.write(b);out.flush();
     }
@@ -148,28 +148,30 @@ final class Coach {
             else if(!old.optString("id_token").isEmpty())u.appendQueryParameter("id_token_hint",old.optString("id_token"));
             else if(!old.optString("email").isEmpty())u.appendQueryParameter("login_hint",old.optString("email"));
             if(consent&&!saved.isEmpty()&&!scope(old))u.appendQueryParameter("prompt","consent");
-            activity.openBrowser(u.build().toString());
+            activity.openOAuthBrowser(u.build().toString());
             Uri callback=null;
             while(System.currentTimeMillis()<deadline){
                 server.setSoTimeout((int)Math.max(1,deadline-System.currentTimeMillis()));
                 try(Socket s=server.accept()){
                     s.setSoTimeout(2500);InputStream in=s.getInputStream();String request=line(in,8192);String[] parts=request.split(" ");
                     if(parts.length!=3||!"GET".equals(parts[0])||!parts[1].startsWith("/auth/callback?")){browserReply(s,false);continue;}
+                    // Drain bounded request headers before replying to avoid resetting the browser connection.
+                    for(int h=0;h<64;h++){String header=line(in,8192);if(header.isEmpty())break;}
                     Uri candidate=Uri.parse("http://127.0.0.1"+parts[1]);
                     if(!state.equals(candidate.getQueryParameter("state"))){browserReply(s,false);continue;}
                     callback=candidate;browserReply(s,true);break;
                 }catch(SocketTimeoutException e){if(System.currentTimeMillis()>=deadline)break;}
             }
             if(callback==null)throw new IOException("Время входа истекло");
-            if(callback.getQueryParameter("error")!=null)throw new IOException("Вход отменён");
+            if(callback.getQueryParameter("error")!=null){String error=callback.getQueryParameter("error");throw new IOException("access_denied".equals(error)?"Разрешение OpenAI отклонено. Повтори вход, если хочешь подключить план.":"OpenAI отклонил вход ("+(error.matches("[a-zA-Z0-9_.-]{1,100}")?error:"oauth_error")+")");}
             String code=callback.getQueryParameter("code"),returned=callback.getQueryParameter("client_id");
             String issued=saved.isEmpty()?returned:saved;
             if(code==null||code.isEmpty()||issued==null||!issued.matches("oaiapp_[A-Za-z0-9_-]+")||returned!=null&&!returned.equals(issued))throw new IOException("Некорректная регистрация");
-            JSONObject t=token("grant_type","authorization_code","client_id",issued,"code",code,"code_verifier",verifier,"redirect_uri",redirect,"resource",API);
-            JWTClaimsSet identity=verify(t.getString("id_token"),issued,nonce);
+            JSONObject t;try{t=token("grant_type","authorization_code","client_id",issued,"code",code,"code_verifier",verifier,"redirect_uri",redirect,"resource",API);}catch(Exception e){throw new IOException("Обмен кода OpenAI: "+e.getMessage(),e);}
+            JWTClaimsSet identity;try{identity=verify(t.getString("id_token"),issued,nonce);}catch(Exception e){throw new IOException("Проверка аккаунта OpenAI: "+e.getMessage(),e);}
             if(old.has("sub")&&!old.getString("sub").equals(identity.getSubject()))throw new IOException("Выбрана другая учётная запись");
             save(credentials(t,issued,identity,new JSONObject()));models.clear();return status();
-        }finally{listener=null;}
+        }catch(SocketException e){if(listener!=null&&listener.isClosed())throw new IOException("Вход отменён");throw e;}finally{listener=null;}
     }
     private String bearer()throws Exception{
         if(!scope(profile)||profile.optString("access_token").isEmpty())throw new IOException("Подключи использование подписки ChatGPT");
