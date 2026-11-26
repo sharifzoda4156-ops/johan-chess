@@ -37,6 +37,7 @@ globalThis.JohanHandleBack=()=>{
  const puzzlesScreen=document.querySelector('[data-screen="puzzles"]');
  if(puzzlesScreen&&!puzzlesScreen.hidden&&$('puzzleReview')&&!$('puzzleReview').hidden){$('reviewPuzzleClose')?.click();return true;}
  if(document.body.classList.contains('puzzle-focus')){$('journeyBack')?.click();return true;}
+ if(training?.handleBack?.())return true;
  const cur=navigation.current();
  if(cur==='account'){navigation.show('profile');return true;}
  if(cur==='library'&&globalThis.JohanNative){navigation.show('coach');return true;}
@@ -254,7 +255,9 @@ training=initTraining({
  getUser:()=>$('user').value.trim(),
  lock:()=>{navigation.setPlaying(true);$('importPanel').hidden=true;$('review').hidden=true;$('aiPanel').hidden=true;},
  unlock:()=>{navigation.setPlaying(false);$('importPanel').hidden=false;$('review').hidden=!game;$('aiPanel').hidden=!globalThis.JohanNative;},
- review:(text,auto,user)=>{navigation.show('review');if(user)$('user').value=user;if(pgn!==text||!game){if(!load(text))return;}openReviewBoard(true);if(auto&&results.length!==moves.length)$('analyze').click();}
+ review:(text,auto,user)=>{navigation.show('review');if(user)$('user').value=user;if(pgn!==text||!game){if(!load(text))return;}openReviewBoard(true);if(auto&&results.length!==moves.length)$('analyze').click();},
+ goHome:()=>navigation.show('home'),
+ goOnline:({friend}={})=>{navigation.show('online');if(friend&&$('onlineFriendNick')&&!$('onlineSocial').hidden){$('onlineFriendNick').scrollIntoView({behavior:scrollBehavior(),block:'center'});$('onlineFriendNick').focus();}}
 });
 initOnline({
  canStart:()=>!onlineLocked&&!busy&&!importing&&!training?.active()&&!coachBusy(),
