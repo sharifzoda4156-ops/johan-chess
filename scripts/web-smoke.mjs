@@ -10,7 +10,7 @@ async function boardBox(page,selector){
  return b;
 }
 function stable(a,b){for(const k of ['x','y','width','height'])assert.ok(Math.abs(a[k]-b[k])<=1,'Board moved: '+k+' '+a[k]+' → '+b[k]);}
-const pgn='[White "Test"]\n[Black "Opponent"]\n[Result "1-0"]\n\n1. e4 e5 2. Nf3 Nc6 1-0';
+const pgn='[White "Test"]\n[Black "Opponent"]\n[Result "1-0"]\n\n1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0';
 try{
  for(const viewport of [{width:390,height:844},{width:1280,height:800},{width:844,height:390}]){
   const page=await browser.newPage({viewport});
@@ -30,20 +30,33 @@ try{
   await page.waitForFunction(()=>document.querySelector('#homePlayed').textContent!=='—');
   assert.equal(await page.locator('html').getAttribute('data-hosting'),'pages');
   assert.ok(await page.evaluate(()=>[...document.querySelectorAll('img.brand-logo')].every(img=>img.complete&&img.naturalWidth>0)),'Brand logo SVG loaded');
+
+  // Online Lichess screen must be enabled on Web (not Android-only stub)
+  await page.locator('[data-go="online"]').first().click();
+  assert.equal(await page.locator('#onlineLogin').isDisabled(),false,'Web Lichess login button must be enabled');
+  assert.equal((await page.locator('#onlineStatus').textContent()).includes('Android-сборка'),false,'Web Online must not show Android-only stub');
   await page.locator('[data-tab="profile"]').click();
   await page.locator('#profileAwards .profile-award').first().waitFor();
   assert.ok(await page.evaluate(()=>[...document.querySelectorAll('#profileAwards img')].every(img=>img.complete&&img.naturalWidth>0)),'Award SVGs loaded');
+  assert.equal(await page.locator('#soundEnabled').isChecked(),true,'Sound enabled by default');
+
+  // Puzzles: Classic focus board fits viewport cleanly across mobile, desktop, and landscape
   await page.locator('[data-tab="puzzles"]').click();
   await page.locator('#modeClassic').click();
   await page.locator('#classicStart').click();
   await page.locator('#puzzleBoard [data-square]').first().waitFor({timeout:30000});
   assert.equal(await page.locator('#puzzleBoard [data-square]').count(),64);
+  await boardBox(page,'#puzzleBoard');
   await page.locator('#journeyBack').click();
+
+  // Web Study tab routes directly to Library
   await page.locator('[data-tab="coach"]').click();
   await page.waitForFunction(()=>Number(document.querySelector('#studyOpeningCount').textContent)>0);
   assert.equal(await page.locator('#studyBoard [data-square]').count(),64);
   await page.locator('#studyNext').click();
   assert.equal(await page.locator('#studyOpeningAsk').isVisible(),false);
+
+  // Review: unified Lichess URL & PGN import, keyboard nav, check highlight & material
   await page.locator('[data-tab="home"]').click();
   await page.locator('[data-go="review"]').first().click();
   await page.locator('#pgn').fill('https://lichess.org/Ab12Cd34abcd');
@@ -55,16 +68,22 @@ try{
   assert.equal(lichessCalls,2);
   if(viewport.width<900)await page.locator('#reviewCloseBoard').click();
   else{assert.ok(await page.locator('#review .report').isVisible(),'Desktop review shows report side by side');await page.evaluate(()=>{const d=document.getElementById('importSource');if(d)d.open=true;});}
-  await page.locator('#pgn').fill('[Result "1-0"]\n\n1. e4 e5 2. Nf3 Nc6 1-0');
+  await page.locator('#pgn').fill(pgn);
   await page.locator('#load').click();
   await page.locator('#board [data-square="e2"]').waitFor();
   assert.equal(await page.locator('#board [data-square]').count(),64);
   const reviewBox=await boardBox(page,'#board');
+  await page.keyboard.press('End');
+  await page.waitForFunction(()=>document.querySelector('#board [data-square="e8"]')?.classList.contains('in-check'));
+  assert.ok((await page.locator('#reviewBottomMat').textContent()).includes('+1'),'Material strip shows +1 pawn');
+  await page.keyboard.press('Home');
   await page.locator('#next').click();
   stable(reviewBox,await boardBox(page,'#board'));
   await page.locator('#flip').click();
   stable(reviewBox,await boardBox(page,'#board'));
   if(viewport.width<900)await page.locator('#reviewCloseBoard').click();
+
+  // Play vs Stockfish: Drag & Drop e2->e4 + bot reply + custom confirm dialog cancel
   await page.locator('[data-tab="home"]').click();
   await page.locator('[data-go="play"]').first().click();
   await page.locator('#playTime').selectOption('free');
@@ -74,8 +93,12 @@ try{
   assert.equal(await page.locator('#playBoard [data-square]').count(),64);
   await page.waitForFunction(()=>document.querySelector('#playStatus').textContent.startsWith('Твой ход'),{},{timeout:30000});
   const playBox=await boardBox(page,'#playBoard');
-  await page.locator('#playBoard [data-square="e2"]').click();
-  await page.locator('#playBoard [data-square="e4"]').click();
+  const e2=await page.locator('#playBoard [data-square="e2"]').boundingBox();
+  const e4=await page.locator('#playBoard [data-square="e4"]').boundingBox();
+  await page.mouse.move(e2.x+e2.width/2,e2.y+e2.height/2);
+  await page.mouse.down();
+  await page.mouse.move(e4.x+e4.width/2,e4.y+e4.height/2,{steps:6});
+  await page.mouse.up();
   await page.waitForFunction(()=>document.querySelector('#playBoard [data-square="e4"]')?.getAttribute('aria-label')==='e4 wp');
   await page.waitForFunction(()=>document.querySelector('#playMoves').textContent.trim().split(/\s+/).length>=3 && document.querySelector('#playStatus').textContent.startsWith('Твой ход'),{},{timeout:30000});
   stable(playBox,await boardBox(page,'#playBoard'));
