@@ -1,26 +1,27 @@
+import {initTraining} from './training.js';
 import {initCoach,rememberGame} from './android-coach.js';
 import {Chess} from './chess.js';
 import {Engine} from './engine.js';
 import {enginePath} from './engine-path.js';
 import {evaluateMove,displayScore,scoreValue} from './metrics.js';
 const $=id=>document.getElementById(id), status=t=>$('status').textContent=t;
-let game=null, moves=[], positions=[], results=[], cursor=0, flipped=false, engine=null, busy=false, runId=0, imported=[], startFen='', pgn='';
+let training=null,importing=false,analysisDepth=null,game=null, moves=[], positions=[], results=[], cursor=0, flipped=false, engine=null, busy=false, runId=0, imported=[], startFen='', pgn='';
 const pieces={p:'♟︎',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'};
 const player=c=>game?.getHeaders()[c==='w'?'White':'Black']|| (c==='w'?'Белые':'Чёрные');
 const own=()=>player('b').toLowerCase()===$('user').value.trim().toLowerCase()?'b':'w';
 const uci=m=>m.from+m.to+(m.promotion||'');
 function load(text){
- if(busy)return;
+ if(busy||training?.active())return false;
  try{const c=new Chess();c.loadPgn(text);const h=c.history({verbose:true});if(!h.length)throw Error('В PGN нет ходов. Экспортируй полную партию.');
- game=c;moves=h;startFen=h[0].before;positions=[startFen,...h.map(m=>m.after)];pgn=text;results=[];cursor=0;flipped=own()==='b';$('review').hidden=false;$('analyze').disabled=false;$('export').disabled=true;$('progress').hidden=true;render();status('Партия загружена: '+h.length+' полуходов.');
- }catch(e){status('Не удалось прочитать PGN: '+e.message);}
+ game=c;moves=h;startFen=h[0].before;positions=[startFen,...h.map(m=>m.after)];pgn=text;results=[];analysisDepth=null;cursor=0;flipped=own()==='b';$('review').hidden=false;$('analyze').disabled=false;$('export').disabled=true;$('progress').hidden=true;render();status('Партия загружена: '+h.length+' полуходов.');return true;
+ }catch(e){status('Не удалось прочитать PGN: '+e.message);return false;}
 }
 $('load').onclick=()=>load($('pgn').value);
-$('fetch').onclick=async()=>{if(busy)return;const b=$('fetch');b.disabled=true;status('Загружаю завершённые партии…');try{const r=await fetch('/api/games?user='+encodeURIComponent($('user').value.trim()));const data=await r.json();if(!r.ok)throw Error(data.error);imported=data.games||[];if(!imported.length)throw Error('Партии не найдены');const select=$('games');select.replaceChildren();imported.forEach((g,i)=>{const o=document.createElement('option');o.value=i;o.textContent=`${g.white} — ${g.black} · ${g.timeClass||''} · ${new Date(g.ended*1000).toLocaleDateString('ru')}`;select.append(o);});select.hidden=false;load(imported[0].pgn);}catch(e){status(e.message);$('manual').open=true;}finally{b.disabled=busy;}};
+$('fetch').onclick=async()=>{if(busy||importing||training?.active())return;importing=true;const b=$('fetch');b.disabled=true;status('Загружаю завершённые партии…');try{const r=await fetch('/api/games?user='+encodeURIComponent($('user').value.trim()));const data=await r.json();if(!r.ok)throw Error(data.error);imported=data.games||[];if(!imported.length)throw Error('Партии не найдены');const select=$('games');select.replaceChildren();imported.forEach((g,i)=>{const o=document.createElement('option');o.value=i;o.textContent=`${g.white} — ${g.black} · ${g.timeClass||''} · ${new Date(g.ended*1000).toLocaleDateString('ru')}`;select.append(o);});select.hidden=false;load(imported[0].pgn);}catch(e){status(e.message);$('manual').open=true;}finally{importing=false;b.disabled=busy||!!training?.active();}};
 $('games').onchange=()=>{const g=imported[Number($('games').value)];if(g)load(g.pgn);};
 function setBusy(v){busy=v;for(const id of ['fetch','load','games','user','depth'])$(id).disabled=v;$('analyze').disabled=v||!game;$('stop').hidden=!v;}
 $('analyze').onclick=async()=>{
- if(busy||!game)return;const id=++runId,depth=Number($('depth').value);setBusy(true);results=[];render();$('export').disabled=true;const progress=$('progress');progress.hidden=false;progress.max=moves.length;progress.value=0;let local;
+ if(busy||!game||training?.active()||importing)return;const id=++runId,depth=Number($('depth').value);analysisDepth=depth;setBusy(true);results=[];render();$('export').disabled=true;const progress=$('progress');progress.hidden=false;progress.max=moves.length;progress.value=0;let local;
  try{status('Запускаю Stockfish…');local=new Engine(enginePath);engine=local;await local.init();const prefix=[];
  for(let i=0;i<moves.length;i++){if(id!==runId)return;const m=moves[i],actualMove=uci(m);status(`Анализ ${i+1} / ${moves.length} · ${m.san}`);const best=await local.search(startFen,prefix,depth);const isBest=best.best===actualMove;const played=isBest?best:await local.search(startFen,prefix,depth,actualMove);if(id!==runId)return;
  const metrics=evaluateMove(best.score,played.score,isBest);const c=new Chess(m.before);let bestSan=best.best;try{bestSan=c.move({from:best.best.slice(0,2),to:best.best.slice(2,4),...(best.best.length>4?{promotion:best.best[4]}:{})}).san;}catch{};
@@ -44,17 +45,30 @@ function renderCoach(){const el=$('coach');el.replaceChildren();const r=results[
 }
 function renderReport(){const sum=$('summary');sum.replaceChildren();const scores=elem('div',undefined,'scores');for(const c of ['w','b']){const rs=results.filter(r=>r.color===c),box=elem('div',undefined,'score');box.append(elem('span',player(c)),elem('strong',rs.length?(rs.reduce((a,r)=>a+r.accuracy,0)/rs.length).toFixed(1)+'%':'—'),elem('span','Точность JC · '+rs.length+' ходов'));scores.append(box);}sum.append(scores);if(results.length){const stats=elem('div',undefined,'muted');stats.textContent=['Лучший','Отличный','Хороший','Неточность','Ошибка','Грубая ошибка'].map(l=>l+': '+results.filter(r=>r.color===own()&&r.label===l).length).join(' · ');sum.append(stats);}
  const list=$('moves');const old=list.scrollTop;list.replaceChildren();moves.forEach((m,i)=>{const r=results[i];const b=elem('button',undefined,'move'+(cursor===i+1?' active':''));b.append(elem('span',label(i)),elem('span',r?.label||'—',r?.loss>=20?'blunder':r?.loss>=5?'bad':r?.label==='Лучший'?'best':'neutral'),elem('span',r?displayScore(r.playedScore):'—'));b.onclick=()=>go(i+1);list.append(b);});list.scrollTop=old;chart();
- const t=$('training');t.replaceChildren();const errors=results.filter(r=>r.color===own()&&r.loss>=5).sort((a,b)=>b.loss-a.loss).slice(0,5);if(!errors.length)t.textContent=results.length?'Пока существенных ошибок по нашей шкале нет.':'После анализа здесь появятся самые важные ошибки.';else for(const r of errors){const d=elem('div',undefined,'training-row');d.append(elem('div',label(r.index)+' · '+r.label+' · потеря '+r.loss.toFixed(1)+' п.п. шанса на победу (модель)'));const b=elem('button','Открыть позицию до ошибки');b.onclick=()=>{go(r.index);$('board').scrollIntoView({behavior:'smooth',block:'center'});};d.append(b);t.append(d);}
+ $('askReview').hidden=!globalThis.JohanNative;$('askReview').disabled=!results.length;const t=$('training');t.replaceChildren();const errors=results.filter(r=>r.color===own()&&r.loss>=5).sort((a,b)=>b.loss-a.loss).slice(0,5);if(!errors.length)t.textContent=results.length?'Пока существенных ошибок по нашей шкале нет.':'После анализа здесь появятся самые важные ошибки.';else for(const r of errors){const d=elem('div',undefined,'training-row');d.append(elem('div',label(r.index)+' · '+r.label+' · потеря '+r.loss.toFixed(1)+' п.п. шанса на победу (модель)'));const b=elem('button','Открыть позицию до ошибки');b.onclick=()=>{go(r.index);$('board').scrollIntoView({behavior:'smooth',block:'center'});};d.append(b);const replay=elem('button','Переиграть со Stockfish');replay.onclick=()=>{if(!busy&&!importing&&!training?.active())training.startReplay(positions[r.index],r.color);};replay.disabled=busy;d.append(replay);t.append(d);}
 }
 function chart(){const canvas=$('chart'),ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;ctx.clearRect(0,0,w,h);ctx.strokeStyle='#68727b';ctx.beginPath();ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();if(!results.length)return;const y=s=>h/2-Math.max(-1,Math.min(1,s/600))*(h/2-8);const x=i=>i/Math.max(1,moves.length)*(w-12)+6;const vals=[scoreValue(results[0].bestScore)*(results[0].color==='w'?1:-1),...results.map(r=>scoreValue(r.playedScore)*(r.color==='w'?1:-1))];ctx.strokeStyle='#a8d77c';ctx.lineWidth=3;ctx.beginPath();vals.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.stroke();ctx.strokeStyle='#e6e7e7';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x(cursor),0);ctx.lineTo(x(cursor),h);ctx.stroke();}
 $('chart').onclick=e=>{const r=$('chart').getBoundingClientRect();go(Math.round((e.clientX-r.left)/r.width*moves.length));};
-$('export').onclick=()=>{const blob=new Blob([JSON.stringify({version:'0.1.0',pgn,user:$('user').value,depth:Number($('depth').value),complete:results.length===moves.length,results},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='johan-chess-review.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+$('export').onclick=()=>{const blob=new Blob([JSON.stringify({version:'0.1.0',pgn,user:$('user').value,depth:analysisDepth??Number($('depth').value),complete:results.length===moves.length,results},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='johan-chess-review.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 
 function coachContext(){
  const user=$('user').value.trim();
- if(!game)return {user,game:null};
+ if(!game||training?.active())return {user,game:null};
  const h=game.getHeaders();
  const color=h.White?.toLowerCase()===user.toLowerCase()?'w':h.Black?.toLowerCase()===user.toLowerCase()?'b':null;
- return {user,game:{white:player('w'),black:player('b'),date:h.Date||'',result:h.Result||'*',color,startFen,position:positions[cursor],cursor,moves:moves.map(m=>m.san),depth:Number($('depth').value),complete:results.length===moves.length,analysis:results}};
+ return {user,game:{source:h.Site==='Johan Chess'?'training':'import',termination:h.Termination||'',timeControl:h.TimeControl||'',white:player('w'),black:player('b'),date:h.Date||'',result:h.Result||'*',color,startFen,position:positions[cursor],cursor,moves:moves.map(m=>m.san),depth:Number($('depth').value),complete:results.length===moves.length,analysis:results}};
 }
 initCoach(coachContext);
+training=initTraining({
+ canStart:()=>!busy&&!importing,
+ getUser:()=>$('user').value.trim(),
+ lock:()=>{$('importPanel').hidden=true;$('review').hidden=true;$('aiPanel').hidden=true;},
+ unlock:()=>{$('importPanel').hidden=false;$('review').hidden=!game;$('aiPanel').hidden=!globalThis.JohanNative;},
+ review:(text,auto)=>{if(!load(text))return;$('review').scrollIntoView({behavior:'smooth'});if(auto)$('analyze').click();}
+});
+$('askReview').onclick=()=>{
+ if(!game||training.active()||!results.length||!globalThis.JohanNative)return;
+ $('aiShare').checked=true;
+ $('aiQuestion').value='Разбери мою партию по данным Stockfish. Выдели главные ошибки, объясни их причины и предложи конкретную тренировку. Задай мне вопрос о том, что я рассчитывал в критической позиции.';
+ $('aiPanel').scrollIntoView({behavior:'smooth'});$('aiQuestion').focus();
+};
