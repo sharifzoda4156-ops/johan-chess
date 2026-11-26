@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'public/**'
+      - 'android/**'
       - 'lib/**'
       - 'scripts/**'
       - 'test/**'
@@ -29,3 +30,8 @@ jobs:
       - name: Check JavaScript syntax
         run: find public lib scripts test -type f \( -name '*.js' -o -name '*.mjs' \) -print0 | xargs -0 -n1 node --check
       - run: npm test
+      - name: Test native absence state machine
+        run: |
+          mkdir -p /tmp/jc-guard
+          javac -d /tmp/jc-guard android/app/src/main/java/com/johansystems/chess/OnlineAbsence.java test/native/OnlineAbsenceTest.java
+          java -cp /tmp/jc-guard com.johansystems.chess.OnlineAbsenceTest

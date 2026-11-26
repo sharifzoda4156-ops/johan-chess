@@ -2,6 +2,7 @@ package com.johansystems.chess;
 
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.os.SystemClock;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
@@ -22,6 +23,12 @@ final class Lichess {
     private final SharedPreferences prefs;
     private final SecretKey key;
     private final ExecutorService streams=Executors.newCachedThreadPool();
+    private final ScheduledExecutorService watchdog=Executors.newSingleThreadScheduledExecutor();
+    private final OnlineAbsence absence=new OnlineAbsence();
+    private final long wallOrigin=System.currentTimeMillis(),monoOrigin=SystemClock.elapsedRealtime();
+    private boolean foreground=false,resignAccepted=false,recoveryQueued=false;
+    private long nextRecovery=0;
+    private long now(){return wallOrigin+SystemClock.elapsedRealtime()-monoOrigin;}
     private volatile String token="",username="";
     private volatile boolean closed=false,needsSync=false;
     private volatile long rateUntil=0;
@@ -48,6 +55,9 @@ final class Lichess {
             token=p.getString("token");username=p.getString("username");
         }
         needsSync=prefs.getBoolean("onlineLock",false);
+        String saved=prefs.getString("activeGame","");
+        if(!token.isEmpty()&&saved.matches("[A-Za-z0-9]{8}")){gameId=saved;needsSync=true;absence.restore(saved,prefs.getLong("absenceDeadline",0),prefs.getBoolean("absenceExpired",false));}
+        watchdog.scheduleWithFixedDelay(()->{try{watchdogTick();}catch(Exception ignored){}},0,500,TimeUnit.MILLISECONDS);
     }
     private void save(String t,String u)throws Exception{
         Cipher c=Cipher.getInstance("AES/GCM/NoPadding");c.init(Cipher.ENCRYPT_MODE,key);
@@ -57,7 +67,45 @@ final class Lichess {
         token=t;username=u;
     }
     synchronized boolean locked(){return needsSync||waiting!=null||(!gameId.isEmpty()&&!terminal);}
-    private synchronized void persistLock(){prefs.edit().putBoolean("onlineLock",locked()).commit();}
+    private synchronized void persistLock(){
+        updateAbsence();
+        prefs.edit().putBoolean("onlineLock",locked()).putString("activeGame",absence.game()).putLong("absenceDeadline",absence.deadline()).putBoolean("absenceExpired",absence.expired()).commit();
+        activity.updateOnlineProtection();
+    }
+    private String liveId(){return terminal?"":gameId;}
+    private boolean healthy(){return foreground&&activity.onlineNetworkAvailable()&&game!=null&&game.ready&&full!=null&&!needsSync;}
+    private synchronized void updateAbsence(){
+        String old=absence.game();long deadline=absence.deadline();boolean due=absence.expired();
+        absence.update(liveId(),healthy(),now());
+        if(!old.equals(absence.game())){resignAccepted=false;nextRecovery=0;}
+        if(!old.equals(absence.game())||deadline!=absence.deadline()||due!=absence.expired()){
+            prefs.edit().putString("activeGame",absence.game()).putLong("absenceDeadline",absence.deadline()).putBoolean("absenceExpired",absence.expired()).commit();
+        }
+    }
+    synchronized void foreground(boolean value){foreground=value;updateAbsence();}
+    private void watchdogTick(){
+        synchronized(this){
+            if(closed)return;
+            updateAbsence();
+            if(liveId().isEmpty()||!activity.onlineNetworkAvailable()||recoveryQueued||now()<nextRecovery)return;
+            if(!absence.expired()&&(!foreground||(!needsSync&&game!=null&&game.ready&&full!=null)))return;
+            recoveryQueued=true;nextRecovery=now()+12000;
+        }
+        // Serialize recovery/resignation with normal Board API commands.
+        activity.queueOnlineRecovery(()->{
+            String target="";boolean resign=false;
+            try{
+                synchronized(this){if(closed)return;updateAbsence();target=liveId();if(target.isEmpty()||!activity.onlineNetworkAvailable())return;resign=absence.expired()&&!resignAccepted;}
+                if(resign){
+                    try{json("/api/board/game/"+id(target)+"/resign","POST","");
+                        synchronized(this){if(target.equals(liveId()))resignAccepted=true;}
+                    }catch(Exception e){synchronized(this){if(target.equals(liveId()))notice="Сдача ожидает связи или подтверждения Lichess";}}
+                }
+                refresh();
+            }catch(Exception ignored){}
+            finally{synchronized(this){recoveryQueued=false;nextRecovery=now()+12000;}}
+        });
+    }
     private static String b64(byte[] b){return Base64.encodeToString(b,Base64.URL_SAFE|Base64.NO_WRAP|Base64.NO_PADDING);}
     private static String random(){byte[] b=new byte[32];new SecureRandom().nextBytes(b);return b64(b);}
     private static String form(String... pairs)throws Exception{StringBuilder s=new StringBuilder();for(int i=0;i<pairs.length;i+=2){if(i>0)s.append('&');s.append(URLEncoder.encode(pairs[i],"UTF-8")).append('=').append(URLEncoder.encode(pairs[i+1],"UTF-8"));}return s.toString();}
@@ -197,7 +245,8 @@ final class Lichess {
         }
     }
     private synchronized JSONObject snapshot()throws Exception{
-        JSONObject out=new JSONObject().put("connected",!token.isEmpty()).put("username",username).put("account",account).put("locked",locked()).put("needsSync",needsSync).put("eventReady",events!=null&&events.ready).put("waiting",waiting!=null).put("gameId",gameId).put("terminal",terminal).put("notice",notice).put("incoming",incoming).put("ongoing",ongoing);
+        updateAbsence();
+        JSONObject out=new JSONObject().put("connected",!token.isEmpty()).put("username",username).put("account",account).put("locked",locked()).put("needsSync",needsSync).put("eventReady",events!=null&&events.ready).put("waiting",waiting!=null).put("gameId",gameId).put("terminal",terminal).put("notice",notice).put("incoming",incoming).put("ongoing",ongoing).put("absenceMs",absence.remaining(now())).put("forfeitPending",absence.expired()).put("onlineHealthy",healthy());
         if(full!=null)out.put("full",full);if(state!=null)out.put("state",state);
         return out;
     }
@@ -226,7 +275,7 @@ final class Lichess {
     }
     private JSONObject action(JSONObject r)throws Exception{
         String target=id(r.getString("gameId")),action=r.getString("action"),suffix;
-        synchronized(this){if(!target.equals(gameId)||terminal||needsSync||full==null||state==null||game==null||!game.ready)throw new IOException("Нет активной подключённой партии");}
+        synchronized(this){updateAbsence();if(!target.equals(gameId)||terminal||absence.expired()||!healthy()||full==null||state==null)throw new IOException("Нет активной подключённой партии");}
         if("move".equals(action)){String m=r.getString("move");if(!m.matches("[a-h][1-8][a-h][1-8][qrbn]?"))throw new IOException("Неверный ход");suffix="move/"+m;}
         else if(Arrays.asList("resign","abort","draw/yes","draw/no").contains(action))suffix=action;
         else throw new IOException("Неизвестное действие");
@@ -248,15 +297,15 @@ final class Lichess {
             case "decline":return json("/api/challenge/"+id(r.getString("challengeId"))+"/decline","POST","");
             case "gameAction":return action(r);
             case "friends":if(locked())throw new IOException("Сначала заверши игру");return new JSONObject().put("users",ndjson("/api/rel/following",200));
-            case "player":return json("/api/user/"+nick(r.getString("user")),"GET",null);
+            case "player":if(locked())throw new IOException("Профили недоступны во время игры");return json("/api/user/"+nick(r.getString("user")),"GET",null);
             case "follow":case "unfollow":if(locked())throw new IOException("Сначала заверши игру");return json("/api/rel/"+r.getString("op")+"/"+nick(r.getString("user")),"POST","");
             case "history":if(locked())throw new IOException("Сначала заверши игру");return new JSONObject().put("games",ndjson("/api/games/user/"+nick(username)+"?max=20&ongoing=false&moves=false&clocks=false&evals=false",20));
             case "pgn":if(locked())throw new IOException("Сначала заверши игру");return new JSONObject().put("pgn",request("/game/export/"+id(r.getString("gameId")),"GET",token,null,"application/x-chess-pgn",300000));
-            case "share":requireLogin();activity.shareLichess(HOST+"/@/"+nick(username));return new JSONObject().put("ok",true);
-            case "openGame":requireLogin();synchronized(this){if(gameId.isEmpty())throw new IOException("Нет партии");activity.openBrowser(HOST+"/"+id(gameId));}return new JSONObject().put("ok",true);
-            case "open":requireLogin();activity.openBrowser(HOST+"/@/"+nick(r.optString("user",username)));return new JSONObject().put("ok",true);
+            case "share":if(locked())throw new IOException("Профиль недоступен во время игры");requireLogin();activity.shareLichess(HOST+"/@/"+nick(username));return new JSONObject().put("ok",true);
+            case "openGame":throw new IOException("Выход из онлайн-партии заблокирован");
+            case "open":if(locked())throw new IOException("Профиль недоступен во время игры");requireLogin();activity.openBrowser(HOST+"/@/"+nick(r.optString("user",username)));return new JSONObject().put("ok",true);
             default:throw new IOException("Неизвестное действие Lichess");
         }
     }
-    void close(){closed=true;ServerSocket socket=loginSocket;if(socket!=null)try{socket.close();}catch(Exception ignored){}synchronized(this){persistLock();stopStreams();}streams.shutdownNow();}
+    void close(){foreground(false);closed=true;watchdog.shutdownNow();ServerSocket socket=loginSocket;if(socket!=null)try{socket.close();}catch(Exception ignored){}synchronized(this){persistLock();stopStreams();}streams.shutdownNow();}
 }

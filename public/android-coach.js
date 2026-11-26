@@ -134,6 +134,7 @@ export function initCoach(provider,options){
    result=await call('continueCoach',{turn:result.turn,outputs});
   }
   $('aiCacheStatus').textContent=reported?'Контекст: '+totalInput+' токенов · из кэша '+totalCached:'Статистика кэша не предоставлена';
+  if(toolOptions?.onlineLocked?.())throw Error('Тренер отключён во время онлайн-партии');
   const answer=typeof result.answer==='string'?result.answer.trim():'';if(!answer)throw Error('Пустой ответ');
   const pair=[{role:'user',content:question},{role:'assistant',content:answer,parts:snapshotBoards(answer,context.game)}];
   if(requestKey!==memoryKey(account,contextProvider().user)){const saved=loadMemory(localStorage,requestKey,Chess);const stored=saveMemory(localStorage,requestKey,{...saved,history:[...saved.history,...pair]},Chess);switchMemory();say(stored.saved?'Ответ сохранён в предыдущем профиле.':'Не удалось сохранить ответ предыдущего профиля.');return;}

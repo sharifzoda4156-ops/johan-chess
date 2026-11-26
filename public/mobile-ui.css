@@ -246,3 +246,5 @@ input[type=checkbox]{width:20px;height:20px;min-height:0;vertical-align:middle;a
 #onlineBoard{width:100%;max-width:520px;margin:auto;isolation:isolate}#onlineBoard button.square{min-height:0;padding:0;border-radius:0;border:0;aspect-ratio:1;position:relative;display:grid;place-items:center}#onlineBoard .square:disabled{opacity:1}
 body.is-online-playing .app-header,body.is-online-playing .bottom-nav,body.is-online-playing footer{display:none}body.is-online-playing .online-panel{padding:8px;border:0;background:transparent}body.is-online-playing #onlineAccount,body.is-online-playing #onlineLobby,body.is-online-playing #onlineSocial{display:none}
 @media(orientation:landscape) and (max-height:550px){#onlineBoard{max-width:calc(100dvh - 24px)}}
+
+.online-absence{display:flex;align-items:center;gap:12px;padding:12px;margin:12px 0;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink)}.online-absence strong{font-size:26px;font-variant-numeric:tabular-nums;color:#f49c99;white-space:nowrap}.online-absence span{font-size:12px;line-height:1.4}
