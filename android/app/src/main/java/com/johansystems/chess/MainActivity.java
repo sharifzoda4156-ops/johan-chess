@@ -78,7 +78,7 @@ public final class MainActivity extends Activity {
                 if(!main||!ORIGIN.equals(origin.toString()))return;
                 String raw=msg.getData();
                 if(raw==null||raw.length()>350000)return;
-                try{JSONObject req=new JSONObject(raw);if("cancelLogin".equals(req.optString("op"))){if(coach!=null)coach.cancelLogin();reply.postMessage(new JSONObject().put("id",req.getString("id")).put("data",new JSONObject().put("ok",true)).toString());return;}}catch(Exception ignored){}
+                try{JSONObject req=new JSONObject(raw);if(Arrays.asList("cancelLogin","loginProgress").contains(req.optString("op"))){if(coach!=null&&"cancelLogin".equals(req.optString("op")))coach.cancelLogin();reply.postMessage(new JSONObject().put("id",req.getString("id")).put("data",new JSONObject().put("ok",true).put("stage",coach==null?"":coach.loginStage())).toString());return;}}catch(Exception ignored){}
                 executor.execute(()->{
                     JSONObject out=new JSONObject();
                     try {

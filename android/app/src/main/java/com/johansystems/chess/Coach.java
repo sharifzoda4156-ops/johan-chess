@@ -28,6 +28,9 @@ final class Coach {
     private JSONObject profile;
     private final Set<String> models=new HashSet<>();
     private volatile ServerSocket listener;
+    private volatile boolean cancelRequested=false;
+    private volatile String loginStage="";
+    String loginStage(){return loginStage;}
     Coach(MainActivity activity)throws Exception {
         this.activity=activity;
         prefs=activity.getSharedPreferences("coach",0);
@@ -123,7 +126,7 @@ final class Coach {
         if(access.isEmpty()||!"Bearer".equalsIgnoreCase(t.getString("token_type"))||lifetime<=0||lifetime>86400*365L||Arrays.asList(scope.split("\\s+")).contains(PLAN)&&refresh.isEmpty())throw new IOException("Неверный ответ авторизации");
         return new JSONObject().put("client_id",client).put("sub",identity.getSubject()).put("email",identity.getStringClaim("email")==null?old.optString("email"):identity.getStringClaim("email")).put("name",identity.getStringClaim("name")==null?old.optString("name"):identity.getStringClaim("name")).put("scope",scope).put("access_token",access).put("refresh_token",refresh).put("id_token",t.optString("id_token",old.optString("id_token"))).put("expires",System.currentTimeMillis()+lifetime*1000);
     }
-    void cancelLogin(){ServerSocket s=listener;if(s!=null)try{s.close();}catch(Exception ignored){}}
+    void cancelLogin(){cancelRequested=true;ServerSocket s=listener;if(s!=null)try{s.close();}catch(Exception ignored){}}
     private static void browserReply(Socket s,boolean ok)throws Exception{
         byte[] b=(ok?"Код получен. Вернись в Johan Chess, чтобы завершить вход.":"Недействительный callback.").getBytes(StandardCharsets.UTF_8);
         OutputStream out=s.getOutputStream();
@@ -134,7 +137,7 @@ final class Coach {
         return out.toString("UTF-8");
     }
     private JSONObject login(boolean consent)throws Exception{
-        clearTurn();
+        clearTurn();cancelRequested=false;loginStage="Подготавливаю защищённый вход…";
         JSONObject old=profile;String saved=old.optString("client_id"),client=saved.isEmpty()?"dynamic_agent_client":saved;
         String state=random(),nonce=random(),verifier=random();
         long deadline=System.currentTimeMillis()+300000;
@@ -148,7 +151,9 @@ final class Coach {
             else if(!old.optString("id_token").isEmpty())u.appendQueryParameter("id_token_hint",old.optString("id_token"));
             else if(!old.optString("email").isEmpty())u.appendQueryParameter("login_hint",old.optString("email"));
             if(consent&&!saved.isEmpty()&&!scope(old))u.appendQueryParameter("prompt","consent");
-            activity.openOAuthBrowser(u.build().toString());
+            if(cancelRequested)throw new IOException("Вход отменён");
+            loginStage="Открываю браузер…";activity.openOAuthBrowser(u.build().toString());
+            loginStage="Ожидаю возврата из браузера…";
             Uri callback=null;
             while(System.currentTimeMillis()<deadline){
                 server.setSoTimeout((int)Math.max(1,deadline-System.currentTimeMillis()));
@@ -167,11 +172,15 @@ final class Coach {
             String code=callback.getQueryParameter("code"),returned=callback.getQueryParameter("client_id");
             String issued=saved.isEmpty()?returned:saved;
             if(code==null||code.isEmpty()||issued==null||!issued.matches("oaiapp_[A-Za-z0-9_-]+")||returned!=null&&!returned.equals(issued))throw new IOException("Некорректная регистрация");
+            if(cancelRequested)throw new IOException("Вход отменён");
+            loginStage="Код получен. Обмениваю код OpenAI…";
             JSONObject t;try{t=token("grant_type","authorization_code","client_id",issued,"code",code,"code_verifier",verifier,"redirect_uri",redirect,"resource",API);}catch(Exception e){throw new IOException("Обмен кода OpenAI: "+e.getMessage(),e);}
+            loginStage="Проверяю подпись и аккаунт…";
             JWTClaimsSet identity;try{identity=verify(t.getString("id_token"),issued,nonce);}catch(Exception e){throw new IOException("Проверка аккаунта OpenAI: "+e.getMessage(),e);}
             if(old.has("sub")&&!old.getString("sub").equals(identity.getSubject()))throw new IOException("Выбрана другая учётная запись");
-            save(credentials(t,issued,identity,new JSONObject()));models.clear();return status();
-        }catch(SocketException e){if(listener!=null&&listener.isClosed())throw new IOException("Вход отменён");throw e;}finally{listener=null;}
+            if(cancelRequested)throw new IOException("Вход отменён");
+            loginStage="Сохраняю подключение…";save(credentials(t,issued,identity,new JSONObject()));models.clear();return status();
+        }catch(SocketException e){if(cancelRequested)throw new IOException("Вход отменён");throw e;}finally{listener=null;loginStage="";}
     }
     private String bearer()throws Exception{
         if(!scope(profile)||profile.optString("access_token").isEmpty())throw new IOException("Подключи использование подписки ChatGPT");

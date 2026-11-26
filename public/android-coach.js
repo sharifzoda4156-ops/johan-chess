@@ -6,7 +6,7 @@ import {snapshotBoards,renderCoachContent} from './coach-board.js';
 const $=id=>document.getElementById(id);
 const native=globalThis.JohanNative;
 const pending=new Map();
-let seq=0, active=false,connected=false,loginPending=false, history=[], contextProvider=null,toolOptions=null,account='',scopeKey=null,visibleMessages=20,memory=normalizeMemory(null,Chess);
+let seq=0, active=false,connected=false,loginPending=false,loginVersion=0,pendingQuestion='', history=[], contextProvider=null,toolOptions=null,account='',scopeKey=null,visibleMessages=20,memory=normalizeMemory(null,Chess);
 if(native)native.onmessage=e=>{
  try{const m=JSON.parse(e.data), p=pending.get(m.id);if(!p)return;clearTimeout(p.timer);pending.delete(m.id);m.error?p.reject(Error(m.error)):p.resolve(m.data);}catch{}
 };
@@ -21,7 +21,7 @@ function call(op,fields={}){
 function say(text){$('aiStatus').textContent=text;}
 function sayAccount(text){$('aiAccountStatus').textContent=text;}
 function ready(){return active&&!!scopeKey&&$('aiModel').options.length>0;}
-function syncChat(){const ok=ready();$('aiSetup').hidden=ok;$('aiChat').hidden=!ok;$('aiSetupText').textContent=!connected?'Подключи ChatGPT в профиле.':!active?'Разреши использование подписки в настройках.':'Модели пока недоступны. Проверь подключение в настройках.';$('aiAsk').disabled=busy||!ok;$('aiEmpty').hidden=history.length>0;}
+function syncChat(){const ok=ready();$('aiSetup').hidden=ok;$('aiChat').hidden=!ok;$('aiSetupText').textContent=!connected?'Подключи ChatGPT в профиле.':!active?'Разреши использование подписки в настройках.':'Модели пока недоступны. Проверь подключение в настройках.';$('aiAsk').disabled=busy||!ok;$('aiEmpty').hidden=history.length>0||!!pendingQuestion;}
 function key(user){return 'jc-coach-games:'+String(user||'').toLowerCase().trim();}
 function getGames(user){try{return JSON.parse(localStorage.getItem(key(user))||'[]');}catch{return [];}}
 export function rememberGame(context){
@@ -41,7 +41,7 @@ function switchMemory(force=false){
  const next=memoryKey(account,contextProvider?.().user);
  if(next===scopeKey&&!force)return;
  $('aiCacheStatus').textContent='';scopeKey=next;memory=loadMemory(localStorage,scopeKey,Chess);history=memory.history;visibleMessages=20;
- $('aiQuestion').value='';updateStudyFields();showHistory();
+ $('aiQuestion').value='';pendingQuestion='';updateStudyFields();showHistory();
 }
 function persist(){
  if(!scopeKey)return false;
@@ -54,7 +54,8 @@ function showHistory(){
  const list=$('aiHistory');list.replaceChildren();
  $('aiOlder').hidden=history.length<=visibleMessages;
  for(const m of history.slice(-visibleMessages)){const el=document.createElement('div');el.className='ai-message '+m.role;const name=document.createElement('b');name.textContent=m.role==='assistant'?'Тренер':'Ты';const body=document.createElement('div');renderCoachContent(body,m);el.append(name,body);list.append(el);}
- list.scrollTop=list.scrollHeight;$('aiEmpty').hidden=history.length>0;
+ if(pendingQuestion){const el=document.createElement('div');el.className='ai-message user';el.textContent=pendingQuestion;list.append(el);}
+ list.scrollTop=list.scrollHeight;$('aiEmpty').hidden=history.length>0||!!pendingQuestion;
 }
 function syncStatus(s){
  connected=!!s.connected;active=connected&&Boolean(s.sharing);account=s.connected&&typeof s.memoryId==='string'?s.memoryId:'';switchMemory();
@@ -85,13 +86,13 @@ async function action(fn,settings=false){
  const controls=['aiLogin','aiConsent','aiLogout','aiForget','aiRefresh','aiAsk','aiClear','aiDeleteStudy','aiDeleteMemory','aiContinue','aiMakePlan','aiSummary','aiNotes','aiGoal','aiFocus','aiMinutes','aiPlan','aiShareHistory','aiShare','aiModel'];
  for(const id of controls)$(id).disabled=true;
  try{await fn();}catch(e){(settings?sayAccount:say)(e.message||'Ошибка подключения.');}
- finally{busy=false;for(const id of controls)$(id).disabled=false;switchMemory();updateStudyFields();$('aiModel').disabled=!active||!$('aiModel').options.length;syncChat();}
+ finally{if(pendingQuestion){pendingQuestion='';showHistory();}busy=false;for(const id of controls)$(id).disabled=false;switchMemory();updateStudyFields();$('aiModel').disabled=!active||!$('aiModel').options.length;syncChat();}
 }
 export function initCoach(provider,options){
  contextProvider=provider;toolOptions=options;
  if(!native){$('aiAccountStatus').textContent='Подключение доступно только в Android.';for(const id of ['aiLogin','aiRefresh'])$(id).disabled=true;return;}
  $('coachUnavailable').hidden=true;$('aiPanel').hidden=false;
- const login=consent=>action(async()=>{if(toolOptions?.onlineLocked?.())throw Error('Сначала заверши онлайн-партию.');loginPending=true;$('aiCancelLogin').hidden=false;sayAccount('Продолжи вход в браузере и вернись в Johan Chess.');try{syncStatus(await call('login',{consent}));await refresh();}finally{loginPending=false;$('aiCancelLogin').hidden=true;}},true);
+ const login=consent=>action(async()=>{if(toolOptions?.onlineLocked?.())throw Error('Сначала заверши онлайн-партию.');loginPending=true;const version=++loginVersion;$('aiCancelLogin').hidden=false;sayAccount('Продолжи вход в браузере и вернись в Johan Chess.');let checking=false;const poll=setInterval(async()=>{if(checking||!loginPending||version!==loginVersion)return;checking=true;try{const r=await call('loginProgress');if(loginPending&&version===loginVersion&&r.stage)sayAccount(r.stage);}catch{}finally{checking=false;}},800);try{syncStatus(await call('login',{consent}));loginPending=false;await refresh();}finally{clearInterval(poll);loginPending=false;$('aiCancelLogin').hidden=true;}},true);
  $('aiCancelLogin').onclick=async()=>{if(!loginPending)return;try{await call('cancelLogin');}catch(e){sayAccount(e.message);}};
  $('aiModel').onchange=()=>{if(account)try{localStorage.setItem('jc-coach-model:'+account,$('aiModel').value);}catch{}};
  $('aiLogin').onclick=()=>login(false);$('aiConsent').onclick=()=>login(true);
@@ -110,6 +111,7 @@ export function initCoach(provider,options){
   if(toolOptions?.onlineLocked?.())throw Error('Тренер недоступен во время онлайн-партии');
   switchMemory();const requestKey=scopeKey;
   const question=$('aiQuestion').value.trim(),model=$('aiModel').value;if(!question||!model||!requestKey)return;
+  pendingQuestion=question;showHistory();
   const ctx=contextProvider();
   const include=$('aiShare').checked;
   const fullGame=include&&ctx.game&&['1-0','0-1','1/2-1/2'].includes(ctx.game.result)?ctx.game:null;
@@ -146,7 +148,7 @@ export function initCoach(provider,options){
   const answer=typeof result.answer==='string'?result.answer.trim():'';if(!answer)throw Error('Пустой ответ');
   const pair=[{role:'user',content:question},{role:'assistant',content:answer,parts:snapshotBoards(answer,context.game)}];
   if(requestKey!==memoryKey(account,contextProvider().user)){const saved=loadMemory(localStorage,requestKey,Chess);const stored=saveMemory(localStorage,requestKey,{...saved,history:[...saved.history,...pair]},Chess);switchMemory();say(stored.saved?'Ответ сохранён в предыдущем профиле.':'Не удалось сохранить ответ предыдущего профиля.');return;}
-  memory=memoryUpdate.finish(memory);history.push(...pair);const saved=persist();$('aiSummary').value=memory.summary;$('aiQuestion').value='';showHistory();say(saved?'Ответ получен.':'Ответ получен, но сохранение не удалось.');
+  memory=memoryUpdate.finish(memory);pendingQuestion='';history.push(...pair);const saved=persist();$('aiSummary').value=memory.summary;$('aiQuestion').value='';showHistory();say(saved?'Ответ получен.':'Ответ получен, но сохранение не удалось.');
  });
  for(const [id,k] of [['aiSummary','summary'],['aiNotes','notes'],['aiGoal','goal'],['aiFocus','focus'],['aiMinutes','minutes'],['aiPlan','plan']])$(id).onchange=()=>{if(!scopeKey||busy)return;memory[k]=k==='minutes'?Number($(id).value):$(id).value;persist();};
  document.addEventListener('jc-screen',e=>{if(['coach','account'].includes(e.detail)&&!busy){switchMemory();syncChat();}});
