@@ -5,7 +5,7 @@ export function initNavigation(){
  const buttons=[...document.querySelectorAll('[data-tab]')],links=[...document.querySelectorAll('[data-go]')],screens=[...document.querySelectorAll('[data-screen]')];
  function show(requested,{scroll=true}={}){
   screen=normalizeScreen(requested,playing);
-  for(const panel of screens)panel.hidden=panel.dataset.screen!==screen;
+  for(const panel of screens){const hidden=panel.dataset.screen!==screen;if(panel.hidden!==hidden)panel.hidden=hidden;}
   for(const b of buttons){const active=b.dataset.tab===parentTab(screen);b.setAttribute('aria-current',active?'page':'false');b.disabled=playing;}
   for(const link of links)link.disabled=playing;
   if(scroll)window.scrollTo({top:0,behavior:'auto'});

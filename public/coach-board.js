@@ -1,5 +1,5 @@
 import {Chess} from './chess.js';
-import {pieceGraphic} from './piece-art.js';
+import {renderBoardView} from './board-view.js';
 import {resolveBoards} from './coach-board-core.js';
 export const snapshotBoards=(answer,game)=>resolveBoards(answer,game,Chess);
 const NS='http://www.w3.org/2000/svg';
@@ -18,13 +18,10 @@ export function renderMiniBoard(card){
  const flip=card.orientation==='b';
  function draw(mode){
   const fen=mode==='before'?card.fen:card[mode].fen;
-  const c=new Chess(fen),rows=c.board(),order=Array.from({length:8},(_,i)=>flip?7-i:i);
-  board.replaceChildren();board.setAttribute('aria-label','Шахматная позиция: '+modes.find(m=>m[0]===mode)[1]);
+  const c=new Chess(fen);
+  board.querySelector('.mini-arrows')?.remove();board.setAttribute('aria-label','Шахматная позиция: '+modes.find(m=>m[0]===mode)[1]);
   const marked=mode==='before'?[]:[card[mode].from,card[mode].to];
-  for(const [ri,r] of order.entries())for(const [fi,f] of order.entries()){
-   const sq='abcdefgh'[f]+(8-r),p=rows[r][f],cell=elem('div','square '+((r+f)%2?'dark':'light')+(marked.includes(sq)?' mark':''));
-   if(p)cell.append(pieceGraphic(p));if(fi===0)cell.append(elem('span','coord',8-r));if(ri===7)cell.append(elem('span','coord file','abcdefgh'[f]));board.append(cell);
-  }
+  renderBoardView(board,{rows:c.board(),flip,marked,animateMoves:mode==='before'?[]:[card[mode]]});
   if(mode==='before'){
    const overlay=document.createElementNS(NS,'svg');overlay.setAttribute('class','mini-arrows');overlay.setAttribute('viewBox','0 0 8 8');overlay.setAttribute('aria-hidden','true');
    if(card.played.from!==card.best.from||card.played.to!==card.best.to)arrow(overlay,card.played,flip,'#d84c43d9');

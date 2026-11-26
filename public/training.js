@@ -1,4 +1,4 @@
-import {pieceGraphic} from './piece-art.js';
+import {renderBoardView,clearBoardView,scrollBehavior} from './board-view.js';
 import {Chess} from './chess.js';
 import {Engine} from './engine.js';
 import {enginePath} from './engine-path.js';
@@ -18,23 +18,15 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
   select.disabled=!all.length||!!session;$('playOpenHistory').disabled=select.disabled;
  }
  function settings(enabled){for(const id of ['playColor','playLevel','playTime','playFen','playStart','playHistory','playOpenHistory'])$(id).disabled=!enabled;}
- function renderClock(){if(!session?.clock)return;const r=remaining(session.clock,performance.now());for(const [id,c] of [['playTopClock',opposite(session.color)],['playBottomClock',session.color]]){const el=$(id);el.textContent=clockText(r[c]);el.classList.toggle('running',session.clock.turn===c);}}
- function draw(){
+ function renderClock(){if(!session?.clock)return;const r=remaining(session.clock,performance.now());for(const [id,c] of [['playTopClock',opposite(session.color)],['playBottomClock',session.color]]){const el=$(id);const text=clockText(r[c]);if(el.textContent!==text)el.textContent=text;el.classList.toggle('running',session.clock.turn===c);}}
+ function draw(animateMoves=[]){
   const s=session;if(!s)return;
-  const b=$('playBoard'),ranks=Array.from({length:8},(_,i)=>s.color==='b'?7-i:i),rows=s.game.board(),last=s.game.history({verbose:true}).at(-1);
-  const targets=selected&&!s.thinking&&!s.starting&&s.game.turn()===s.color?s.game.moves({square:selected,verbose:true}):[];
-  b.replaceChildren();
-  for(const [ri,r] of ranks.entries())for(const [fi,f] of ranks.entries()){
-   const square='abcdefgh'[f]+(8-r),p=rows[r][f],d=document.createElement('button');
-   d.type='button';d.className='square '+((r+f)%2?'dark':'light')+(last&&(last.from===square||last.to===square)?' last':'')+(selected===square?' selected':'')+(targets.some(m=>m.to===square)?' target':'');
-   d.setAttribute('aria-label',square+(p?' '+p.color+p.type:''));d.disabled=s.starting||s.thinking||s.game.turn()!==s.color||promotions.length>0;
-   if(p)d.append(pieceGraphic(p));
-   if(fi===0){const el=document.createElement('span');el.className='coord';el.textContent=8-r;d.append(el);}
-   if(ri===7){const el=document.createElement('span');el.className='coord file';el.textContent='abcdefgh'[f];d.append(el);}
-   d.onclick=()=>click(square);b.append(d);
+  const targets=selected&&!s.thinking&&!s.starting&&s.game.turn()===s.color?s.game.moves({square:selected,verbose:true}).map(m=>m.to):[];
+  renderBoardView($('playBoard'),{rows:s.game.board(),flip:s.color==='b',interactive:true,disabled:s.starting||s.thinking||s.game.turn()!==s.color||promotions.length>0,onClick:click,selected,targets,last:s.last,animateMoves});
+  if(s.renderedPly!==s.sans.length){
+   const list=$('playMoves');list.textContent=s.sans.map((m,i)=>i%2===0?Math.floor(i/2)+1+'. '+m:m).join(' ');
+   list.scrollTop=list.scrollHeight;s.renderedPly=s.sans.length;
   }
-  $('playMoves').textContent=s.game.history().map((m,i)=>i%2===0?Math.floor(i/2)+1+'. '+m:m).join(' ');
-  $('playMoves').scrollTop=$('playMoves').scrollHeight;
   $('playPromotion').hidden=!promotions.length;renderClock();
  }
  function stopEngine(s){if(timer!==null){clearInterval(timer);timer=null;}if(s?.engine){s.engine.close();s.engine=null;}}
@@ -63,8 +55,8 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
   const s=session;if(!s||!s.clock)return false;
   const now=performance.now(),clock=nextClock(s.clock,now);
   if(!clock){finish(flagResult(s.game,s.clock.turn));return false;}
-  try{s.game.move(m);}catch{return false;}
-  s.clock=clock;selected=null;promotions=[];draw();
+  try{s.last=s.game.move(m);s.sans.push(s.last.san);}catch{return false;}
+  s.clock=clock;selected=null;promotions=[];draw([s.last]);
   const end=terminal(s.game);if(end){finish(end);return true;}
   return true;
  }
@@ -99,12 +91,12 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
   const control=$('playTime').value;if(!CONTROLS[control])return false;
   const color=overrides.color??($('playColor').value==='random'?(Math.random()<.5?'w':'b'):$('playColor').value);
   const level=LEVELS[levelIndex],id=++serial,standard=game.fen()===new Chess().fen();
-  const s={id,game,user,color,level,levelIndex,adaptive,standard,replay:!!overrides.replay,startFen:game.fen(),clock:null,engine:null,starting:true,thinking:false};
+  const s={id,game,user,color,level,levelIndex,adaptive,standard,replay:!!overrides.replay,startFen:game.fen(),clock:null,engine:null,starting:true,thinking:false,last:null,sans:[],renderedPly:-1};
   game.setHeader('Event',overrides.replay?'Johan Chess · повтор позиции':'Johan Chess · тренировка');
   game.setHeader('Site','Johan Chess');game.setHeader('Date',new Date().toISOString().slice(0,10).replaceAll('-','.'));
   game.setHeader('White',color==='w'?user:'Stockfish '+level);game.setHeader('Black',color==='b'?user:'Stockfish '+level);
   game.setHeader('Result','*');game.setHeader('TimeControl',control==='free'?'-':String(CONTROLS[control].base/1000)+'+'+String(CONTROLS[control].increment/1000));
-  session=s;finished=null;selected=null;promotions=[];lock();settings(false);
+  session=s;finished=null;selected=null;promotions=[];clearBoardView($('playBoard'));lock();settings(false);
   $('playArea').hidden=false;$('playCancel').disabled=false;$('playResign').disabled=true;$('playReview').hidden=true;
   $('playTopName').textContent='Stockfish · уровень '+level;$('playBottomName').textContent=user;
   $('playTopClock').textContent=$('playBottomClock').textContent=clockText(CONTROLS[control].base);
@@ -124,5 +116,5 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
  $('promote-cancel').onclick=()=>{promotions=[];draw();};
  document.addEventListener('visibilitychange',()=>{if(session)tick();});
  historyList();
- return {active:()=>!!session,startReplay:(fen,color)=>{if(session||!canStart())return; $('playFen').value=fen;$('playPanel').scrollIntoView({behavior:'smooth'});return start({fen,color,replay:true});}};
+ return {active:()=>!!session,startReplay:(fen,color)=>{if(session||!canStart())return; $('playFen').value=fen;$('playPanel').scrollIntoView({behavior:scrollBehavior()});return start({fen,color,replay:true});}};
 }
