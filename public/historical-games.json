@@ -1,0 +1,83 @@
+{
+  "source": "https://theoreticalnovelty.com/",
+  "license": "public-domain game scores",
+  "games": [
+    {
+      "id": "opera",
+      "title": "Оперная партия",
+      "year": "1858",
+      "white": "Paul Morphy",
+      "black": "Duke Karl / Count Isouard",
+      "result": "1-0",
+      "eco": "C41",
+      "source": "https://theoreticalnovelty.com/games/04e81a89-669f-4b7a-bbb7-51718be38480",
+      "moves": "1. e4 e5 2. Nf3 d6 3. d4 Bg4 4. dxe5 Bxf3 5. Qxf3 dxe5 6. Bc4 Nf6 7. Qb3 Qe7 8. Nc3 c6 9. Bg5 b5 10. Nxb5 cxb5 11. Bxb5+ Nbd7 12. O-O-O Rd8 13. Rxd7 Rxd7 14. Rd1 Qe6 15. Bxd7+ Nxd7 16. Qb8+ Nxb8 17. Rd8# 1-0"
+    },
+    {
+      "id": "immortal",
+      "title": "Бессмертная партия",
+      "year": "1851",
+      "white": "Adolf Anderssen",
+      "black": "Lionel Kieseritzky",
+      "result": "1-0",
+      "eco": "C33",
+      "source": "https://theoreticalnovelty.com/games/5b7413c7-76a4-4e9e-a210-5db96bca8f96",
+      "moves": "1. e4 e5 2. f4 exf4 3. Bc4 Qh4+ 4. Kf1 b5 5. Bxb5 Nf6 6. Nf3 Qh6 7. d3 Nh5 8. Nh4 Qg5 9. Nf5 c6 10. g4 Nf6 11. Rg1 cxb5 12. h4 Qg6 13. h5 Qg5 14. Qf3 Ng8 15. Bxf4 Qf6 16. Nc3 Bc5 17. Nd5 Qxb2 18. Bd6 Bxg1 19. e5 Qxa1+ 20. Ke2 Na6 21. Nxg7+ Kd8 22. Qf6+ Nxf6 23. Be7# 1-0"
+    },
+    {
+      "id": "evergreen",
+      "title": "Вечнозелёная партия",
+      "year": "1852",
+      "white": "Adolf Anderssen",
+      "black": "Jean Dufresne",
+      "result": "1-0",
+      "eco": "C52",
+      "source": "https://theoreticalnovelty.com/games/2c51b785-472e-4a23-9f2a-dc44c1e68436",
+      "moves": "1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. b4 Bxb4 5. c3 Ba5 6. d4 exd4 7. O-O d3 8. Qb3 Qf6 9. e5 Qg6 10. Re1 Nge7 11. Ba3 b5 12. Qxb5 Rb8 13. Qa4 Bb6 14. Nbd2 Bb7 15. Ne4 Qf5 16. Bxd3 Qh5 17. Nf6+ gxf6 18. exf6 Rg8 19. Rad1 Qxf3 20. Rxe7+ Nxe7 21. Qxd7+ Kxd7 22. Bf5+ Ke8 23. Bd7+ Kf8 24. Bxe7# 1-0"
+    },
+    {
+      "id": "steinitz",
+      "title": "Стейниц — Барделебен",
+      "year": "1895",
+      "white": "Wilhelm Steinitz",
+      "black": "Kurt von Bardeleben",
+      "result": "1-0",
+      "eco": "C54",
+      "source": "https://theoreticalnovelty.com/games/7a2f3fd7-a634-456c-a27a-3eac110e4615",
+      "moves": "1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 5. d4 exd4 6. cxd4 Bb4+ 7. Nc3 d5 8. exd5 Nxd5 9. O-O Be6 10. Bg5 Be7 11. Bxd5 Bxd5 12. Nxd5 Qxd5 13. Bxe7 Nxe7 14. Re1 f6 15. Qe2 Qd7 16. Rac1 c6 17. d5 cxd5 18. Nd4 Kf7 19. Ne6 Rhc8 20. Qg4 g6 21. Ng5+ Ke8 22. Rxe7+ Kf8 23. Rf7+ Kg8 24. Rg7+ Kh8 25. Rxh7+ 1-0"
+    },
+    {
+      "id": "lasker",
+      "title": "Ласкер — Капабланка",
+      "year": "1914",
+      "white": "Emanuel Lasker",
+      "black": "Jose Raul Capablanca",
+      "result": "1-0",
+      "eco": "C68",
+      "source": "https://theoreticalnovelty.com/games/64e7da86-e587-4734-a271-acd554c76634",
+      "moves": "1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Bxc6 dxc6 5. d4 exd4 6. Qxd4 Qxd4 7. Nxd4 Bd6 8. Nc3 Ne7 9. O-O O-O 10. f4 Re8 11. Nb3 f6 12. f5 b6 13. Bf4 Bb7 14. Bxd6 cxd6 15. Nd4 Rad8 16. Ne6 Rd7 17. Rad1 Nc8 18. Rf2 b5 19. Rfd2 Rde7 20. b4 Kf7 21. a3 Ba8 22. Kf2 Ra7 23. g4 h6 24. Rd3 a5 25. h4 axb4 26. axb4 Rae7 27. Kf3 Rg8 28. Kf4 g6 29. Rg3 g5+ 30. Kf3 Nb6 31. hxg5 hxg5 32. Rh3 Rd7 33. Kg3 Ke8 34. Rdh1 Bb7 35. e5 dxe5 36. Ne4 Nd5 37. N6c5 Bc8 38. Nxd7 Bxd7 39. Rh7 Rf8 40. Ra1 Kd8 41. Ra8+ Bc8 42. Nc5 1-0"
+    },
+    {
+      "id": "century",
+      "title": "Партия века",
+      "year": "1956",
+      "white": "Donald Byrne",
+      "black": "Robert James Fischer",
+      "result": "0-1",
+      "eco": "D92",
+      "source": "https://theoreticalnovelty.com/games/ab6a3f3d-fa56-484c-a4ba-213ce99eac67",
+      "moves": "1. Nf3 Nf6 2. c4 g6 3. Nc3 Bg7 4. d4 O-O 5. Bf4 d5 6. Qb3 dxc4 7. Qxc4 c6 8. e4 Nbd7 9. Rd1 Nb6 10. Qc5 Bg4 11. Bg5 Na4 12. Qa3 Nxc3 13. bxc3 Nxe4 14. Bxe7 Qb6 15. Bc4 Nxc3 16. Bc5 Rfe8+ 17. Kf1 Be6 18. Bxb6 Bxc4+ 19. Kg1 Ne2+ 20. Kf1 Nxd4+ 21. Kg1 Ne2+ 22. Kf1 Nc3+ 23. Kg1 axb6 24. Qb4 Ra4 25. Qxb6 Nxd1 26. h3 Rxa2 27. Kh2 Nxf2 28. Re1 Rxe1 29. Qd8+ Bf8 30. Nxe1 Bd5 31. Nf3 Ne4 32. Qb8 b5 33. h4 h5 34. Ne5 Kg7 35. Kg1 Bc5+ 36. Kf1 Ng3+ 37. Ke1 Bb4+ 38. Kd1 Bb3+ 39. Kc1 Ne2+ 40. Kb1 Nc3+ 41. Kc1 Rc2# 0-1"
+    },
+    {
+      "id": "kasparov",
+      "title": "Бессмертная партия Каспарова",
+      "year": "1999",
+      "white": "Garry Kasparov",
+      "black": "Veselin Topalov",
+      "result": "1-0",
+      "eco": "B07",
+      "source": "https://theoreticalnovelty.com/games/fd6abb6d-6c87-4119-bc0c-c3f393c68985",
+      "moves": "1. e4 d6 2. d4 Nf6 3. Nc3 g6 4. Be3 Bg7 5. Qd2 c6 6. f3 b5 7. Nge2 Nbd7 8. Bh6 Bxh6 9. Qxh6 Bb7 10. a3 e5 11. O-O-O Qe7 12. Kb1 a6 13. Nc1 O-O-O 14. Nb3 exd4 15. Rxd4 c5 16. Rd1 Nb6 17. g3 Kb8 18. Na5 Ba8 19. Bh3 d5 20. Qf4+ Ka7 21. Rhe1 d4 22. Nd5 Nbxd5 23. exd5 Qd6 24. Rxd4 cxd4 25. Re7+ Kb6 26. Qxd4+ Kxa5 27. b4+ Ka4 28. Qc3 Qxd5 29. Ra7 Bb7 30. Rxb7 Qc4 31. Qxf6 Kxa3 32. Qxa6+ Kxb4 33. c3+ Kxc3 34. Qa1+ Kd2 35. Qb2+ Kd1 36. Bf1 Rd2 37. Rd7 Rxd7 38. Bxc4 bxc4 39. Qxh8 Rd3 40. Qa8 c3 41. Qa4+ Ke1 42. f4 f5 43. Kc1 Rd2 44. Qa7 1-0"
+    }
+  ]
+}
