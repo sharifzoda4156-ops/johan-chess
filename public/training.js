@@ -11,16 +11,38 @@ const STORAGE='jc-training-history-v1';
 function readHistory(){try{const data=JSON.parse(localStorage.getItem(STORAGE)||'[]');return Array.isArray(data)?data.filter(x=>x&&typeof x.pgn==='string'):[];}catch{return [];}}
 function storeHistory(record){try{localStorage.setItem(STORAGE,JSON.stringify([record,...readHistory()].slice(0,30)));return true;}catch{return false;}}
 function adaptiveIndex(user){try{const v=localStorage.getItem('jc-bot-level:'+user.toLowerCase());const n=v===null?DEFAULT_ADAPTIVE:Number(v);return Number.isInteger(n)&&n>=0&&n<LEVELS.length?n:DEFAULT_ADAPTIVE;}catch{return DEFAULT_ADAPTIVE;}}
-export function initTraining({canStart,lock,unlock,review,getUser}){
- let session=null,serial=0,selected=null,promotions=[],timer=null,finished=null;
+export function initTraining({canStart,lock,unlock,review,getUser,goHome,goOnline}){
+ let session=null,serial=0,selected=null,promotions=[],timer=null,finished=null,view='hub',botReturnTo='home';
  const status=t=>{$('playStatus').textContent=t;$('playGameStatus').textContent=t;};
+ const TIME_LABELS={'10+0':'10 минут','15+10':'15 | 10','30+0':'30 минут',free:'Без часов'};
  function historyList(){
   const select=$('playHistory');select.replaceChildren();
   const all=readHistory();
   all.forEach((g,i)=>{const o=document.createElement('option');o.value=String(i);o.textContent=g.date+' · '+g.result+' · SF '+g.level;select.append(o);});
   select.disabled=!all.length||!!session;$('playOpenHistory').disabled=select.disabled;
  }
- function settings(enabled){for(const id of ['playColor','playLevel','playTime','playFen','playStart','playHistory','playOpenHistory'])$(id).disabled=!enabled;for(const b of document.querySelectorAll('#playColorGroup button'))b.disabled=!enabled;}
+ function setView(next,from='home'){
+  view=next==='bot'?'bot':'hub';
+  if(view==='bot')botReturnTo=from;
+  if($('playHub'))$('playHub').hidden=view!=='hub';
+  if($('playBotSheet'))$('playBotSheet').hidden=view!=='bot';
+  if($('playTopbarTitle'))$('playTopbarTitle').textContent=view==='bot'?'Игра с ботом':'Новая партия';
+  if($('playHistoryPanel'))$('playHistoryPanel').hidden=true;
+ }
+ function syncTimeLabels(){
+  const v=$('playTime').value,label=TIME_LABELS[v]||v;
+  if($('playTimeLabel'))$('playTimeLabel').textContent=label;
+  if($('playBotTimeLabel'))$('playBotTimeLabel').textContent=label;
+  if($('playBotTime')&&$('playBotTime').value!==v)$('playBotTime').value=v;
+ }
+ function syncLevelGrid(){
+  const v=$('playLevel').value;
+  for(const b of document.querySelectorAll('#playBotGrid button'))b.setAttribute('aria-pressed',String(b.dataset.level===v));
+ }
+ function settings(enabled){
+  for(const id of ['playColor','playLevel','playTime','playBotTime','playFen','playStart','playBotStart','playHistory','playOpenHistory']){if($(id))$(id).disabled=!enabled;}
+  for(const b of document.querySelectorAll('#playColorGroup button,#playBotGrid button'))b.disabled=!enabled;
+ }
  function syncColorGroup(){const v=$('playColor').value;for(const b of document.querySelectorAll('#playColorGroup button'))b.setAttribute('aria-pressed',String(b.dataset.color===v));}
  function renderClock(){if(!session?.clock)return;const r=remaining(session.clock,performance.now());for(const [id,c] of [['playTopClock',opposite(session.color)],['playBottomClock',session.color]]){const el=$(id);const text=clockText(r[c]);if(el.textContent!==text)el.textContent=text;el.classList.toggle('running',session.clock.turn===c);}}
  function draw(animateMoves=[]){
@@ -119,6 +141,22 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
   }catch(e){if(session===s)cancel('Не удалось запустить Stockfish: '+e.message);return false;}
  }
  $('playStart').onclick=()=>start();
+ if($('playBotStart'))$('playBotStart').onclick=()=>start();
+ if($('playBack'))$('playBack').onclick=()=>{if(session)return;if(view==='bot'&&botReturnTo==='hub'){setView('hub');return;}goHome?.();};
+ if($('playBotOpen'))$('playBotOpen').onclick=()=>{if(!session)setView('bot','hub');};
+ if($('playGoOnline'))$('playGoOnline').onclick=()=>{
+  if(session)return;
+  const map={'10+0':'10+0','15+10':'15+10','30+0':'30+20'};
+  const ctrl=map[$('playTime').value];
+  if(ctrl&&$('onlineControl'))$('onlineControl').value=ctrl;
+  goOnline?.({friend:false});
+ };
+ if($('playGoFriend'))$('playGoFriend').onclick=()=>{if(!session)goOnline?.({friend:true});};
+ if($('playHistoryToggle'))$('playHistoryToggle').onclick=()=>{const p=$('playHistoryPanel');if(p){p.hidden=!p.hidden;if(!p.hidden)p.open=true;}};
+ $('playTime').onchange=syncTimeLabels;
+ if($('playBotTime'))$('playBotTime').onchange=()=>{$('playTime').value=$('playBotTime').value;syncTimeLabels();};
+ for(const b of document.querySelectorAll('#playBotGrid button'))b.onclick=()=>{if(session)return;$('playLevel').value=b.dataset.level;syncLevelGrid();};
+ $('playLevel').onchange=syncLevelGrid;
  $('playCancel').onclick=async()=>{const s=session;if(!s)return;if(await confirmDialog({title:'Прервать тренировку?',message:'Текущая партия завершится без результата и не попадёт в историю.',confirmText:'Прервать',danger:true})&&session===s)cancel('Тренировка отменена.');};
  $('playResign').onclick=async()=>{const s=session;if(!s||s.starting)return;if(await confirmDialog({title:'Сдаться?',message:'Партия завершится поражением и сохранится для разбора.',confirmText:'Сдаться',danger:true})&&session===s){tick();if(session===s)finish({result:resultFor(opposite(session.color)),reason:'Игрок сдался'});}};
  $('playReview').onclick=()=>{if(finished&&!session&&canStart())review(finished.pgn,true,finished.user);};
@@ -126,9 +164,15 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
  for(const p of ['q','r','b','n'])$('promote-'+p).onclick=()=>{const m=promotions.find(x=>x.promotion===p);if(m)human(m);};
  $('promote-cancel').onclick=()=>{promotions=[];draw();};
  document.addEventListener('visibilitychange',()=>{if(session)tick();});
+ document.addEventListener('jc-play-view',e=>{if(!session)setView(e.detail?.view||'hub',e.detail?.from||'home');});
  for(const b of document.querySelectorAll('#playColorGroup button'))b.onclick=()=>{if(session)return;$('playColor').value=b.dataset.color;syncColorGroup();};
  $('playColor').onchange=syncColorGroup;
- syncColorGroup();
+ syncColorGroup();syncLevelGrid();syncTimeLabels();setView('hub');
  historyList();
- return {active:()=>!!session,interrupt:()=>{if(session)cancel('Тренировка остановлена: онлайн-партия');},startReplay:(fen,color)=>{if(session||!canStart())return; $('playFen').value=fen;return start({fen,color,replay:true});}};
+ return {
+  active:()=>!!session,
+  handleBack:()=>{if(!session&&document.body.dataset.activeScreen==='play'&&view==='bot'&&botReturnTo==='hub'){setView('hub');return true;}return false;},
+  interrupt:()=>{if(session)cancel('Тренировка остановлена: онлайн-партия');},
+  startReplay:(fen,color)=>{if(session||!canStart())return; $('playFen').value=fen;return start({fen,color,replay:true});}
+ };
 }

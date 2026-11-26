@@ -29,7 +29,22 @@ try{
   await page.goto(url,{waitUntil:'load'});
   await page.waitForFunction(()=>document.querySelector('#homePlayed').textContent!=='—');
   assert.equal(await page.locator('html').getAttribute('data-hosting'),'pages');
-  assert.ok(await page.evaluate(()=>[...document.querySelectorAll('img.brand-logo')].every(img=>img.complete&&img.naturalWidth>0)),'Brand logo SVG loaded');
+  assert.ok(await page.evaluate(()=>[...document.querySelectorAll('img.brand-logo,img.hero-knight')].every(img=>img.complete&&img.naturalWidth>0)),'Brand & knight SVGs loaded');
+
+  // Home Dashboard geometry check: 50/50 Hero CTAs + 2x2 Bento Grid
+  const homeGeom=await page.evaluate(()=>{
+   const btns=[...document.querySelectorAll('.home-hero-actions button')].map(e=>e.getBoundingClientRect());
+   const cards=[...document.querySelectorAll('.home-bento .bento-card')].map(e=>e.getBoundingClientRect());
+   const stats=document.querySelector('.home-stats').getBoundingClientRect();
+   const nav=document.querySelector('.bottom-nav').getBoundingClientRect();
+   return {btns,cards,statsBottom:stats.bottom,navTop:nav.top};
+  });
+  assert.equal(homeGeom.btns.length,2);
+  assert.ok(Math.abs(homeGeom.btns[0].y-homeGeom.btns[1].y)<=1,'Hero CTAs aligned on one row');
+  assert.ok(Math.abs(homeGeom.btns[0].width-homeGeom.btns[1].width)<=2,'Hero CTAs equal 50/50 width');
+  assert.equal(homeGeom.cards.length,4);
+  assert.ok(Math.abs(homeGeom.cards[0].y-homeGeom.cards[1].y)<=1&&Math.abs(homeGeom.cards[2].y-homeGeom.cards[3].y)<=1,'Bento cards form 2x2 grid');
+  if(viewport.height>=800)assert.ok(homeGeom.statsBottom<=homeGeom.navTop+2,'Home dashboard fits above bottom nav');
 
   // Online Lichess screen must be enabled on Web (not Android-only stub)
   await page.locator('[data-go="online"]').first().click();
@@ -83,11 +98,22 @@ try{
   stable(reviewBox,await boardBox(page,'#board'));
   if(viewport.width<900)await page.locator('#reviewCloseBoard').click();
 
-  // Play vs Stockfish: Drag & Drop e2->e4 + bot reply + custom confirm dialog cancel
+  // Play Hub ("Новая партия") & Bot Setup ("Игра с ботом"): equal 100% widths + Drag & Drop
   await page.locator('[data-tab="home"]').click();
   await page.locator('[data-go="play"]').first().click();
-  await page.locator('#playTime').selectOption('free');
-  await page.locator('#playLevel').selectOption('0');
+  const hubWidths=await page.evaluate(()=>[
+   document.getElementById('playTimeRow').getBoundingClientRect().width,
+   document.getElementById('playStart').getBoundingClientRect().width,
+   ...[...document.querySelectorAll('#playHub .play-mode-btn')].map(b=>b.getBoundingClientRect().width)
+  ]);
+  for(const w of hubWidths)assert.ok(Math.abs(w-hubWidths[1])<=1,'Hub controls share exact 100% width: '+JSON.stringify(hubWidths));
+  await page.locator('#playBotOpen').click();
+  assert.equal(await page.locator('#playTopbarTitle').textContent(),'Игра с ботом');
+  await page.locator('#playBotGrid [data-level="0"]').click();
+  await page.locator('#playBotTime').selectOption('free');
+  await page.locator('#playBack').click();
+  assert.equal(await page.locator('#playTopbarTitle').textContent(),'Новая партия');
+  assert.equal(await page.locator('#playTimeLabel').textContent(),'Без часов');
   await page.locator('#playStart').click();
   await page.locator('#playBoard [data-square="e2"]').waitFor();
   assert.equal(await page.locator('#playBoard [data-square]').count(),64);
