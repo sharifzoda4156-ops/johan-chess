@@ -14,7 +14,7 @@ function arrow(svg,move,flip,color){
 }
 export function renderMiniBoard(card){
  const root=elem('section','mini-position'),title=elem('h3',null,card.label+(card.classification?' · '+card.classification:'')),board=elem('div','mini-board'),controls=elem('div','mini-controls'),info=elem('div','mini-info');
- const modes=[['before','До хода'],['played','Твой ход'],['best','Лучший']],buttons=[];
+ const modes=[['before','До хода'],['played',card.historical?'Ход в партии':'Твой ход'],['best','Лучший']],buttons=[];
  const flip=card.orientation==='b';
  function draw(mode){
   const fen=mode==='before'?card.fen:card[mode].fen;
@@ -31,7 +31,7 @@ export function renderMiniBoard(card){
    arrow(overlay,card.best,flip,'#329e4ce6');board.append(overlay);
   }
   for(const [key,b] of buttons)b.setAttribute('aria-pressed',String(key===mode));
-  info.textContent=mode==='before'?'Твой ход: '+card.played.san+' · лучший: '+card.best.san:mode==='played'?'Сыграно: '+card.played.san:'Stockfish: '+card.best.san;
+  info.textContent=mode==='before'?(card.historical?'Ход в партии: ':'Твой ход: ')+card.played.san+' · лучший: '+card.best.san:mode==='played'?'Сыграно: '+card.played.san:'Stockfish: '+card.best.san;
  }
  for(const [key,label] of modes){const b=elem('button',null,label);b.type='button';b.onclick=()=>draw(key);buttons.push([key,b]);controls.append(b);}
  root.append(title,board,controls,info);draw('before');return root;

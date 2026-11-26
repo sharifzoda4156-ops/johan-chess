@@ -1,3 +1,4 @@
+import {initStudyLibrary} from './study-library.js';
 import {TOPICS} from './puzzle-training.js';
 import {initPuzzles,getPuzzleProgress,getPuzzleTraining} from './puzzles.js';
 import {displayName,profileStats} from './profile-core.js';
@@ -10,15 +11,15 @@ import {Engine} from './engine.js';
 import {enginePath} from './engine-path.js';
 import {evaluateMove,displayScore,scoreValue} from './metrics.js';
 const $=id=>document.getElementById(id), status=t=>$('status').textContent=t;
-let training=null,importing=false,analysisDepth=null,game=null, moves=[], positions=[], results=[], cursor=0, flipped=false, engine=null, busy=false, runId=0, imported=[], startFen='', pgn='';
+let training=null,importing=false,analysisDepth=null,game=null, moves=[], positions=[], results=[], cursor=0, flipped=false, engine=null, busy=false, runId=0, imported=[], startFen='', pgn='', historical=null;
 const navigation=initNavigation();
 const player=c=>game?.getHeaders()[c==='w'?'White':'Black']|| (c==='w'?'Белые':'Чёрные');
 const own=()=>player('b').toLowerCase()===$('user').value.trim().toLowerCase()?'b':'w';
 const uci=m=>m.from+m.to+(m.promotion||'');
-function load(text){
+function load(text,study=null){
  if(busy||training?.active())return false;
  try{const c=new Chess();c.loadPgn(text);const h=c.history({verbose:true});if(!h.length)throw Error('В PGN нет ходов. Экспортируй полную партию.');
- game=c;moves=h;startFen=h[0].before;positions=[startFen,...h.map(m=>m.after)];pgn=text;results=[];analysisDepth=null;cursor=0;flipped=own()==='b';$('review').hidden=false;$('analyze').disabled=false;$('export').disabled=true;$('progress').hidden=true;render();status('Партия загружена: '+h.length+' полуходов.');return true;
+ historical=study;game=c;moves=h;startFen=h[0].before;positions=[startFen,...h.map(m=>m.after)];pgn=text;results=[];analysisDepth=null;cursor=0;flipped=historical?historical.result==='0-1':own()==='b';$('review').hidden=false;$('analyze').disabled=false;$('export').disabled=true;$('progress').hidden=true;render();status((historical?historical.title+' · '+historical.year:'Партия загружена')+': '+h.length+' полуходов.');return true;
  }catch(e){status('Не удалось прочитать PGN: '+e.message);return false;}
 }
 $('load').onclick=()=>load($('pgn').value);
@@ -32,7 +33,7 @@ $('analyze').onclick=async()=>{
  const metrics=evaluateMove(best.score,played.score,isBest);const c=new Chess(m.before);let bestSan=best.best;try{bestSan=c.move({from:best.best.slice(0,2),to:best.best.slice(2,4),...(best.best.length>4?{promotion:best.best[4]}:{})}).san;}catch{};
  const continuation=new Chess(m.before),pv=[];for(const u of best.pv.slice(0,6)){try{pv.push(continuation.move({from:u.slice(0,2),to:u.slice(2,4),...(u.length>4?{promotion:u[4]}:{})}).san);}catch{break;}}
  results.push({index:i,color:m.color,san:m.san,move:actualMove,best:best.best,bestSan,pv,bestScore:best.score,playedScore:played.score,...metrics});prefix.push(actualMove);progress.value=i+1;renderReport();renderCoach();}
- const completedContext=coachContext();rememberGame(completedContext);status('Анализ завершён. Выбери ошибку для разбора.');$('export').disabled=false;
+ const completedContext=coachContext();if(!historical)rememberGame(completedContext);status('Анализ завершён. Выбери ошибку для разбора.');$('export').disabled=false;
  }catch(e){if(id===runId)status('Анализ прерван: '+e.message);}finally{if(id===runId){local?.close();engine=null;setBusy(false);render();$('export').disabled=!results.length;}}
 };
 $('stop').onclick=()=>{runId++;engine?.close();engine=null;setBusy(false);status('Анализ остановлен. Частичный отчёт сохранён на экране.');$('export').disabled=!results.length;render();};
@@ -46,11 +47,11 @@ $('first').onclick=()=>go(0);$('back').onclick=()=>go(cursor-1);$('next').onclic
 function elem(tag,text,cls){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;}
 function renderCoach(){const el=$('coach');el.replaceChildren();const r=results[cursor-1];if(!cursor){el.textContent='Начальная позиция. Выбери ход или запусти анализ.';return;}if(!r){el.textContent=label(cursor-1)+' · оценка пока отсутствует';return;}
  el.append(elem('b',label(cursor-1)+' · '+r.label),elem('div',`Лучше: ${r.bestSan} · оценка ${displayScore(r.bestScore)} вместо ${displayScore(r.playedScore)} (со стороны ходившего).`),elem('div','Вариант: '+r.pv.join(' ')));
- if(r.loss>=5)el.append(elem('div','Задание: вернись на один ход назад и найди ответ соперника на свой ход.'));
+ if(r.loss>=5)el.append(elem('div','Задание: вернись на один ход назад и найди сильный ответ на сыгранный ход.'));
 }
-function renderReport(){const sum=$('summary');sum.replaceChildren();const scores=elem('div',undefined,'scores');for(const c of ['w','b']){const rs=results.filter(r=>r.color===c),box=elem('div',undefined,'score');box.append(elem('span',player(c)),elem('strong',rs.length?(rs.reduce((a,r)=>a+r.accuracy,0)/rs.length).toFixed(1)+'%':'—'),elem('span','Точность JC · '+rs.length+' ходов'));scores.append(box);}sum.append(scores);if(results.length){const stats=elem('div',undefined,'muted');stats.textContent=['Лучший','Отличный','Хороший','Неточность','Ошибка','Грубая ошибка'].map(l=>l+': '+results.filter(r=>r.color===own()&&r.label===l).length).join(' · ');sum.append(stats);}
+function renderReport(){const sum=$('summary');sum.replaceChildren();const scores=elem('div',undefined,'scores');for(const c of ['w','b']){const rs=results.filter(r=>r.color===c),box=elem('div',undefined,'score');box.append(elem('span',player(c)),elem('strong',rs.length?(rs.reduce((a,r)=>a+r.accuracy,0)/rs.length).toFixed(1)+'%':'—'),elem('span','Точность JC · '+rs.length+' ходов'));scores.append(box);}sum.append(scores);if(results.length){const stats=elem('div',undefined,'muted');stats.textContent=['Лучший','Отличный','Хороший','Неточность','Ошибка','Грубая ошибка'].map(l=>l+': '+results.filter(r=>(historical||r.color===own())&&r.label===l).length).join(' · ');sum.append(stats);}
  const list=$('moves');const old=list.scrollTop;list.replaceChildren();moves.forEach((m,i)=>{const r=results[i];const b=elem('button',undefined,'move'+(cursor===i+1?' active':''));b.append(elem('span',label(i)),elem('span',r?.label||'—',r?.loss>=20?'blunder':r?.loss>=5?'bad':r?.label==='Лучший'?'best':'neutral'),elem('span',r?displayScore(r.playedScore):'—'));b.onclick=()=>go(i+1);list.append(b);});list.scrollTop=old;chart();
- $('askReview').hidden=!globalThis.JohanNative;$('askReview').disabled=!results.length;const t=$('training');t.replaceChildren();const errors=results.filter(r=>r.color===own()&&r.loss>=5).sort((a,b)=>b.loss-a.loss).slice(0,5);if(!errors.length)t.textContent=results.length?'Пока существенных ошибок по нашей шкале нет.':'После анализа здесь появятся самые важные ошибки.';else for(const r of errors){const d=elem('div',undefined,'training-row');d.append(elem('div',label(r.index)+' · '+r.label+' · потеря '+r.loss.toFixed(1)+' п.п. шанса на победу (модель)'));const b=elem('button','Открыть позицию до ошибки');b.onclick=()=>{go(r.index);$('board').scrollIntoView({behavior:'smooth',block:'center'});};d.append(b);const replay=elem('button','Переиграть со Stockfish');replay.onclick=()=>{if(!busy&&!importing&&!training?.active())training.startReplay(positions[r.index],r.color);};replay.disabled=busy;d.append(replay);t.append(d);}
+ $('askReview').hidden=!globalThis.JohanNative;$('askReview').disabled=!results.length;const t=$('training');t.replaceChildren();const errors=results.filter(r=>(historical||r.color===own())&&r.loss>=5).sort((a,b)=>b.loss-a.loss).slice(0,5);if(!errors.length)t.textContent=results.length?'Пока существенных ошибок по нашей шкале нет.':'После анализа здесь появятся самые важные ошибки.';else for(const r of errors){const d=elem('div',undefined,'training-row');d.append(elem('div',label(r.index)+' · '+r.label+' · потеря '+r.loss.toFixed(1)+' п.п. шанса на победу (модель)'));const b=elem('button','Открыть позицию до ошибки');b.onclick=()=>{go(r.index);$('board').scrollIntoView({behavior:'smooth',block:'center'});};d.append(b);const replay=elem('button','Переиграть со Stockfish');replay.onclick=()=>{if(!busy&&!importing&&!training?.active())training.startReplay(positions[r.index],r.color);};replay.disabled=busy;d.append(replay);t.append(d);}
 }
 function chart(){const canvas=$('chart'),ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;ctx.clearRect(0,0,w,h);ctx.strokeStyle='#68727b';ctx.beginPath();ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();if(!results.length)return;const y=s=>h/2-Math.max(-1,Math.min(1,s/600))*(h/2-8);const x=i=>i/Math.max(1,moves.length)*(w-12)+6;const vals=[scoreValue(results[0].bestScore)*(results[0].color==='w'?1:-1),...results.map(r=>scoreValue(r.playedScore)*(r.color==='w'?1:-1))];ctx.strokeStyle='#a8d77c';ctx.lineWidth=3;ctx.beginPath();vals.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.stroke();ctx.strokeStyle='#e6e7e7';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x(cursor),0);ctx.lineTo(x(cursor),h);ctx.stroke();}
 $('chart').onclick=e=>{const r=$('chart').getBoundingClientRect();go(Math.round((e.clientX-r.left)/r.width*moves.length));};
@@ -60,8 +61,8 @@ function coachContext(){
  const user=$('user').value.trim();
  if(!game||training?.active())return {user,game:null};
  const h=game.getHeaders();
- const color=h.White?.toLowerCase()===user.toLowerCase()?'w':h.Black?.toLowerCase()===user.toLowerCase()?'b':null;
- return {user,game:{source:h.Site==='Johan Chess'?'training':'import',termination:h.Termination||'',timeControl:h.TimeControl||'',white:player('w'),black:player('b'),date:h.Date||'',result:h.Result||'*',color,startFen,position:positions[cursor],cursor,moves:moves.map(m=>m.san),depth:analysisDepth??Number($('depth').value),complete:results.length===moves.length,analysis:results}};
+ const color=historical?null:h.White?.toLowerCase()===user.toLowerCase()?'w':h.Black?.toLowerCase()===user.toLowerCase()?'b':null;
+ return {user,game:{source:historical?'historical':h.Site==='Johan Chess'?'training':'import',historical:historical?{id:historical.id,title:historical.title,year:historical.year,source:historical.source}:null,termination:h.Termination||'',timeControl:h.TimeControl||'',white:player('w'),black:player('b'),date:h.Date||'',result:h.Result||'*',color,startFen,position:positions[cursor],cursor,moves:moves.map(m=>m.san),depth:analysisDepth??Number($('depth').value),complete:results.length===moves.length,analysis:results}};
 }
 $('coachUnavailable').hidden=!!globalThis.JohanNative;
 let accountStatus=null;
@@ -90,7 +91,7 @@ document.addEventListener('jc-puzzle-progress',refreshProfile);
 document.addEventListener('jc-account',e=>{accountStatus=e.detail;refreshProfile();});
 $('profileConnect').onclick=()=>{navigation.show('coach');const settings=document.querySelector('.coach-settings');if(settings)settings.open=true;};
 refreshProfile();
-initPuzzles(()=>$('user').value.trim());
+const puzzleUI=initPuzzles(()=>$('user').value.trim());
 initCoach(coachContext);
 training=initTraining({
  canStart:()=>!busy&&!importing,
@@ -99,9 +100,15 @@ training=initTraining({
  unlock:()=>{navigation.setPlaying(false);$('importPanel').hidden=false;$('review').hidden=!game;$('aiPanel').hidden=!globalThis.JohanNative;},
  review:(text,auto,user)=>{navigation.show('review');if(user)$('user').value=user;if(pgn!==text||!game){if(!load(text))return;}$('review').scrollIntoView({behavior:'smooth'});if(auto&&results.length!==moves.length)$('analyze').click();}
 });
+initStudyLibrary({
+ openGame:(pgn,row)=>{if(busy||importing||training?.active()){$('studyLibraryStatus').textContent='Дождись завершения текущей игры или анализа.';return;}navigation.show('review');if(load(pgn,row))$('review').scrollIntoView({behavior:'smooth'});},
+ practiceEndgame:theme=>{puzzleUI.selectTheme(theme);navigation.show('puzzles');},
+ askOpening:row=>{navigation.show('coach');if(!globalThis.JohanNative)return;$('aiShare').checked=false;$('aiQuestion').value='Объясни идеи и типичные планы дебютной линии Lichess '+row.eco+' '+row.name+': '+row.pgn+'. Не придумывай дополнительные проверенные варианты.';$('aiQuestion').focus();},
+ playOpening:(fen,color)=>{if(!busy&&!importing&&!training?.active())training.startReplay(fen,color);else $('studyLibraryStatus').textContent='Дождись окончания текущей работы.';}
+});
 $('askReview').onclick=()=>{
  if(!game||training.active()||!results.length||!globalThis.JohanNative)return;
  navigation.show('coach');$('aiShare').checked=true;
- $('aiQuestion').value='Разбери мою партию по данным Stockfish. Выдели главные ошибки, объясни их причины и предложи конкретную тренировку. Задай мне вопрос о том, что я рассчитывал в критической позиции.';
+ $('aiQuestion').value=historical?'Разбери историческую партию '+historical.title+'. Объясни ключевые идеи, сильные ходы и критические ошибки обеих сторон по анализу Stockfish. Покажи мини-доски и выводы для моей игры.':'Разбери мою партию по данным Stockfish. Выдели главные ошибки, объясни их причины и предложи конкретную тренировку. Задай мне вопрос о том, что я рассчитывал в критической позиции.';
  $('aiPanel').scrollIntoView({behavior:'smooth'});$('aiQuestion').focus();
 };

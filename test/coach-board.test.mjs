@@ -17,3 +17,7 @@ test('at most three cards; plain text survives',()=>{
  assert.equal(resolveBoards('Обычный ответ',null,Chess)[0].text,'Обычный ответ');
  assert.equal(resolveBoards('[[board:0]][[board:0]][[board:0]][[board:0]]',make(),Chess).filter(p=>p.board).length,3);
 });
+
+test('historical board is explicitly distinct from the student move',()=>{
+ const g={...make(),source:'historical',color:null};const b=resolveBoards('[[board:0]]',g,Chess)[0].board;assert.equal(b.historical,true);assert.equal(b.played.san,'e4');assert.equal(resolveBoards('[[board:0]]',make(),Chess)[0].board.historical,false);
+});

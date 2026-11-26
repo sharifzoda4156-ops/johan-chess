@@ -1,6 +1,6 @@
 // Local practice target, NOT a Lichess or Chess.com player rating.
 export const INITIAL_TARGET=1100;
-export const TOPICS={mateIn1:'Мат в один',mateIn2:'Мат в два',fork:'Вилки',pin:'Связки',hangingPiece:'Взятия',endgame:'Эндшпиль'};
+export const TOPICS={mateIn1:'Мат в один',mateIn2:'Мат в два',fork:'Вилки',pin:'Связки',hangingPiece:'Взятия',endgame:'Эндшпиль',pawnEndgame:'Пешечный эндшпиль',rookEndgame:'Ладейный эндшпиль',bishopEndgame:'Слоновый эндшпиль',knightEndgame:'Коневой эндшпиль',queenEndgame:'Ферзевый эндшпиль',queenRookEndgame:'Ферзь и ладья'};
 const validId=id=>typeof id==='string'&&/^[A-Za-z0-9]{5}$/.test(id);
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const outcomes=['clean','assisted','skipped'];
