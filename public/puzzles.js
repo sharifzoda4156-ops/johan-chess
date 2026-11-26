@@ -50,11 +50,11 @@ export function initPuzzles(getUser){
   if(!reset&&puzzle&&!done){progress={...progress,streak:0};save();}
   puzzle=null;game=null;answer=[];selected=null;highlight=null;promotion=[];done=false;assisted=false;
   const list=all();let next=choosePuzzle(list,progress,lastId);
-  for(let i=0;next&&i<list.length;i++){
+  while(next&&list.length){
    answer=solutions(next,Chess);if(answer.length){puzzle=next;break;}
    list.splice(list.indexOf(next),1);next=choosePuzzle(list,progress,lastId);
   }
-  if(!puzzle){$('puzzleTitle').textContent='Нет задач';$('puzzleNext').disabled=true;status('Сначала проанализируй завершённую партию, чтобы получить персональные задачи.');draw();stats();return;}
+  if(!puzzle){$('puzzleTurn').textContent='';$('puzzleExplanation').hidden=true;$('puzzleTitle').textContent='Нет задач';$('puzzleNext').disabled=true;status('Сначала проанализируй завершённую партию, чтобы получить персональные задачи.');draw();stats();return;}
   lastId=puzzle.id;game=new Chess(puzzle.fen);$('puzzleNext').disabled=false;$('puzzleNext').textContent='Пропустить';
   $('puzzleTitle').textContent=puzzle.title;
   $('puzzleTurn').textContent=game.turn()==='w'?'Ход белых':'Ход чёрных';
