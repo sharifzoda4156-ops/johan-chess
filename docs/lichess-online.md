@@ -1,0 +1,6 @@
+# Online Lichess alpha
+Official API and fair play: https://lichess.org/api ; https://lichess.org/page/fair-play ; https://lichess.org/page/api-tips .
+Android OAuth PKCE S256 and encrypted token, no VPS. Browser loopback callback checks state. Native bridge uses fixed Lichess endpoints and separates ordinary serial requests from event/game/seek streams. 429 waits one minute.
+Standard real-time chess only; automatic seek 10+0, 15+10, 30+20; direct 3+2 and 5+0 challenges also allowed. Server decides pairing, moves, clocks, outcomes and ratings. UI clocks are projections. Matchmaking and live game lock training navigation, cancel local engine work, and reject coach inference. Completed PGN can be opened in Stockfish.
+Social: Lichess follow/unfollow, account ratings, profile URL via Android share, incoming challenge refresh, completed standard-game history. No mutual-friend system, private messages or notifications when app is closed. Lichess and Chess.com identities remain separate.
+Device verification required: OAuth loopback; seek cancellation and game-start race; live stream reconnect, background/resume, promotion, draw/resign/abort, end status, unsupported variants, 429, history and share. No Android build or live two-account test performed here.
