@@ -1,6 +1,8 @@
 package com.johansystems.chess;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.view.WindowManager;
 import android.os.Bundle;
 import android.net.Uri;
 import android.webkit.*;
@@ -16,11 +18,15 @@ public final class MainActivity extends Activity {
     private static final String ORIGIN = "https://appassets.androidplatform.net";
     private WebView web;
     private Coach coach;
+    private boolean resumed=false,confirmingExit=false;
+    private volatile boolean protectedOnline=false;
     private Lichess lichess;
     private final ExecutorService lichessExecutor=Executors.newSingleThreadExecutor();
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
+        protectedOnline=getSharedPreferences("lichess",0).getBoolean("onlineLock",false);
+        if(protectedOnline)getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         web = new WebView(this);
         setContentView(web);
         getWindow().setStatusBarColor(0xff131d29);
@@ -39,6 +45,7 @@ public final class MainActivity extends Activity {
                 Uri u=r.getUrl();
                 if (!"https".equals(u.getScheme()) || !"appassets.androidplatform.net".equals(u.getHost()) || u.getPort()!=-1)
                     return response(403, "{\"error\":\"Blocked\"}");
+                if(protectedOnline&&(u.getPath().startsWith("/assets/engine/")||u.getPath().startsWith("/api/")))return response(403,"{\"error\":\"Online fair play\"}");
                 if (("/api/puzzle-data/catalog".equals(u.getPath()) || "/api/puzzle-data/pack".equals(u.getPath())) && "GET".equals(r.getMethod())) {
                     try { return response(200, PuzzleDownload.get(u)); }
                     catch(Exception e) { return response(502, "{\"error\":\"Puzzle data unavailable\"}"); }
@@ -61,7 +68,7 @@ public final class MainActivity extends Activity {
         });
         web.setDownloadListener((url,agent,disposition,mime,length)->{});
         try { coach=new Coach(this); } catch(Exception ignored) {}
-        try { lichess=new Lichess(this); } catch(Exception ignored) {}
+        try { lichess=new Lichess(this);onlineSecure(lichess.locked()); } catch(Exception ignored) {}
         if(WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)){
             WebViewCompat.addWebMessageListener(web,"JohanNative",Collections.singleton(ORIGIN),(view,msg,origin,main,reply)->{
                 if(!main||!ORIGIN.equals(origin.toString()))return;
@@ -73,8 +80,10 @@ public final class MainActivity extends Activity {
                         JSONObject req=new JSONObject(raw);
                         out.put("id",req.getString("id"));
                         if(coach==null)throw new IOException("Защищённое хранилище недоступно");
-                        if(lichess!=null&&lichess.locked()&&Arrays.asList("ask","continueCoach").contains(req.optString("op")))throw new IOException("ИИ недоступен во время онлайн-партии");
-                        out.put("data",coach.handle(req));
+                        if((protectedOnline||lichess!=null&&lichess.locked())&&Arrays.asList("ask","continueCoach").contains(req.optString("op")))throw new IOException("ИИ недоступен во время онлайн-партии");
+                        JSONObject data=coach.handle(req);
+                        if((protectedOnline||lichess!=null&&lichess.locked())&&Arrays.asList("ask","continueCoach").contains(req.optString("op")))throw new IOException("ИИ недоступен во время онлайн-партии");
+                        out.put("data",data);
                     } catch(Exception e) {
                         try { out.put("error", e.getMessage()==null?"Ошибка подключения":e.getMessage()); } catch(Exception ignored){}
                     }
@@ -84,6 +93,7 @@ public final class MainActivity extends Activity {
             WebViewCompat.addWebMessageListener(web,"JohanLichess",Collections.singleton(ORIGIN),(view,msg,origin,isMain,reply)->{
                 if(!isMain||!ORIGIN.equals(origin.toString()))return;
                 String raw=msg.getData();if(raw==null||raw.length()>30000)return;
+                try{JSONObject req=new JSONObject(raw);if("snapshot".equals(req.optString("op"))&&lichess!=null){reply.postMessage(new JSONObject().put("id",req.getString("id")).put("data",lichess.snapshot()).toString());return;}}catch(Exception ignored){}
                 lichessExecutor.execute(()->{
                     JSONObject out=new JSONObject();
                     try{JSONObject req=new JSONObject(raw);out.put("id",req.getString("id"));if(lichess==null)throw new IOException("Защищённое хранилище Lichess недоступно");out.put("data",lichess.handle(req));}
@@ -99,11 +109,37 @@ public final class MainActivity extends Activity {
     }
     void openBrowser(String url) {
         runOnUiThread(()->{
-            try { startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url))); }
+            try { if(protectedOnline)return;startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url))); }
             catch(Exception e) { if(coach!=null)coach.cancelLogin(); }
         });
     }
-    void shareLichess(String url){runOnUiThread(()->{Intent intent=new Intent(Intent.ACTION_SEND);intent.setType("text/plain");intent.putExtra(Intent.EXTRA_TEXT,url);startActivity(Intent.createChooser(intent,"Поделиться профилем Lichess"));});}
+    void shareLichess(String url){runOnUiThread(()->{if(protectedOnline)return;Intent intent=new Intent(Intent.ACTION_SEND);intent.setType("text/plain");intent.putExtra(Intent.EXTRA_TEXT,url);startActivity(Intent.createChooser(intent,"Поделиться профилем Lichess"));});}
+    void onlineSecure(boolean locked){
+        boolean changed=protectedOnline!=locked;protectedOnline=locked;if(!changed)return;
+        runOnUiThread(()->{if(isDestroyed())return;
+            if(protectedOnline){getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);if(web!=null)web.evaluateJavascript("document.dispatchEvent(new Event('jc-native-online-lock'))",null);}
+            else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        });
+    }
+    void runLichessMaintenance(Runnable task){if(!lichessExecutor.isShutdown())lichessExecutor.execute(task);}
+    private void syncForeground(){if(lichess!=null)lichess.foreground(resumed&&(hasWindowFocus()||confirmingExit));}
+    @Override protected void onResume(){super.onResume();resumed=true;syncForeground();}
+    @Override protected void onPause(){resumed=false;if(lichess!=null)lichess.background();super.onPause();}
+    @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);syncForeground();}
+    @Override public void onBackPressed(){
+        if(lichess!=null&&lichess.liveGame()){
+            if(confirmingExit)return;
+            confirmingExit=true;
+            AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Покинуть онлайн-партию?")
+                .setMessage("Выход считается сдачей. Остаться можно без штрафа.")
+                .setNegativeButton("Продолжить игру",null)
+                .setPositiveButton("Сдаться",(d,which)->lichess.resignConfirmed()).create();
+            dialog.setOnDismissListener(d->{confirmingExit=false;syncForeground();});dialog.show();
+            return;
+        }
+        if(protectedOnline||lichess!=null&&lichess.locked())return;
+        super.onBackPressed();
+    }
     @Override protected void onDestroy() {
         if(lichess!=null)lichess.close();lichessExecutor.shutdownNow();
         if(coach!=null)coach.cancelLogin();
