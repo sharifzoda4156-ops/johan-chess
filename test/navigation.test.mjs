@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {normalizeScreen} from '../public/navigation.js';
-test('navigation locks to play for every active game',()=>{
- for(const screen of ['review','coach','play','unknown'])assert.equal(normalizeScreen(screen,true),'play');
- assert.equal(normalizeScreen('review',false),'review');assert.equal(normalizeScreen('coach',false),'coach');assert.equal(normalizeScreen('unknown',false),'play');
+import {normalizeScreen,parentTab} from '../public/navigation.js';
+test('home, puzzles and study with play and review as child screens',()=>{
+ for(const screen of ['home','puzzles','review','coach','play','unknown'])assert.equal(normalizeScreen(screen,true),'play');
+ for(const screen of ['home','puzzles','review','coach','play'])assert.equal(normalizeScreen(screen,false),screen);
+ assert.equal(normalizeScreen('unknown',false),'home');assert.equal(parentTab('review'),'home');assert.equal(parentTab('play'),'home');assert.equal(parentTab('coach'),'coach');
 });
