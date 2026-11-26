@@ -21,7 +21,7 @@ function say(text){$('aiStatus').textContent=text;}
 function key(user){return 'jc-coach-games:'+String(user||'').toLowerCase().trim();}
 function getGames(user){try{return JSON.parse(localStorage.getItem(key(user))||'[]');}catch{return [];}}
 export function rememberGame(context){
- if(!context?.game||!context.user||!context.game.complete||!['1-0','0-1','1/2-1/2'].includes(context.game.result))return;
+ if(context?.game?.source==='historical'||!context?.game||!context.user||!context.game.complete||!['1-0','0-1','1/2-1/2'].includes(context.game.result))return;
  const g=context.game, own=g.color;if(!['w','b'].includes(own))return;
  const rs=(g.analysis||[]).filter(r=>r.color===own);
  const fingerprint=g.white+'|'+g.black+'|'+g.date+'|'+g.startFen+'|'+g.moves.join(' ');
