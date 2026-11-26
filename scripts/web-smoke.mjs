@@ -31,6 +31,7 @@ try{
   assert.equal(await page.locator('html').getAttribute('data-hosting'),'pages');
   await page.locator('[data-tab="profile"]').click();
   await page.locator('#profileAwards .profile-award').first().waitFor();
+  assert.ok(await page.evaluate(()=>[...document.querySelectorAll('#profileAwards img')].every(img=>img.complete&&img.naturalWidth>0)),'Award SVGs loaded');
   await page.locator('[data-tab="puzzles"]').click();
   await page.locator('#modeClassic').click();
   await page.locator('#classicStart').click();
@@ -46,15 +47,14 @@ try{
   assert.equal(await page.locator('#studyOpeningAsk').isVisible(),false);
   await page.locator('[data-tab="home"]').click();
   await page.locator('[data-go="review"]').first().click();
-  await page.locator('#sharedInput').fill('https://lichess.org/Ab12Cd34abcd');
-  await page.locator('#shareImport').click();
+  await page.locator('#pgn').fill('https://lichess.org/Ab12Cd34abcd');
+  await page.locator('#load').click();
   await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Нет завершённых'));
-  await page.locator('#sharedInput').fill('https://lichess.org/Ab12Cd34');
-  await page.locator('#shareImport').click();
+  await page.locator('#pgn').fill('https://lichess.org/Ab12Cd34');
+  await page.locator('#load').click();
   await page.locator('#board [data-square="e2"]').waitFor();
   assert.equal(lichessCalls,2);
   await page.locator('#reviewCloseBoard').click();
-  await page.locator('#manual summary').click();
   await page.locator('#pgn').fill('[Result "1-0"]\n\n1. e4 e5 2. Nf3 Nc6 1-0');
   await page.locator('#load').click();
   await page.locator('#board [data-square="e2"]').waitFor();
@@ -79,9 +79,8 @@ try{
   await page.waitForFunction(()=>document.querySelector('#playBoard [data-square="e4"]')?.getAttribute('aria-label')==='e4 wp');
   await page.waitForFunction(()=>document.querySelector('#playMoves').textContent.trim().split(/\s+/).length>=3 && document.querySelector('#playStatus').textContent.startsWith('Твой ход'),{},{timeout:30000});
   stable(playBox,await boardBox(page,'#playBoard'));
-  await page.locator('#playCancel').click({trial:true});
-  page.once('dialog',d=>d.accept());
   await page.locator('#playCancel').click();
+  await page.locator('[data-dialog="confirm"] [data-dialog-action="confirm"]').click();
   await page.locator('[data-tab="home"]').click();
   assert.deepEqual(errors,[]);
   assert.deepEqual(failed,[]);

@@ -3,6 +3,7 @@ import {memoryKey,loadMemory,saveMemory,normalizeMemory,shouldCompact,coachHisto
 import {getPuzzleTraining} from './puzzles.js';
 import {createCoachTools} from './coach-tools.js';
 import {snapshotBoards,renderCoachContent} from './coach-board.js';
+import {confirmDialog} from './dialog.js';
 const $=id=>document.getElementById(id);
 const native=globalThis.JohanNative;
 const pending=new Map();
@@ -98,15 +99,15 @@ export function initCoach(provider,options){
  $('aiLogin').onclick=()=>login(false);$('aiConsent').onclick=()=>login(true);
  $('aiRefresh').onclick=()=>action(refresh,true);
  const logout=forget=>action(async()=>{const r=await call(forget?'forget':'logout');syncStatus(r);if(!r.revoked)sayAccount('Локальный выход выполнен. Отзови доступ в настройках ChatGPT, если требуется.');},true);
- $('aiLogout').onclick=()=>logout(false);$('aiForget').onclick=()=>{if(confirm('Удалить сохранённую регистрацию ChatGPT с устройства?'))logout(true);};
- $('aiClear').onclick=()=>{if(busy||!scopeKey||!confirm('Удалить сохранённый диалог и краткую сводку? План и заметки останутся.'))return;history=[];memory.summary='';memory.summaryPending=0;persist();updateStudyFields();showHistory();};
- $('aiDeleteStudy').onclick=()=>{if(busy||!scopeKey||!confirm('Удалить диалог, мини-доски, сводку, план и заметки для текущего аккаунта и ника?'))return;try{localStorage.removeItem(scopeKey);switchMemory(true);}catch{say('Не удалось удалить память.');}};
+ $('aiLogout').onclick=()=>logout(false);$('aiForget').onclick=async()=>{if(busy)return;if(await confirmDialog({title:'Удалить регистрацию ChatGPT?',message:'Сохранённая регистрация клиента на этом устройстве будет удалена.',confirmText:'Удалить',danger:true})&&!busy)logout(true);};
+ $('aiClear').onclick=async()=>{const currentScope=scopeKey;if(busy||!currentScope)return;if(!await confirmDialog({title:'Очистить диалог?',message:'Удалить сохранённый диалог и краткую сводку? План и заметки останутся.',confirmText:'Очистить',danger:true}))return;if(busy||scopeKey!==currentScope)return;history=[];memory.summary='';memory.summaryPending=0;persist();updateStudyFields();showHistory();};
+ $('aiDeleteStudy').onclick=async()=>{const currentScope=scopeKey;if(busy||!currentScope)return;if(!await confirmDialog({title:'Удалить память учёбы?',message:'Удалить диалог, мини-доски, сводку, план и заметки для текущего аккаунта и ника?',confirmText:'Удалить',danger:true}))return;if(busy||scopeKey!==currentScope)return;try{localStorage.removeItem(currentScope);switchMemory(true);}catch{say('Не удалось удалить память.');}};
  $('aiOlder').onclick=()=>{visibleMessages+=20;showHistory();};
  $('aiShare').onchange=()=>{if(!scopeKey||busy)return;memory.shareGames=$('aiShare').checked;persist();};
  $('aiShareHistory').onchange=()=>{if(!scopeKey||busy)return;memory.shareHistory=$('aiShareHistory').checked;persist();};
  $('aiContinue').onclick=()=>{if(busy||!scopeKey)return;$('aiQuestion').value='Продолжим обучение. На основе доступного плана, прошлых занятий и статистики предложи один следующий шаг. Если контекста недостаточно, уточни.';$('aiQuestion').focus();};
  $('aiMakePlan').onclick=()=>{if(busy||!scopeKey)return;$('aiQuestion').value='Составь индивидуальный план на неделю по моим целям, времени и доступной статистике. Используй проверенные учебные источники и существующие задачи Lichess; не создавай новые шахматные позиции.';$('aiQuestion').focus();};
- $('aiDeleteMemory').onclick=()=>{if(!busy&&scopeKey&&confirm('Удалить локальную историю проанализированных партий этого игрока?')){try{localStorage.removeItem(key(contextProvider().user));say('История анализа очищена.');}catch{say('Не удалось очистить историю.');}}};
+ $('aiDeleteMemory').onclick=async()=>{const currentScope=scopeKey;if(busy||!currentScope)return;if(!await confirmDialog({title:'Очистить историю анализа?',message:'Удалить локальную историю проанализированных партий этого игрока?',confirmText:'Очистить',danger:true}))return;if(busy||scopeKey!==currentScope)return;try{localStorage.removeItem(key(contextProvider().user));say('История анализа очищена.');}catch{say('Не удалось очистить историю.');}};
  $('aiAsk').onclick=()=>action(async()=>{
   if(toolOptions?.onlineLocked?.())throw Error('Тренер недоступен во время онлайн-партии');
   switchMemory();const requestKey=scopeKey;

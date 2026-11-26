@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {platformFetch,webLichessPgn} from '../public/platform-api.js';
+import {platformFetch,webLichessPgn,webChessComGame} from '../public/platform-api.js';
 const response=data=>new Response(JSON.stringify(data));
 test('native and local routes remain untouched',async()=>{
  const opts={cache:'no-store'};let called=false;
@@ -26,3 +26,18 @@ test('web Lichess export uses only public IDs and bounded PGN',async()=>{
  await assert.rejects(webLichessPgn('Ab12Cd34',async()=>new Response('x'.repeat(1048577))),/Не удалось/);
  await assert.rejects(webLichessPgn('Ab12Cd34',async()=>new Response('',{status:404})),/Не удалось/);
 });
+
+test('webChessComGame resolves game via local proxy or direct public archives on Pages',async()=>{
+ const pgn='[Result "1-0"]\n\n1. e4 e5 1-0';
+ const localFetcher=async url=>{assert.equal(url,'/api/chesscom-game?user=alice&kind=live&id=123456');return response({pgn});};
+ assert.equal(await webChessComGame('Alice','live','123456',localFetcher,false),pgn);
+ const pagesFetcher=async url=>{
+  if(url.endsWith('/archives'))return response({archives:['https://api.chess.com/pub/player/alice/games/2026/11']});
+  assert.equal(url,'https://api.chess.com/pub/player/alice/games/2026/11');
+  return response({games:[{rules:'chess',url:'https://www.chess.com/game/live/123456',pgn}]});
+ };
+ assert.equal(await webChessComGame('Alice','live','123456',pagesFetcher,true),pgn);
+ await assert.rejects(webChessComGame('../bad','live','123',localFetcher,false),/ник/);
+ await assert.rejects(webChessComGame('alice','bullet','123',localFetcher,false),/ссылка/);
+});
+
