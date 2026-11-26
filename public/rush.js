@@ -19,7 +19,7 @@ export function initRush({getUser,back}){
  const read=()=>{try{return normalizeRushHistory(JSON.parse(localStorage.getItem(storageKey(user))||'null'));}catch{return normalizeRushHistory(null);}};
  function store(){try{localStorage.setItem(storageKey(user),JSON.stringify(history));return true;}catch{return false;}}
  function menu(){
-  view='menu';sync();for(const m of Object.keys(labels))$('rushBest'+m).textContent=String(history.best[m]);
+  view='menu';sync();if(active)window.scrollTo(0,0);for(const m of Object.keys(labels))$('rushBest'+m).textContent=String(history.best[m]);
   for(const b of document.querySelectorAll('[data-rush-mode]'))b.setAttribute('aria-pressed',String(b.dataset.rushMode===mode));
   const list=$('rushHistory'),frag=document.createDocumentFragment();
   for(const r of history.runs.slice(0,20)){
@@ -94,15 +94,15 @@ export function initRush({getUser,back}){
   $('rushResultBest').textContent='Рекорд: '+history.best[r.mode];$('rushResultNotice').textContent=lastError;
   const list=$('rushResultRows'),frag=document.createDocumentFragment();
   for(const e of r.entries){const b=el('button',undefined,'rush-history-row');b.type='button';b.append(el('strong',(e.correct?'✓ ':'× ')+e.rating,e.correct?'puzzle-success':'puzzle-wrong'),el('small','Lichess #'+e.id+' · Разбор'));b.onclick=()=>review(e.id);frag.append(b);}
-  if(!r.entries.length)frag.append(el('p','Нет завершённых задач.','muted'));list.replaceChildren(frag);window.scrollTo(0,0);
+  if(!r.entries.length)frag.append(el('p','Нет завершённых задач.','muted'));list.replaceChildren(frag);if(active)window.scrollTo(0,0);
  }
  async function review(id){
-  const token=generation;
+  const token=generation,selectedResult=result;
   try{
-   if(!byId.size){rows=await loadPack();if(token!==generation||!active||view!=='result')return;byId=new Map(rows.map(p=>[p.id,p]));}
+   if(!byId.size){rows=await loadPack();if(token!==generation||!active||view!=='result'||result!==selectedResult)return;byId=new Map(rows.map(p=>[p.id,p]));}
    const p=preparePuzzle(byId.get(id),Chess);if(!p)throw Error('Задача отсутствует в текущем наборе');
    puzzle=p;frames=buildPuzzleReview(p,Chess);frame=0;view='review';sync();drawReview();window.scrollTo(0,0);
-  }catch(e){if(token===generation&&view==='result')$('rushResultNotice').textContent=e.message;}
+  }catch(e){if(token===generation&&view==='result'&&result===selectedResult)$('rushResultNotice').textContent=e.message;}
  }
  function drawReview(animate=false){
   const f=frames[frame];if(!f)return;renderBoardView($('rushReviewBoard'),{rows:new Chess(f.fen).board(),flip:puzzle.color==='b',last:f.move,animateMoves:animate&&f.move?[f.move]:[]});
@@ -126,6 +126,6 @@ export function initRush({getUser,back}){
   if(!active){
    generation++;loading=false;if(run&&view==='play'){run=endRush(run,now(),'stopped');finish();}sync();return;
   }
-  const next=String(getUser()||'').trim().toLowerCase();if(next!==user||!result){user=next;history=read();lastError='';menu();}else sync();
+  const next=String(getUser()||'').trim().toLowerCase();if(next!==user||!result){user=next;result=null;history=read();lastError='';menu();}else sync();
  });
 }
