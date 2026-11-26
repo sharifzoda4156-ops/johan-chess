@@ -34,6 +34,7 @@ export function initStudyLibrary({openGame,practiceEndgame,askOpening,playOpenin
  $('studyPrevious').onclick=()=>{if(line&&at>0){at--;draw();}};
  $('studyNext').onclick=()=>{if(line&&at<line.moves.length){at++;draw([line.moves[at-1]]);}};
  $('studyFlip').onclick=()=>{flip=!flip;draw();};
+ $('studyOpeningAsk').hidden=!globalThis.JohanNative;
  $('studyOpeningAsk').onclick=()=>{if(selected)askOpening(selected);};
  $('studyOpeningPlay').onclick=()=>{if(line)playOpening(line.positions[at],flip?'b':'w');};
  for(const [theme,label] of Object.entries(ENDGAMES)){
