@@ -107,7 +107,7 @@ export function initPuzzles(getUser){
  async function enter(){
   try{if(!pack){status('Загружаю локальную базу Lichess…');await loadPack();}}catch(e){status(e.message);return;}
   const next=userNow();if(starting)return;
-  if(next!==user||!puzzle){if(next!==user){excluded=new Set();remotePacks=[];visited=new Set(read('visited',next,[]));}user=next;progress=getPuzzleProgress(user);training=normalizeTraining(read('training',user,{}));storageFailed=false;lastId=null;start({reset:true});}
+  if(next!==user||!puzzle){if(next!==user){excluded=new Set();remotePacks=[];const oldVisited=read('visited',next,[]);visited=new Set(Array.isArray(oldVisited)?oldVisited:[]);}user=next;progress=getPuzzleProgress(user);training=normalizeTraining(read('training',user,{}));storageFailed=false;lastId=null;start({reset:true});}
   else stats();
  }
  document.addEventListener('jc-screen',e=>{if(e.detail==='puzzles')enter();});
