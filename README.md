@@ -64,3 +64,5 @@ Workflow `Quality checks` запускает Node-тесты и проверку
 
 ## Web — GitHub Pages (stage 1)
 The web build shares the Android UI and chess logic but does not use native bridges. Run `npm install && node scripts/build-pages.mjs`; serve `dist/` with a static HTTP server. The Pages workflow builds and tests under the repository URL prefix before deployment. Enable Settings → Pages → Source → GitHub Actions if not already enabled. Direct Chess.com public requests and GitHub puzzle range downloads depend on upstream CORS; manual PGN and the bundled 1000 puzzles remain available. Lichess live games, native share and ChatGPT sign-in remain Android-only at this stage. No secrets or tokens should be added to the static build.
+
+Web: direct public Lichess game link import is supported for completed standard games, subject to browser CORS. Chess.com links still require a PGN or username-based import. Android bridges are unchanged.
