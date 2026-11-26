@@ -1,6 +1,6 @@
 import {loadMorePuzzles} from './puzzle-remote.js';
 import {Chess} from './chess.js';
-import {renderBoardView,clearBoardView} from './board-view.js';
+import {renderBoardView,clearBoardView,replyDelay} from './board-view.js';
 import {preparePuzzle,advancePuzzle,filterPuzzles,cleanProgress,finishAttempt,buildPuzzleReview} from './puzzle-core.js';
 import {normalizeTraining,recordOutcome,summarizeTraining,selectTrainingPuzzle} from './puzzle-training.js';
 import {parseUci} from './training-core.js';
@@ -15,14 +15,14 @@ export const getPuzzleTraining=user=>summarizeTraining(read('training',user,{}))
 
 function elem(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;}
 export function initPuzzles(getUser){
- let puzzle=null,game=null,step=0,selected=null,highlight=null,promotion=[],done=false,assisted=false,user='',progress=cleanProgress(null),lastId=null,training=normalizeTraining(null),storageFailed=false,starting=false,remotePacks=[],excluded=new Set(),visited=new Set(),pendingTheme=false;
+ let replying=false,puzzle=null,game=null,step=0,selected=null,highlight=null,promotion=[],done=false,assisted=false,user='',progress=cleanProgress(null),lastId=null,training=normalizeTraining(null),storageFailed=false,starting=false,remotePacks=[],excluded=new Set(),visited=new Set(),pendingTheme=false;
  let mode='journey',map=true,active=false,journey=normalizeJourney(null),daily=normalizeDaily(null),date=dayKey(),calendarDay=date,hearts=5,attemptTarget=1100,view='solve',dailyOutcome=null,feedback=null,previousFeedback=null,reviewFrames=[],reviewAt=0,retryPractice=false;
  const timer=createPuzzleTimer(),modes={journey:'modeJourney',daily:'modeDaily',classic:'modeClassic'};
  const status=(s,cls='')=>{$('puzzleStatus').textContent=s;$('puzzleStatus').className=cls;};
  const userNow=()=>String(getUser()||'').trim().toLowerCase();
  function saveMode(kind,state){if(!write(kind,user,state))storageFailed=true;}
  function refreshClock(){const text=formatDuration(timer.seconds());if($('puzzleElapsed').textContent!==text)$('puzzleElapsed').textContent=text;}
- function syncTimer(){if(active&&!document.hidden&&mode!=='classic'&&!map&&view==='solve'&&game&&!done&&!starting)timer.resume();else timer.pause();refreshClock();}
+ function syncTimer(){if(active&&!document.hidden&&mode!=='classic'&&!map&&view==='solve'&&game&&!done&&!starting&&!replying)timer.resume();else timer.pause();refreshClock();}
  setInterval(()=>{if(active&&mode==='journey'&&!map&&!done)refreshClock();},250);
  document.addEventListener('visibilitychange',()=>{syncTimer();if(active&&!document.hidden)refreshDay();});
  setInterval(()=>{if(active&&!document.hidden)refreshDay();},15000);
@@ -67,7 +67,7 @@ export function initPuzzles(getUser){
   }
  }
  function refreshDay(){
-  if(starting)return false;
+  if(starting||replying)return false;
   const today=dayKey();if(today===calendarDay)return false;
   const previous=calendarDay;calendarDay=today;
   if(mode==='daily'&&(date<shiftDay(today,-6)||(date===previous&&(!game||done)))){date=today;if(map){modeControls();stats();return false;}start({reset:true});return true;}
@@ -115,8 +115,8 @@ export function initPuzzles(getUser){
  function draw(animateMoves=[]){
   const board=$('puzzleBoard');
   $('puzzleArea').hidden=!game;
-  $('puzzleHint').disabled=!game||done||!!promotion.length;
-  $('puzzleReveal').disabled=!game||done||!!promotion.length;
+  $('puzzleHint').disabled=!game||done||replying||!!promotion.length;
+  $('puzzleReveal').disabled=!game||done||replying||!!promotion.length;
   $('puzzleHint').hidden=done;
   $('puzzleReveal').hidden=done||mode==='daily';
   $('puzzleRetry').hidden=!game||!done;
@@ -125,13 +125,13 @@ export function initPuzzles(getUser){
   $('puzzlePromotion').hidden=!promotion.length;
   if(!game){clearBoardView(board);previousFeedback=null;return;}
   const targets=selected&&!done&&!promotion.length?game.moves({square:selected,verbose:true}).map(m=>m.to):[];
-  renderBoardView(board,{rows:game.board(),flip:puzzle.color==='b',interactive:true,disabled:starting||done||!!promotion.length,onClick:click,selected,targets,marked:highlight||[],markClass:'puzzle-mark',animateMoves});
+  renderBoardView(board,{rows:game.board(),flip:puzzle.color==='b',interactive:true,disabled:starting||done||replying||!!promotion.length,onClick:click,selected,targets,marked:highlight||[],markClass:'puzzle-mark',animateMoves});
   if(previousFeedback)board.querySelector('[data-square="'+previousFeedback+'"]')?.removeAttribute('data-feedback');
   if(feedback)board.querySelector('[data-square="'+feedback.square+'"]')?.setAttribute('data-feedback',feedback.kind);
   previousFeedback=feedback?.square||null;
  }
  async function start({reset=false}={}){
-  if(starting)return;starting=true;pendingTheme=false;timer.pause();const wasPractice=retryPractice;view='solve';dailyOutcome=null;feedback=null;retryPractice=false;$('journeyDelta').textContent='';$('dailyShareText').hidden=true;
+  if(starting||replying)return;starting=true;pendingTheme=false;timer.pause();const wasPractice=retryPractice;view='solve';dailyOutcome=null;feedback=null;retryPractice=false;$('journeyDelta').textContent='';$('dailyShareText').hidden=true;
   $('puzzleNext').disabled=$('puzzleTheme').disabled=$('puzzleBand').disabled=true;
   if(!reset&&puzzle&&!done&&mode!=='daily'&&!wasPractice){record('skipped');progress={...progress,streak:0};save();if(mode==='journey'){journey=breakJourney(journey);saveMode('journey',journey);}}
   puzzle=null;game=null;step=0;selected=null;highlight=null;promotion=[];done=false;assisted=false;hearts=5;timer.reset();attemptTarget=training.target;
@@ -181,16 +181,18 @@ export function initPuzzles(getUser){
   $('puzzleNext').disabled=false;$('puzzleNext').textContent='Далее';$('puzzleTurn').textContent=reveal?'Решение':!assisted?'Отличный ход!':'Задача решена';draw(animateMoves);stats();if(mode==='daily')showDailyResult();
  }
  function tryMove(m){
-  if(done||!game)return;
+  if(done||replying||!game)return;
   promotion=[];selected=null;highlight=null;
   const next=advancePuzzle(puzzle,game,step,m,Chess);
-  if(next){feedback={square:next.played.to,kind:'correct'};game=next.game;step=next.index;const last=next.reply||next.played;highlight=[last.from,last.to];const animation=[next.played,...(next.reply?[next.reply]:[])];if(next.done){finish(false,animation);return;}status('Верно! Соперник ответил '+next.reply.san+'. Продолжай.','puzzle-success');draw(animation);return;}
+  if(next){feedback={square:next.played.to,kind:'correct'};const applyReply=animation=>{game=next.game;step=next.index;const last=next.reply||next.played;highlight=[last.from,last.to];if(next.done){finish(false,animation);return;}status('Верно! Соперник ответил '+next.reply.san+'. Продолжай.','puzzle-success');draw(animation);syncTimer();};
+   if(next.reply&&replyDelay()>0){const current=puzzle,intermediate=new Chess(next.played.after);game=intermediate;replying=true;highlight=[next.played.from,next.played.to];$('puzzleNext').disabled=true;status('Верно! Ответ соперника…','puzzle-success');draw([next.played]);syncTimer();setTimeout(()=>{if(puzzle!==current||game!==intermediate)return;replying=false;if(userNow()!==user){enter();return;}$('puzzleNext').disabled=mode==='daily';applyReply(active?[next.reply]:[]);},replyDelay());}
+   else applyReply([next.played,...(next.reply?[next.reply]:[])]);return;}
   assisted=true;feedback={square:m.to,kind:'wrong'};penalty();
   if(mode==='daily'&&hearts===0){failDaily();return;}
   status('Не совпадает с решением Lichess. Попробуй ещё раз.','puzzle-wrong');draw();stats();
  }
  function click(sq){
-  if(done||!game||promotion.length)return;
+  if(done||replying||!game||promotion.length)return;
   if(selected){
    const moves=game.moves({square:selected,verbose:true}).filter(m=>m.to===sq);
    if(moves.length>1){promotion=moves;draw();return;}
@@ -205,12 +207,12 @@ export function initPuzzles(getUser){
   if(mode==='journey'){journey=breakJourney(journey);saveMode('journey',journey);}
  }
  function abandon(){
-  timer.pause();
+  replying=false;timer.pause();
   if(mode==='journey'&&puzzle&&!done&&!retryPractice){journey=breakJourney(journey);saveMode('journey',journey);record('skipped');progress={...progress,streak:0};save();}
   puzzle=null;game=null;promotion=[];selected=null;done=false;lastId=null;view='solve';dailyOutcome=null;feedback=null;draw();
  }
  function switchMode(next){
-  if(starting||next===mode)return;
+  if(starting||replying||next===mode)return;
   abandon();mode=next;map=true;date=dayKey();calendarDay=date;hearts=5;modeControls();stats();
  }
  function openSession(){if(starting||!pack)return;map=false;modeControls();if(!puzzle)start({reset:true});else syncTimer();}
@@ -221,8 +223,8 @@ export function initPuzzles(getUser){
  $('puzzleArchive').onclick=()=>{map=true;modeControls();stats();};
  $('puzzleNext').onclick=()=>start({reset:mode==='daily'});
  $('puzzleTheme').onchange=$('puzzleBand').onchange=()=>{if(puzzle)abandon();lastId=null;modeControls();stats();};
- $('puzzleHint').onclick=()=>{if(done||!game)return;assisted=true;feedback=null;penalty();if(mode==='daily'&&hearts===0){failDaily();return;}highlight=[puzzle.solution[step].slice(0,2)];selected=null;status('Подсказка: начни с выделенной фигуры.');draw();stats();};
- $('puzzleReveal').onclick=()=>{if(done||!game)return;while(step<puzzle.solution.length){const m=game.move(parseUci(puzzle.solution[step++]));highlight=[m.from,m.to];}finish(true);};
+ $('puzzleHint').onclick=()=>{if(done||replying||!game)return;assisted=true;feedback=null;penalty();if(mode==='daily'&&hearts===0){failDaily();return;}highlight=[puzzle.solution[step].slice(0,2)];selected=null;status('Подсказка: начни с выделенной фигуры.');draw();stats();};
+ $('puzzleReveal').onclick=()=>{if(done||replying||!game)return;while(step<puzzle.solution.length){const m=game.move(parseUci(puzzle.solution[step++]));highlight=[m.from,m.to];}finish(true);};
  for(const type of ['q','r','b','n'])$('puzzle-promote-'+type).onclick=()=>{const m=promotion.find(x=>x.promotion===type);if(m)tryMove(m);};
  $('puzzle-promote-cancel').onclick=()=>{promotion=[];draw();};
  function failDaily(){
@@ -243,7 +245,7 @@ export function initPuzzles(getUser){
   if(active)window.scrollTo(0,0);
  }
  function retryCurrent(){
-  if(starting||!puzzle)return;
+  if(starting||replying||!puzzle)return;
   view='solve';dailyOutcome=null;feedback=null;game=new Chess(puzzle.startFen);step=0;selected=null;highlight=null;promotion=[];done=false;hearts=5;
   retryPractice=mode==='journey';assisted=retryPractice;timer.reset();attemptTarget=training.target;
   $('journeyDelta').textContent='';$('journeyReward').hidden=true;$('puzzleExplanation').textContent='';$('puzzleNext').disabled=mode==='daily';$('puzzleNext').textContent=mode==='daily'?'Решай задачу':'Пропустить';
@@ -278,7 +280,7 @@ export function initPuzzles(getUser){
   if(starting)return;
   const next=userNow();
   if(next!==user){
-   timer.pause();puzzle=null;game=null;done=false;lastId=null;excluded=new Set();remotePacks=[];
+   replying=false;timer.pause();puzzle=null;game=null;done=false;lastId=null;excluded=new Set();remotePacks=[];
    const oldVisited=read('visited',next,[]);visited=new Set(Array.isArray(oldVisited)?oldVisited:[]);
    user=next;progress=getPuzzleProgress(user);training=normalizeTraining(read('training',user,{}));journey=normalizeJourney(read('journey',user,{}));daily=normalizeDaily(read('daily',user,{}));storageFailed=false;map=true;date=dayKey();calendarDay=date;hearts=5;view='solve';dailyOutcome=null;feedback=null;draw();
   }

@@ -8,3 +8,5 @@ test('home, puzzles and study with play and review as child screens',()=>{
 });
 
 test('online is a home child screen',()=>{assert.equal(normalizeScreen('online',false),'online');assert.equal(parentTab('online'),'home');});
+
+test('account settings is a profile child and cannot bypass play lock',()=>{assert.equal(normalizeScreen('account',false),'account');assert.equal(parentTab('account'),'profile');assert.equal(normalizeScreen('account',true),'play');});

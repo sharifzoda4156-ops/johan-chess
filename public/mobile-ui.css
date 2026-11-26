@@ -248,3 +248,133 @@ body.is-online-playing .app-header,body.is-online-playing .bottom-nav,body.is-on
 @media(orientation:landscape) and (max-height:550px){#onlineBoard{max-width:calc(100dvh - 24px)}}
 
 .online-absence{color:var(--accent);border:1px solid var(--line);padding:10px 12px;border-radius:10px;font-variant-numeric:tabular-nums;text-align:center}
+
+/* Account and study are separate screens; compact chat first. */
+.profile-hero .profile-cover{height:64px;margin-bottom:12px}
+.profile-hero .profile-heading{margin-top:0;align-items:center;gap:12px}
+.profile-hero .profile-avatar{width:62px;height:62px;border:0;border-radius:14px}
+.profile-hero .profile-heading h2{font-size:23px;margin:0 0 3px;line-height:1.18}
+.profile-hero .profile-heading p{margin:2px 0}
+.profile-connections{margin-top:16px;border-top:1px solid var(--line)}
+.profile-link{width:100%;display:flex;align-items:center;gap:8px;justify-content:space-between;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:12px 0;min-height:48px;font-size:15px}
+.profile-link small{margin-left:auto;letter-spacing:0;color:var(--muted);font-weight:500}
+[data-screen=account]{max-width:650px;margin:auto}
+.account-panel>label,.account-panel .study-fields label{display:grid;gap:6px;margin:12px 0}
+.account-panel select{width:100%}
+.account-panel label.account-check{display:flex;align-items:flex-start;gap:10px;line-height:1.4}
+.account-check input{min-height:0;margin-top:3px;accent-color:var(--accent);width:18px;height:18px;flex:none}
+.account-panel .wide{margin:8px 0}
+.account-panel #aiAccountStatus{overflow-wrap:anywhere}
+.coach-chat{padding:12px;min-height:340px}
+.coach-chat-head{display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.coach-chat-head>div{flex:1;min-width:0}
+.coach-chat-head h2{font-size:19px;margin:0 0 3px}
+.coach-chat-head small{font-size:12px;letter-spacing:0}
+.coach-gear{min-width:44px;padding:6px;font-size:20px;background:transparent;border:0}
+.coach-empty{padding:24px 4px;text-align:center}
+.coach-empty h3{font-size:17px;margin:0 0 6px}
+.coach-empty p{margin:6px 0 14px}
+#aiHistory{max-height:none;overflow:visible;display:flex;flex-direction:column;gap:10px;margin:12px 0}
+#aiHistory .ai-message{margin:0;padding:11px 12px;max-width:100%;border-radius:12px}
+#aiHistory .ai-message.user{align-self:flex-end;max-width:88%;background:var(--surface-raised)}
+#aiHistory .ai-message.assistant{align-self:stretch;background:var(--surface-inset)}
+.coach-quick{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.coach-quick button{font-size:12px;min-height:36px;padding:7px 10px}
+.chat-composer{display:flex;align-items:flex-end;gap:8px;padding:10px 0 0}
+#aiQuestion{flex:1;min-width:0;width:100%;margin:0;resize:none;font-size:15px}
+#aiAsk{width:46px;height:46px;min-height:46px;padding:0;font-size:24px;flex:none;border-radius:12px}
+#aiStatus:empty,#aiCacheStatus:empty{display:none}
+
+#aiHistory{max-height:min(52dvh,520px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+#aiHistory:empty{display:none}
+
+/* Pieces glide above squares, not inside their stacking contexts. */
+#board,#playBoard,#puzzleBoard,#studyBoard,.mini-board{position:relative}
+.board-motion-layer{position:absolute;inset:0;pointer-events:none;z-index:15;overflow:hidden}
+.board-motion-piece{position:absolute;display:grid;place-items:center;width:12.5%;height:12.5%;pointer-events:none}
+.board-motion-piece .piece-image{display:block;width:96%;height:96%;object-fit:contain;pointer-events:none}
+.board-motion-moving{z-index:1}
+.board-motion-setting{display:grid;gap:6px;margin:12px 0;font-size:14px}
+.board-motion-setting select{width:100%}
+
+/* Fixed chess workspace. The board never participates in the scrolling page.
+   Only move strips and the analysis note can scroll; all variable text is clipped. */
+html:has(body.is-playing),html:has(body.is-online-playing),html:has(body.review-board-focus),
+body.is-playing,body.is-online-playing,body.review-board-focus{overflow:hidden;overscroll-behavior:none;height:100%;overflow-anchor:none}
+:is(body.is-playing,body.is-online-playing,body.review-board-focus) .app-header,
+:is(body.is-playing,body.is-online-playing,body.review-board-focus) .bottom-nav,
+:is(body.is-playing,body.is-online-playing,body.review-board-focus) footer{display:none!important}
+body.is-playing [data-screen=play],body.is-online-playing [data-screen=online],body.review-board-focus [data-screen=review]{
+ position:fixed;inset:0;inset:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);
+ max-width:none;margin:0;background:var(--app-bg);overflow:hidden;overscroll-behavior:none}
+body.is-playing #playPanel,body.is-online-playing .online-panel,body.review-board-focus #reviewBoardShell{
+ width:100%;height:100%;max-width:none;margin:0;padding:0;border:0;border-radius:0;background:transparent}
+body.is-playing #playStatus,body.is-playing #playHistoryPanel,body.is-playing #playSetup,
+body.review-board-focus #importPanel,body.review-board-focus [data-screen=review]>.screen-back,
+body.review-board-focus #review .report,body.review-board-focus #review>section,
+body.is-online-playing.online-board-focus .online-panel>.online-head,
+body.is-online-playing.online-board-focus #onlineStatus,
+body.is-online-playing.online-board-focus #onlineReconnect{display:none!important}
+body.is-online-playing:not(.online-board-focus) .online-panel{height:100%;overflow-y:auto;padding:14px}
+body.review-board-focus #review,body.review-board-focus #review>.layout{height:100%;margin:0;display:block}
+body:not(.review-board-focus) #reviewBoardShell{display:none}
+.game-topbar{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:0 12px;min-width:0}
+.game-title{font-size:19px;font-weight:780;white-space:nowrap;letter-spacing:-.4px}
+.game-title b{color:var(--accent)}
+.game-caption{font-size:12px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0;text-align:right}
+.game-topbar button{border:0;background:transparent;padding:5px;min-width:40px;min-height:40px;display:grid;place-items:center}
+.game-topbar svg,.game-toolbar svg{width:24px;height:24px;display:block}
+.game-topbar button.running{color:var(--accent)}
+.game-move-strip{height:32px;min-height:32px;max-height:32px;overflow-x:auto;overflow-y:hidden;white-space:nowrap;scrollbar-width:none;overscroll-behavior:contain;touch-action:pan-x;padding:6px 12px;font-size:13px;font-variant-numeric:tabular-nums;color:var(--muted);background:var(--surface-inset);line-height:20px;min-width:0;box-sizing:border-box}
+.game-move-strip::-webkit-scrollbar{display:none}
+.game-move-strip button{display:inline-block;background:transparent;border:0;font-size:13px;min-height:20px;height:20px;padding:0 8px;border-radius:4px}
+.game-move-strip button[aria-current=step]{color:var(--accent);background:var(--surface-raised)}
+.game-shell .game-stage{position:relative;min-width:0}
+.game-toolbar{display:flex;justify-content:space-evenly;align-items:stretch;gap:0;margin:0;padding:0 4px}
+.game-toolbar button{display:flex;flex:1;flex-direction:column;justify-content:center;align-items:center;gap:4px;min-width:0;min-height:48px;border:0;background:transparent;color:var(--muted);border-radius:8px;font-size:11px;padding:5px 2px;font-weight:650}
+.game-toolbar button:not(:disabled):active{background:var(--surface-raised);color:var(--accent)}
+.game-player{display:flex;align-items:center;gap:8px;min-width:0;padding:6px 12px;min-height:0;height:48px;margin:0}
+.game-player .avatar{width:34px;height:34px;font-size:24px}
+.game-player>span:nth-child(2),.game-player>strong:nth-child(2){flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
+.game-player strong:last-child:not(:nth-child(2)){flex:none;min-width:82px;font-size:20px;line-height:1.2;font-weight:750;text-align:center;white-space:nowrap;padding:6px 8px;background:var(--surface-inset);color:var(--muted);border-radius:5px;font-variant-numeric:tabular-nums}
+.game-player strong.running:last-child{background:#f0f2f5;color:#18212c}
+body.is-playing #playArea,body.is-online-playing.online-board-focus #onlineGame,body.review-board-focus #reviewBoardShell{
+ display:grid;grid-template-rows:48px 32px minmax(0,1fr) 62px;max-width:none;width:100%;height:100%;margin:0;min-height:0;overflow:hidden}
+body.review-board-focus #reviewBoardShell{grid-template-rows:48px 32px minmax(0,1fr) 62px 58px}
+:is(body.is-playing,body.is-online-playing.online-board-focus,body.review-board-focus) .game-stage{
+ container-type:size;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(48px,1fr) auto minmax(48px,1fr);align-items:center;justify-items:center;min-height:0}
+:is(body.is-playing,body.is-online-playing.online-board-focus,body.review-board-focus) .game-stage>.game-player{
+ width:min(100%,720px);align-self:end}
+:is(body.is-playing,body.is-online-playing.online-board-focus,body.review-board-focus) .game-stage>.game-player-bottom{align-self:start}
+:is(body.is-playing,body.is-online-playing.online-board-focus,body.review-board-focus) .game-stage>:is(#playBoard,#onlineBoard,#board){
+ width:min(100%,720px,max(0px,calc(100dvh - 300px)));width:min(100cqw,720px,max(0px,calc(100cqh - 96px)));
+ max-width:none;height:auto;aspect-ratio:1;margin:0;border-radius:0;touch-action:none;grid-template-columns:repeat(8,minmax(0,1fr));grid-template-rows:repeat(8,minmax(0,1fr));overflow:hidden}
+.game-stage .square{min-width:0;min-height:0;touch-action:none}
+.game-stage .square .piece-image{touch-action:none}
+#playPromotion,#onlinePromotion,.game-notice{position:absolute;z-index:18;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92%,340px);margin:0;padding:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 4px 24px #0008}
+.game-notice{top:auto;bottom:52px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;font-size:12px}
+body.is-online-playing.online-board-focus #onlineOpponentGone,body.is-online-playing.online-board-focus #onlineClaimActions{position:absolute;z-index:19;left:8px;right:8px;bottom:62px;margin:0;padding:8px;background:var(--surface);border:1px solid var(--line);border-radius:8px;font-size:12px}
+body.is-online-playing.online-board-focus #onlineOpponentGone:has(+ #onlineClaimActions:not([hidden])){bottom:112px}
+body.review-board-focus #coach{height:58px;min-height:0;margin:0;padding:5px 12px;border-radius:0;font-size:12px;line-height:1.35;overflow:auto;overscroll-behavior:contain}
+.sr-game{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+@media(orientation:landscape) and (max-height:550px){
+ :is(body.is-playing,body.is-online-playing.online-board-focus,body.review-board-focus) .game-stage{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);grid-template-rows:1fr 1fr}
+ :is(body.is-playing,body.is-online-playing.online-board-focus,body.review-board-focus) .game-stage>:is(#playBoard,#onlineBoard,#board){grid-column:1;grid-row:1/3;width:min(100%,100cqh)}
+ :is(body.is-playing,body.is-online-playing.online-board-focus,body.review-board-focus) .game-stage>.game-player-top{grid-column:2;grid-row:1;align-self:end}
+ :is(body.is-playing,body.is-online-playing.online-board-focus,body.review-board-focus) .game-stage>.game-player-bottom{grid-column:2;grid-row:2;align-self:start}
+ body.is-playing #playArea,body.is-online-playing.online-board-focus #onlineGame{grid-template-rows:36px 26px minmax(0,1fr) 48px}
+ body.review-board-focus #reviewBoardShell{grid-template-rows:36px 26px minmax(0,1fr) 48px 42px}
+ .game-move-strip{height:26px;min-height:26px;max-height:26px;padding-block:3px}
+ body.review-board-focus #coach{height:42px}
+}
+
+body:not(.review-board-focus) #review>.layout{grid-template-columns:minmax(0,1fr)}
+.review-title{display:flex;flex-direction:column;min-width:0;align-items:center;flex:1;gap:1px}
+#reviewBoardStatus{font-size:10px;letter-spacing:0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:100%;line-height:1.2}
+@media(orientation:landscape) and (max-height:550px){.review-title .game-title{font-size:15px}.game-topbar button{min-height:34px}.game-toolbar button{min-height:42px}}
+
+/* Reset older ID-specific scrolling/card rules in the fixed game workspace. */
+#playMoves.game-move-strip{height:32px;min-height:32px;max-height:32px;margin:0;padding:6px 12px;overflow-x:auto;overflow-y:hidden;border-radius:0;line-height:20px}
+@media(orientation:landscape) and (max-height:550px){#playMoves.game-move-strip{height:26px;min-height:26px;max-height:26px;padding-block:3px}}
+
+body.is-playing #playPanel:has(#playArea:not([hidden])){padding:0;margin:0;border:0}

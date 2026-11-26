@@ -167,7 +167,7 @@ final class Lichess {
             server.bind(new InetSocketAddress(InetAddress.getByName("127.0.0.1"),0));loginSocket=server;
             redirect="http://127.0.0.1:"+server.getLocalPort()+"/lichess";
             String url=HOST+"/oauth?"+form("response_type","code","client_id",CLIENT,"redirect_uri",redirect,"scope","board:play challenge:read challenge:write follow:read follow:write","state",stateToken,"code_challenge_method","S256","code_challenge",b64(MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII))));
-            activity.openBrowser(url);long end=System.currentTimeMillis()+300000;
+            activity.openOAuthBrowser(url);long end=System.currentTimeMillis()+300000;
             while(System.currentTimeMillis()<end){
                 server.setSoTimeout((int)Math.max(1,end-System.currentTimeMillis()));
                 try(Socket socket=server.accept()){
