@@ -6,6 +6,7 @@ export function initNavigation(){
  function show(requested,{scroll=true}={}){
   const target=requested==='coach'&&!globalThis.JohanNative?'library':requested;
   screen=online?'online':normalizeScreen(target,playing);
+  document.body.dataset.activeScreen=screen;
   for(const panel of screens){const hidden=panel.dataset.screen!==screen;if(panel.hidden!==hidden)panel.hidden=hidden;}
   for(const b of buttons){const active=b.dataset.tab===parentTab(screen);b.setAttribute('aria-current',active?'page':'false');b.disabled=playing||online;}
   for(const link of links)link.disabled=playing||online;

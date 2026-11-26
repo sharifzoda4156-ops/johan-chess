@@ -337,7 +337,7 @@ body.is-playing [data-screen=play],body.is-online-playing [data-screen=online],b
 body.is-playing #playPanel,body.is-online-playing .online-panel,body.review-board-focus #reviewBoardShell{
  width:100%;height:100%;max-width:none;margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;
 }
-body.is-playing #playStatus,body.is-playing #playHistoryPanel,body.is-playing #playSetup,
+body.is-playing .play-topbar,body.is-playing #playStatus,body.is-playing #playHistoryPanel,body.is-playing #playSetup,
 body.review-board-focus #importPanel,body.review-board-focus [data-screen=review]>.screen-back,
 body.review-board-focus #review .report,body.review-board-focus #review>section,
 body.is-online-playing [data-screen=online]>.screen-back,
