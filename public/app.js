@@ -102,7 +102,7 @@ training=initTraining({
 });
 initStudyLibrary({
  openGame:(pgn,row)=>{if(busy||importing||training?.active()){$('studyLibraryStatus').textContent='Дождись завершения текущей игры или анализа.';return;}navigation.show('review');if(load(pgn,row))$('review').scrollIntoView({behavior:'smooth'});},
- practiceEndgame:theme=>{navigation.show('puzzles');puzzleUI.selectTheme(theme);},
+ practiceEndgame:theme=>{puzzleUI.selectTheme(theme);navigation.show('puzzles');},
  askOpening:row=>{navigation.show('coach');if(!globalThis.JohanNative)return;$('aiShare').checked=false;$('aiQuestion').value='Объясни идеи и типичные планы дебютной линии Lichess '+row.eco+' '+row.name+': '+row.pgn+'. Не придумывай дополнительные проверенные варианты.';$('aiQuestion').focus();},
  playOpening:(fen,color)=>{if(!busy&&!importing&&!training?.active())training.startReplay(fen,color);else $('studyLibraryStatus').textContent='Дождись окончания текущей работы.';}
 });
