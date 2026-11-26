@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.net.Uri;
 import android.net.ConnectivityManager;
 import android.net.NetworkCapabilities;
+import android.net.Network;
 import android.view.WindowManager;
 import android.widget.Toast;
 import android.webkit.*;
@@ -107,7 +108,8 @@ public final class MainActivity extends Activity {
     }
     boolean onlineNetworkAvailable(){
         ConnectivityManager cm=getSystemService(ConnectivityManager.class);
-        NetworkCapabilities cap=cm==null?null:cm.getNetworkCapabilities(cm.getActiveNetwork());
+        Network network=cm==null?null:cm.getActiveNetwork();
+        NetworkCapabilities cap=network==null?null:cm.getNetworkCapabilities(network);
         return cap!=null&&cap.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
     }
     void queueOnlineRecovery(Runnable task){try{lichessExecutor.execute(task);}catch(RejectedExecutionException ignored){}}

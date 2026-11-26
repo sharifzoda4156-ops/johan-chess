@@ -27,7 +27,7 @@ final class Lichess {
     private final OnlineAbsence absence=new OnlineAbsence();
     private final long wallOrigin=System.currentTimeMillis(),monoOrigin=SystemClock.elapsedRealtime();
     private boolean foreground=false,resignAccepted=false,recoveryQueued=false;
-    private long nextRecovery=0;
+    private long nextRecovery=0,lastHealthyWrite=0;
     private long now(){return wallOrigin+SystemClock.elapsedRealtime()-monoOrigin;}
     private volatile String token="",username="";
     private volatile boolean closed=false,needsSync=false;
@@ -56,7 +56,12 @@ final class Lichess {
         }
         needsSync=prefs.getBoolean("onlineLock",false);
         String saved=prefs.getString("activeGame","");
-        if(!token.isEmpty()&&saved.matches("[A-Za-z0-9]{8}")){gameId=saved;needsSync=true;absence.restore(saved,prefs.getLong("absenceDeadline",0),prefs.getBoolean("absenceExpired",false));}
+        if(!token.isEmpty()&&saved.matches("[A-Za-z0-9]{8}")){
+            gameId=saved;needsSync=true;long deadline=prefs.getLong("absenceDeadline",0),last=prefs.getLong("lastHealthy",0);
+            // Conservative five-second allowance for a process killed without onPause.
+            if(deadline==0&&last>0)deadline=last+OnlineAbsence.LIMIT+5000;
+            absence.restore(saved,deadline,prefs.getBoolean("absenceExpired",false));
+        }
         watchdog.scheduleWithFixedDelay(()->{try{watchdogTick();}catch(Exception ignored){}},0,500,TimeUnit.MILLISECONDS);
     }
     private void save(String t,String u)throws Exception{
@@ -77,7 +82,8 @@ final class Lichess {
     private synchronized void updateAbsence(){
         String old=absence.game();long deadline=absence.deadline();boolean due=absence.expired();
         absence.update(liveId(),healthy(),now());
-        if(!old.equals(absence.game())){resignAccepted=false;nextRecovery=0;}
+        if(!old.equals(absence.game())){resignAccepted=false;nextRecovery=0;lastHealthyWrite=0;prefs.edit().remove("lastHealthy").commit();}
+        if(!absence.game().isEmpty()&&healthy()&&!absence.expired()&&(lastHealthyWrite==0||now()-lastHealthyWrite>=5000)){lastHealthyWrite=now();prefs.edit().putLong("lastHealthy",lastHealthyWrite).commit();}
         if(!old.equals(absence.game())||deadline!=absence.deadline()||due!=absence.expired()){
             prefs.edit().putString("activeGame",absence.game()).putLong("absenceDeadline",absence.deadline()).putBoolean("absenceExpired",absence.expired()).commit();
         }
@@ -86,6 +92,7 @@ final class Lichess {
     private void watchdogTick(){
         synchronized(this){
             if(closed)return;
+            if(!liveId().isEmpty()&&!activity.onlineNetworkAvailable()&&!needsSync){needsSync=true;revision++;persistLock();}
             updateAbsence();
             if(liveId().isEmpty()||!activity.onlineNetworkAvailable()||recoveryQueued||now()<nextRecovery)return;
             if(!absence.expired()&&(!foreground||(!needsSync&&game!=null&&game.ready&&full!=null)))return;
@@ -241,7 +248,7 @@ final class Lichess {
             for(int i=0;i<playing.length();i++){JSONObject p=playing.getJSONObject(i);if(!"correspondence".equals(p.optString("speed"))){next=id(p.getString("gameId"));if(next.equals(gameId))break;}}
             if(!next.isEmpty()){if(game==null||!next.equals(gameId)||needsSync){if(game!=null){game.cancel();game=null;}startGame(next);}}
             else if(waiting==null){if(!gameId.isEmpty()&&!terminal){if(game!=null)game.cancel();game=null;gameId="";full=state=null;}needsSync=false;persistLock();}
-            notice="";return snapshot();
+            notice=next.isEmpty()&&terminal?"Партия завершена":"";return snapshot();
         }
     }
     private synchronized JSONObject snapshot()throws Exception{

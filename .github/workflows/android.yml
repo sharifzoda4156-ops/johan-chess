@@ -1,6 +1,14 @@
 name: Android APK
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'public/**'
+      - 'scripts/prepare.mjs'
+      - 'package.json'
+      - '.github/workflows/android.yml'
 permissions:
   contents: read
 jobs:
