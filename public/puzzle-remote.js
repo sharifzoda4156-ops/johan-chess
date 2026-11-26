@@ -1,6 +1,6 @@
 import {cacheGet,cachePut,cacheKeys} from './puzzle-cache.js';
 const CATALOG='catalog-v1',TTL=6*60*60*1000;
-let current=null,loadedAt=0;
+let current=null,loadedAt=0,retryAfter=0;
 export const packKey=(tag,p)=>tag+':'+p.asset+':'+p.offset+':'+p.sha256;
 export function parseCatalog(text){
  const c=JSON.parse(text);
@@ -19,15 +19,16 @@ export function matchingPacks(c,theme,band,target){
  return c.packs.filter(p=>p.min<=max&&p.max>=min&&(theme==='all'||p.themes.includes(theme))).sort((a,b)=>distance(a)-distance(b)||a.asset.localeCompare(b.asset)||a.offset-b.offset);
 }
 async function fetchText(path){
- const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),35000);
+ const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),15000);
  try{const r=await fetch(path,{signal:ctrl.signal,cache:'no-store'});if(!r.ok)throw Error('Данные GitHub недоступны');return await r.text();}finally{clearTimeout(timer);}
 }
 async function catalog(){
  if(current&&Date.now()-loadedAt<TTL)return current;
  let saved=null;
  try{saved=JSON.parse(await cacheGet(CATALOG)||'null');if(saved){const c=parseCatalog(saved.text);current=c;loadedAt=saved.at;if(Date.now()-loadedAt<TTL)return c;}}catch{}
+ if(Date.now()<retryAfter){if(current)return current;throw Error('GitHub temporarily unavailable');}
  try{const text=await fetchText('/api/puzzle-data/catalog');current=parseCatalog(text);loadedAt=Date.now();await cachePut(CATALOG,JSON.stringify({at:loadedAt,text}));return current;}
- catch(e){if(current)return current;throw e;}
+ catch(e){retryAfter=Date.now()+60000;if(current)return current;throw e;}
 }
 export async function decodePack(text,p){
  const bytes=new TextEncoder().encode(text);
@@ -44,9 +45,9 @@ async function getPack(c,p){
  const key=packKey(c.tag,p);
  const saved=await cacheGet(key);
  if(saved)try{return {key,rows:await decodePack(saved,p),persisted:true};}catch{}
+ if(Date.now()<retryAfter)throw Error('GitHub temporarily unavailable');
  const q=new URLSearchParams({tag:c.tag,asset:p.asset,offset:String(p.offset),length:String(p.length)});
- const text=await fetchText('/api/puzzle-data/pack?'+q),rows=await decodePack(text,p);
- return {key,rows,persisted:await cachePut(key,text)};
+ try{const text=await fetchText('/api/puzzle-data/pack?'+q),rows=await decodePack(text,p);retryAfter=0;return {key,rows,persisted:await cachePut(key,text)};}catch(e){retryAfter=Date.now()+60000;throw e;}
 }
 export async function loadMorePuzzles({theme,band,target,excluded,seen}){
  const c=await catalog(),matches=matchingPacks(c,theme,band,target),keys=new Set(await cacheKeys());
