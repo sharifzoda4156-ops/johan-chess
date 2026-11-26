@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:translateX="15.9"
+        android:translateY="15.9"
+        android:scaleX="0.60"
+        android:scaleY="0.60">
+        <!-- Gold mane & crest facets -->
+        <path android:pathData="M55,19 L64,29 L59,36 L55,27 Z" android:fillColor="#FFF59E0B" />
+        <path android:pathData="M44,29 L53,24 L52,32 L48,36 Z" android:fillColor="#FFFBBF24" />
+        <path android:pathData="M62,21 L78,24 L73,29 L66,27 Z" android:fillColor="#FFF59E0B" />
+        <path android:pathData="M73,30 L84,30 L93,43 L85,40 Z" android:fillColor="#FFF59E0B" />
+        <path android:pathData="M68,31 L82,42 L84,84 L78,86 L78,44 Z" android:fillColor="#FFD97706" />
+        <path android:pathData="M84,45 L94,50 L96,74 L91,68 Z" android:fillColor="#FFF59E0B" />
+        <path android:pathData="M88,61 L96,77 L91,82 L86,74 Z" android:fillColor="#FFD97706" />
+
+        <!-- Faceted emerald mane secondary plates -->
+        <path android:pathData="M64,23 L76,26 L67,30 Z" android:fillColor="#FF10B981" />
+        <path android:pathData="M65,30 L79,43 L72,53 L60,38 Z" android:fillColor="#FF34D399" />
+        <path android:pathData="M79,43 L82,84 L73,88 L72,53 Z" android:fillColor="#FF16A34A" />
+        <path android:pathData="M84,48 L92,69 L86,76 L84,61 Z" android:fillColor="#FF059669" />
+
+        <!-- Head & snout facets -->
+        <path android:pathData="M54,32 L61,39 L50,51 L43,45 Z" android:fillColor="#FF34D399" />
+        <path android:pathData="M61,39 L67,48 L61,59 L50,51 Z" android:fillColor="#FF22C55E" />
+        <path android:pathData="M50,51 L61,59 L47,63 L39,58 Z" android:fillColor="#FF059669" />
+        <path android:pathData="M43,45 L50,51 L39,58 L34,58 L36,52 Z" android:fillColor="#FF22C55E" />
+        <path android:pathData="M36,58 L47,63 L42,69 L36,66 Z" android:fillColor="#FF047857" />
+        <!-- Gold nose bridge -->
+        <path android:pathData="M53,31 L55,34 L45,45 L36,57 L32,57 L42,42 Z" android:fillColor="#FFFDE68A" />
+        <!-- Sharp eye & nostril -->
+        <path android:pathData="M49,43 L58,39 L53,45 L48,46 Z" android:fillColor="#FF0B0E14" />
+        <path android:pathData="M36,58 L39,57 L38,61 L36,61 Z" android:fillColor="#FF0B0E14" />
+
+        <!-- J-curve neck & base -->
+        <path android:pathData="M67,48 L74,56 L74,83 C74,97 64,106 52,107 C40,107 32,98 31,87 L43,87 C45,93 50,95 54,94 C58,92 60,88 60,81 L61,59 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="34"
+                    android:startY="48"
+                    android:endX="76"
+                    android:endY="107"
+                    android:type="linear">
+                    <item android:offset="0" android:color="#FF34D399" />
+                    <item android:offset="0.55" android:color="#FF10B981" />
+                    <item android:offset="1" android:color="#FF059669" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path android:pathData="M61,59 L74,56 L74,77 L60,81 Z" android:fillColor="#FF16A34A" />
+        <path android:pathData="M60,81 L74,77 C74,94 64,106 52,107 L56,92 Z" android:fillColor="#FF047857" />
+        <!-- Secondary outer J rib -->
+        <path android:pathData="M77,86 L83,84 C81,98 70,107 57,108 C67,103 75,95 77,86 Z" android:fillColor="#FF059669" />
+        <!-- Gold J inner hook highlight -->
+        <path android:pathData="M31,87 L41,87 C43,92 48,94 53,93 C46,98 37,95 31,87 Z" android:fillColor="#FFF59E0B" />
+    </group>
+</vector>

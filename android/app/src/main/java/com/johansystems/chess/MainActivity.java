@@ -13,9 +13,13 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.regex.*;
 
 public final class MainActivity extends Activity {
     private static final String ORIGIN = "https://appassets.androidplatform.net";
+    private static final int REQ_FILE_CHOOSER = 1001;
+    private static final int REQ_SAVE_FILE = 1002;
+    private static final Pattern MSG_ID = Pattern.compile("\"id\"\\s*:\\s*\"([^\"]{1,64})\"");
     private WebView web;
     private Coach coach;
     private GameShare gameShare;
@@ -25,6 +29,10 @@ public final class MainActivity extends Activity {
     private Lichess lichess;
     private final ExecutorService lichessExecutor=Executors.newSingleThreadExecutor();
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private ValueCallback<Uri[]> fileChooserCallback;
+    private byte[] pendingSaveBytes;
+    private String pendingSaveId;
+    private JavaScriptReplyProxy pendingSaveReply;
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
         protectedOnline=getSharedPreferences("lichess",0).getBoolean("onlineLock",false);
@@ -33,8 +41,8 @@ public final class MainActivity extends Activity {
         receiveShare(getIntent());
         web = new WebView(this);
         setContentView(web);
-        getWindow().setStatusBarColor(0xff131d29);
-        getWindow().setNavigationBarColor(0xff131d29);
+        getWindow().setStatusBarColor(0xff0b0e14);
+        getWindow().setNavigationBarColor(0xff0b0e14);
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -70,6 +78,31 @@ public final class MainActivity extends Activity {
                 return !r.isForMainFrame() || !(ORIGIN+"/assets/index.html").equals(u.toString());
             }
         });
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                if(protectedOnline||(lichess!=null&&lichess.locked())){
+                    callback.onReceiveValue(null);
+                    return false;
+                }
+                if(fileChooserCallback!=null){
+                    fileChooserCallback.onReceiveValue(null);
+                    fileChooserCallback=null;
+                }
+                fileChooserCallback=callback;
+                Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("*/*");
+                intent.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"application/x-chess-pgn","application/vnd.chess-pgn","text/plain","application/octet-stream"});
+                try{
+                    startActivityForResult(intent,REQ_FILE_CHOOSER);
+                    return true;
+                }catch(Exception e){
+                    fileChooserCallback=null;
+                    callback.onReceiveValue(null);
+                    return false;
+                }
+            }
+        });
         web.setDownloadListener((url,agent,disposition,mime,length)->{});
         try { coach=new Coach(this); } catch(Exception ignored) {}
         try { lichess=new Lichess(this);onlineSecure(lichess.locked()); } catch(Exception ignored) {}
@@ -77,7 +110,7 @@ public final class MainActivity extends Activity {
             WebViewCompat.addWebMessageListener(web,"JohanNative",Collections.singleton(ORIGIN),(view,msg,origin,main,reply)->{
                 if(!main||!ORIGIN.equals(origin.toString()))return;
                 String raw=msg.getData();
-                if(raw==null||raw.length()>350000)return;
+                if(raw==null||raw.length()>350000){rejectOversized(reply,raw,"Сообщение слишком большое");return;}
                 try{JSONObject req=new JSONObject(raw);if(Arrays.asList("cancelLogin","loginProgress").contains(req.optString("op"))){if(coach!=null&&"cancelLogin".equals(req.optString("op")))coach.cancelLogin();reply.postMessage(new JSONObject().put("id",req.getString("id")).put("data",new JSONObject().put("ok",true).put("stage",coach==null?"":coach.loginStage())).toString());return;}}catch(Exception ignored){}
                 executor.execute(()->{
                     JSONObject out=new JSONObject();
@@ -97,14 +130,29 @@ public final class MainActivity extends Activity {
             });
             WebViewCompat.addWebMessageListener(web,"JohanShare",Collections.singleton(ORIGIN),(view,msg,origin,main,reply)->{
                 if(!main||!ORIGIN.equals(origin.toString()))return;
-                String raw=msg.getData();if(raw==null||raw.length()>GameShare.LIMIT*2)return;
+                String raw=msg.getData();
+                if(raw==null||raw.length()>GameShare.LIMIT*2){rejectOversized(reply,raw,"Файл слишком большой для сохранения");return;}
                 shareExecutor.execute(()->{
                     JSONObject out=new JSONObject();
                     try{
-                        JSONObject req=new JSONObject(raw);out.put("id",req.getString("id"));
+                        JSONObject req=new JSONObject(raw);
+                        String reqId=req.getString("id");
+                        out.put("id",reqId);
                         if(protectedOnline||lichess!=null&&lichess.locked())throw new IOException("Передача партий недоступна во время онлайн-игры");
+                        String op=req.getString("op");
+                        if("saveFile".equals(op)){
+                            String content=req.getString("content");
+                            byte[] bytes=content.getBytes(StandardCharsets.UTF_8);
+                            if(bytes.length==0||bytes.length>GameShare.LIMIT*2)throw new IOException("Неверный размер файла");
+                            String rawName=req.optString("filename","johan-chess.pgn").replaceAll("[^A-Za-z0-9._-]","_");
+                            String safeName=rawName.isEmpty()?"johan-chess.pgn":rawName;
+                            String mime=req.optString("mime","application/x-chess-pgn");
+                            if(!Arrays.asList("application/x-chess-pgn","application/json","text/plain").contains(mime))mime="text/plain";
+                            launchSaveDocument(reqId,reply,safeName,mime,bytes);
+                            return;
+                        }
                         JSONObject data;
-                        switch(req.getString("op")){
+                        switch(op){
                             case "peek":data=gameShare.peek();break;
                             case "ack":data=gameShare.ack(req.getString("itemId"));break;
                             case "lichess":data=new JSONObject().put("pgn",GameShare.lichess(req.getString("gameId")));break;
@@ -120,8 +168,14 @@ public final class MainActivity extends Activity {
             });
             WebViewCompat.addWebMessageListener(web,"JohanLichess",Collections.singleton(ORIGIN),(view,msg,origin,isMain,reply)->{
                 if(!isMain||!ORIGIN.equals(origin.toString()))return;
-                String raw=msg.getData();if(raw==null||raw.length()>30000)return;
-                try{JSONObject req=new JSONObject(raw);if("snapshot".equals(req.optString("op"))&&lichess!=null){reply.postMessage(new JSONObject().put("id",req.getString("id")).put("data",lichess.snapshot()).toString());return;}}catch(Exception ignored){}
+                String raw=msg.getData();
+                if(raw==null||raw.length()>30000){rejectOversized(reply,raw,"Сообщение Lichess слишком большое");return;}
+                try{
+                    JSONObject req=new JSONObject(raw);
+                    String op=req.optString("op");
+                    if("snapshot".equals(op)&&lichess!=null){reply.postMessage(new JSONObject().put("id",req.getString("id")).put("data",lichess.snapshot()).toString());return;}
+                    if("cancelLogin".equals(op)&&lichess!=null){lichess.cancelLogin();reply.postMessage(new JSONObject().put("id",req.getString("id")).put("data",lichess.snapshot()).toString());return;}
+                }catch(Exception ignored){}
                 lichessExecutor.execute(()->{
                     JSONObject out=new JSONObject();
                     try{JSONObject req=new JSONObject(raw);out.put("id",req.getString("id"));if(lichess==null)throw new IOException("Защищённое хранилище Lichess недоступно");out.put("data",lichess.handle(req));}
@@ -131,6 +185,79 @@ public final class MainActivity extends Activity {
             });
         }
         web.loadUrl(ORIGIN+"/assets/index.html");
+    }
+    private static void rejectOversized(JavaScriptReplyProxy reply,String raw,String message){
+        if(raw==null)return;
+        Matcher m=MSG_ID.matcher(raw.substring(0,Math.min(raw.length(),512)));
+        if(!m.find())return;
+        try{reply.postMessage(new JSONObject().put("id",m.group(1)).put("error",message).toString());}catch(Exception ignored){}
+    }
+    private void launchSaveDocument(String reqId,JavaScriptReplyProxy reply,String filename,String mime,byte[] bytes){
+        runOnUiThread(()->{
+            if(isDestroyed()||protectedOnline||(lichess!=null&&lichess.locked())){
+                postReply(reply,reqId,null,"Сохранение недоступно");
+                return;
+            }
+            if(pendingSaveReply!=null){
+                postReply(pendingSaveReply,pendingSaveId,null,"Запущено новое сохранение");
+                pendingSaveReply=null;pendingSaveId=null;pendingSaveBytes=null;
+            }
+            pendingSaveId=reqId;pendingSaveReply=reply;pendingSaveBytes=bytes;
+            Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType(mime);
+            intent.putExtra(Intent.EXTRA_TITLE,filename);
+            try{
+                startActivityForResult(intent,REQ_SAVE_FILE);
+            }catch(Exception e){
+                pendingSaveReply=null;pendingSaveId=null;pendingSaveBytes=null;
+                postReply(reply,reqId,null,"Не удалось открыть диалог сохранения");
+            }
+        });
+    }
+    private void postReply(JavaScriptReplyProxy reply,String id,JSONObject data,String error){
+        if(reply==null||id==null||isDestroyed())return;
+        runOnUiThread(()->{
+            if(isDestroyed())return;
+            try{
+                JSONObject out=new JSONObject().put("id",id);
+                if(error!=null)out.put("error",error);else out.put("data",data==null?new JSONObject().put("ok",true):data);
+                reply.postMessage(out.toString());
+            }catch(Exception ignored){}
+        });
+    }
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
+        super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode==REQ_FILE_CHOOSER){
+            ValueCallback<Uri[]> cb=fileChooserCallback;
+            fileChooserCallback=null;
+            if(cb!=null){
+                Uri uri=resultCode==RESULT_OK&&data!=null?data.getData():null;
+                cb.onReceiveValue(uri!=null?new Uri[]{uri}:null);
+            }
+            return;
+        }
+        if(requestCode==REQ_SAVE_FILE){
+            JavaScriptReplyProxy reply=pendingSaveReply;
+            String id=pendingSaveId;
+            byte[] bytes=pendingSaveBytes;
+            pendingSaveReply=null;pendingSaveId=null;pendingSaveBytes=null;
+            if(reply==null||id==null||bytes==null)return;
+            Uri uri=resultCode==RESULT_OK&&data!=null?data.getData():null;
+            if(uri==null){
+                try{postReply(reply,id,new JSONObject().put("ok",true).put("canceled",true),null);}catch(Exception ignored){}
+                return;
+            }
+            shareExecutor.execute(()->{
+                try(OutputStream out=getContentResolver().openOutputStream(uri,"wt")){
+                    if(out==null)throw new IOException("Не удалось записать файл");
+                    out.write(bytes);out.flush();
+                    postReply(reply,id,new JSONObject().put("ok",true).put("saved",true),null);
+                }catch(Exception e){
+                    postReply(reply,id,null,e.getMessage()==null?"Ошибка записи файла":e.getMessage());
+                }
+            });
+        }
     }
     private static WebResourceResponse response(int code,String body) {
         return new WebResourceResponse("application/json","UTF-8",code,code==200?"OK":code==403?"Forbidden":code==404?"Not Found":"Bad Gateway",Collections.singletonMap("Cache-Control","no-store"),new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
@@ -162,6 +289,9 @@ public final class MainActivity extends Activity {
         });
     }
     void shareLichess(String url){runOnUiThread(()->{if(protectedOnline)return;Intent intent=new Intent(Intent.ACTION_SEND);intent.setType("text/plain");intent.putExtra(Intent.EXTRA_TEXT,url);startActivity(Intent.createChooser(intent,"Поделиться профилем Lichess"));});}
+    void notifyLichessUpdate(){
+        runOnUiThread(()->{if(!isDestroyed()&&web!=null)web.evaluateJavascript("document.dispatchEvent(new Event('jc-lichess-update'))",null);});
+    }
     void onlineSecure(boolean locked){
         boolean changed=protectedOnline!=locked;protectedOnline=locked;if(!changed)return;
         runOnUiThread(()->{if(isDestroyed())return;
@@ -190,6 +320,8 @@ public final class MainActivity extends Activity {
         web.evaluateJavascript("typeof window.JohanHandleBack==='function' && window.JohanHandleBack()",value->{if(!isDestroyed()&&!protectedOnline&&(lichess==null||!lichess.locked())&&!"true".equals(value))super.onBackPressed();});
     }
     @Override protected void onDestroy() {
+        if(fileChooserCallback!=null){fileChooserCallback.onReceiveValue(null);fileChooserCallback=null;}
+        pendingSaveReply=null;pendingSaveId=null;pendingSaveBytes=null;
         if(lichess!=null)lichess.close();lichessExecutor.shutdownNow();
         if(coach!=null)coach.cancelLogin();
         executor.shutdownNow();shareExecutor.shutdownNow();

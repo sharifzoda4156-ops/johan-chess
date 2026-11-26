@@ -4,6 +4,7 @@ const native=globalThis.JohanShare,$=id=>document.getElementById(id);
 let seq=0;const pending=new Map();
 if(native)native.onmessage=e=>{try{const m=JSON.parse(e.data),p=pending.get(m.id);if(!p)return;clearTimeout(p.timer);pending.delete(m.id);m.error?p.reject(Error(m.error)):p.resolve(m.data);}catch{}};
 function call(op,args={}){if(!native)return Promise.reject(Error('Передача доступна в Android'));return new Promise((resolve,reject)=>{const id=String(++seq),timer=setTimeout(()=>{pending.delete(id);reject(Error('Не удалось получить партию'));},100000);pending.set(id,{resolve,reject,timer});try{native.postMessage(JSON.stringify({id,op,...args}));}catch(e){clearTimeout(timer);pending.delete(id);reject(e);}});}
+export function saveNativeFile({filename,mime,content}){return call('saveFile',{filename,mime,content});}
 
 export function initGameShare({Chess,canUse,open,user,exportPgn,notice}){
  const say=t=>notice(t);let processing=false,current=null,checking=false,opened=null;

@@ -11,7 +11,7 @@ import {initSoundSetting,playSound,soundForMove} from './sound.js';
 import {initNavigation} from './navigation.js';
 import {initTraining} from './training.js';
 import {initOnline} from './online.js';
-import {initGameShare} from './game-share.js';
+import {initGameShare,saveNativeFile} from './game-share.js';
 import {hasOpenDialog,closeOpenDialog} from './dialog.js';
 import {initCoach,rememberGame,coachBusy} from './android-coach.js';
 import {Chess} from './chess.js';
@@ -29,7 +29,20 @@ function syncReviewFocus(){const visible=!document.querySelector('[data-screen="
 function openReviewBoard(value){reviewFocus=!!value;syncReviewFocus();if(!isDesktop())window.scrollTo({top:0,behavior:'auto'});}
 document.addEventListener('jc-screen',syncReviewFocus);
 globalThis.matchMedia?.('(min-width: 900px)').addEventListener?.('change',syncReviewFocus);
-globalThis.JohanHandleBack=()=>{if(hasOpenDialog()){closeOpenDialog();return true;}if(onlineLocked)return true;if(training?.active()){if(!$('playCancel').disabled)$('playCancel').click();return true;}if(document.body.classList.contains('review-board-focus')){openReviewBoard(false);return true;}return false;};
+globalThis.JohanHandleBack=()=>{
+ if(hasOpenDialog()){closeOpenDialog();return true;}
+ if(onlineLocked)return true;
+ if(training?.active()){if(!$('playCancel').disabled)$('playCancel').click();return true;}
+ if(document.body.classList.contains('review-board-focus')){openReviewBoard(false);return true;}
+ const puzzlesScreen=document.querySelector('[data-screen="puzzles"]');
+ if(puzzlesScreen&&!puzzlesScreen.hidden&&$('puzzleReview')&&!$('puzzleReview').hidden){$('reviewPuzzleClose')?.click();return true;}
+ if(document.body.classList.contains('puzzle-focus')){$('journeyBack')?.click();return true;}
+ const cur=navigation.current();
+ if(cur==='account'){navigation.show('profile');return true;}
+ if(cur==='library'&&globalThis.JohanNative){navigation.show('coach');return true;}
+ if(cur!=='home'){navigation.show('home');return true;}
+ return false;
+};
 $('reviewOpenBoard').onclick=()=>openReviewBoard(true);$('reviewCloseBoard').onclick=()=>openReviewBoard(false);$('reviewAnalyze').onclick=()=>{if(busy)$('stop').click();else $('analyze').click();};
 const player=c=>game?.getHeaders()[c==='w'?'White':'Black']|| (c==='w'?'Белые':'Чёрные');
 const matchedSide=()=>{const nick=(onlineReviewName||$('user').value.trim()).toLowerCase();if(!nick)return null;if(player('w').toLowerCase()===nick)return 'w';if(player('b').toLowerCase()===nick)return 'b';return null;};
@@ -59,7 +72,14 @@ function loadText(text){
 $('pgnFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f||importing)return;if(f.size>5*1024*1024){status('Файл больше 5 МБ.');return;}try{loadText(await f.text());}catch(err){status('Не удалось прочитать файл: '+err.message);}};
 function currentPgn(){return buildPgn({headers:game.getHeaders(),moves,results,depth:analysisDepth??Number($('depth').value)});}
 function syncPgnButtons(){$('exportPgn').disabled=!results.length;$('copyPgn').disabled=!game;for(const id of ['sharePgnFile','sharePgnText'])$(id).disabled=!game||onlineLocked||!['1-0','0-1','1/2-1/2'].includes(game.getHeaders().Result);}
-$('exportPgn').onclick=()=>{if(!game||!results.length)return;const url=URL.createObjectURL(new Blob([currentPgn()],{type:'application/x-chess-pgn'}));const a=document.createElement('a');a.href=url;a.download='johan-chess-analysis.pgn';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+async function downloadOrSave(filename,mime,content){
+ if(globalThis.JohanShare){
+  try{const r=await saveNativeFile({filename,mime,content});if(r?.saved)status('Файл сохранён: '+filename);}catch(e){status(e.message||'Не удалось сохранить файл');}
+  return;
+ }
+ const url=URL.createObjectURL(new Blob([content],{type:mime}));const a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+$('exportPgn').onclick=()=>{if(!game||!results.length)return;downloadOrSave('johan-chess-analysis.pgn','application/x-chess-pgn',currentPgn());};
 $('copyPgn').onclick=async()=>{if(!game)return;const text=currentPgn();try{await navigator.clipboard.writeText(text);status('PGN скопирован.');}catch{$('pgn').value=text;$('importSource').open=true;status('Буфер обмена недоступен: PGN помещён в поле ввода.');}};
 $('fetch').onclick=async()=>{if(busy||importing||training?.active())return;importing=true;const b=$('fetch');for(const id of ['fetch','load','games','user'])$(id).disabled=true;status('Загружаю завершённые партии…');try{const r=await platformFetch('/api/games?user='+encodeURIComponent($('user').value.trim()));const data=await r.json();if(!r.ok)throw Error(data.error);imported=data.games||[];if(!imported.length)throw Error('Партии не найдены');const select=$('games');select.replaceChildren();imported.forEach((g,i)=>{const o=document.createElement('option');o.value=i;o.textContent=`${g.white} — ${g.black} · ${g.timeClass||''} · ${new Date(g.ended*1000).toLocaleDateString('ru')}`;select.append(o);});select.hidden=false;load(imported[0].pgn);}catch(e){status(e.message);$('importSource').open=true;}finally{importing=false;for(const id of ['fetch','load','games','user'])$(id).disabled=busy||!!training?.active();}};
 $('games').onchange=()=>{if(importing)return;const g=imported[Number($('games').value)];if(g)load(g.pgn);};
@@ -157,7 +177,7 @@ function chart(){
 }
 if(typeof ResizeObserver==='function')new ResizeObserver(()=>{if(game)chart();}).observe($('chart'));
 $('chart').onclick=e=>{const r=$('chart').getBoundingClientRect();go(Math.round((e.clientX-r.left)/r.width*moves.length));openReviewBoard(true);};
-$('export').onclick=()=>{const blob=new Blob([JSON.stringify({version:'0.1.0',pgn,user:$('user').value,depth:analysisDepth??Number($('depth').value),complete:results.length===moves.length,results},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='johan-chess-review.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+$('export').onclick=()=>{downloadOrSave('johan-chess-review.json','application/json',JSON.stringify({version:'0.2.0',pgn,user:$('user').value,depth:analysisDepth??Number($('depth').value),complete:results.length===moves.length,results},null,2));};
 document.addEventListener('keydown',e=>{
  if(e.metaKey||e.ctrlKey||e.altKey||hasOpenDialog())return;
  const tag=e.target?.tagName;if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||e.target?.isContentEditable)return;

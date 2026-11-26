@@ -55,7 +55,20 @@ final class ChessImport {
             for(int j=0;j<list.length();j++){
                 JSONObject g=list.getJSONObject(j);
                 if(!"chess".equals(g.optString("rules"))||g.optString("pgn").isEmpty())continue;
-                games.add(new JSONObject().put("pgn",g.getString("pgn")).put("white",g.getJSONObject("white").optString("username")).put("black",g.getJSONObject("black").optString("username")).put("ended",g.optLong("end_time")).put("timeClass",g.optString("time_class")));
+                JSONObject w=g.optJSONObject("white"),b=g.optJSONObject("black");
+                String wRes=w==null?"":w.optString("result"),bRes=b==null?"":b.optString("result");
+                String res="win".equals(wRes)?"1-0":"win".equals(bRes)?"0-1":(!wRes.isEmpty()||!bRes.isEmpty())?"1/2-1/2":"";
+                JSONObject row=new JSONObject()
+                    .put("pgn",g.getString("pgn"))
+                    .put("white",w==null?"":w.optString("username"))
+                    .put("black",b==null?"":b.optString("username"))
+                    .put("ended",g.optLong("end_time"))
+                    .put("timeClass",g.optString("time_class"))
+                    .put("result",res)
+                    .put("url",g.optString("url"));
+                if(w!=null&&w.has("rating"))row.put("whiteRating",w.optInt("rating"));
+                if(b!=null&&b.has("rating"))row.put("blackRating",b.optInt("rating"));
+                games.add(row);
             }
             if(games.size()>=30)break;
         }
