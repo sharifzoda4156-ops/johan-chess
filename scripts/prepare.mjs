@@ -1,0 +1,14 @@
+import {readdir, mkdir, copyFile} from 'node:fs/promises';
+import {join} from 'node:path';
+const root = new URL('../',import.meta.url);
+const bin = new URL('node_modules/stockfish/bin/',root);
+const files = await readdir(bin);
+const js = files.find(f=>/^stockfish-18-lite-single(?:-[\w]+)?\.js$/.test(f));
+if(!js) throw new Error('Stockfish lite-single not found: '+files.join(', '));
+const base=js.slice(0,-3);
+const related=files.filter(f=>f===js||f.startsWith(base+'.')||f.startsWith(base+'-'));
+await mkdir(new URL('public/engine/',root),{recursive:true});
+for(const f of related) await copyFile(new URL(f,bin),new URL('public/engine/'+f,root));
+const {writeFile}=await import('node:fs/promises');
+await writeFile(new URL('public/engine-path.js',root),`export const enginePath = './engine/${js}';\n`);
+await copyFile(new URL('node_modules/chess.js/dist/esm/chess.js',root),new URL('public/chess.js',root));

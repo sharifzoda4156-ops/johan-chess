@@ -1,0 +1,8 @@
+import {parseInfo} from './metrics.js';
+export class Engine{
+ constructor(path){this.worker=new Worker(path);this.waiter=null;this.worker.onmessage=e=>{for(const l of String(e.data).split('\n'))this.waiter?.line(l.trim());};this.worker.onerror=e=>this.waiter?.fail(Error(e.message||'Ошибка запуска Stockfish'));}
+ wait(command,predicate,ms=45000,onInfo=()=>{}){if(this.waiter)throw Error('Stockfish занят');return new Promise((resolve,reject)=>{let timer;const end=(err,val)=>{clearTimeout(timer);this.waiter=null;err?reject(err):resolve(val);};this.waiter={line:l=>{onInfo(l);if(predicate(l))end(null,l);},fail:e=>end(e)};timer=setTimeout(()=>end(Error('Stockfish не ответил')),ms);try{this.worker.postMessage(command);}catch(e){end(e);}});}
+ async init(){await this.wait('uci',l=>l==='uciok');this.worker.postMessage('setoption name Hash value 32');this.worker.postMessage('setoption name MultiPV value 1');await this.wait('isready',l=>l==='readyok');}
+ async search(fen,moves,depth,only){let info=null;this.worker.postMessage('position fen '+fen+(moves.length?' moves '+moves.join(' '):''));const line=await this.wait('go depth '+depth+(only?' searchmoves '+only:''),l=>l.startsWith('bestmove '),120000,l=>{const x=parseInfo(l);if(x&&(!info||x.depth>=info.depth))info=x;});if(!info)throw Error('Нет оценки движка: '+line);return {...info,best:line.split(/\s+/)[1]};}
+ close(){this.waiter?.fail(Error('Анализ остановлен'));this.worker.terminate();}
+}
