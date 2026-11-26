@@ -278,7 +278,7 @@ input[type=checkbox]{width:20px;height:20px;min-height:0;vertical-align:middle;a
  #reviewBoardShell #reviewCloseBoard{display:none}
  #reviewBoardShell .game-move-strip{border-radius:8px;margin-bottom:8px}
  #reviewBoardShell .game-stage{display:grid;gap:6px}
- #reviewBoardShell #board{width:100%;max-width:100%}
+ #reviewBoardShell #board{width:min(100%,460px,max(300px,calc(100dvh - 340px)));margin-inline:auto}
  #reviewBoardShell .game-player{padding:4px 0;height:auto}
  #reviewBoardShell .game-toolbar{margin-top:8px;padding:4px 0;border-top:1px solid var(--line)}
  #reviewBoardShell #coach{height:auto;min-height:84px;max-height:180px;overflow:auto;border-radius:10px;padding:12px;font-size:13.5px}

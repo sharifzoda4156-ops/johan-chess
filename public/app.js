@@ -35,7 +35,7 @@ const uci=m=>m.from+m.to+(m.promotion||'');
 function load(text,study=null){
  if(busy||onlineLocked||training?.active())return false;
  try{const c=new Chess();c.loadPgn(normalizePgn(text));const h=c.history({verbose:true});if(!h.length)throw Error('В PGN нет ходов. Экспортируй полную партию.');
- historical=study;onlineReviewName='';game=c;moves=h;startFen=h[0].before;positions=[startFen,...h.map(m=>m.after)];pgn=text;results=[];analysisDepth=null;cursor=0;flipped=historical?historical.result==='0-1':own()==='b';$('review').hidden=false;$('analyze').disabled=false;$('export').disabled=true;$('progress').hidden=true;if(isDesktop()&&$('importSource'))$('importSource').open=false;openReviewBoard(true);render();status((historical?historical.title+' · '+historical.year:'Партия загружена')+': '+h.length+' полуходов.');return true;
+ historical=study;onlineReviewName='';game=c;moves=h;startFen=h[0].before;positions=[startFen,...h.map(m=>m.after)];pgn=text;results=[];analysisDepth=null;cursor=0;flipped=historical?historical.result==='0-1':own()==='b';$('review').hidden=false;$('analyze').disabled=false;$('export').disabled=true;$('progress').hidden=true;if(isDesktop()&&$('importSource'))$('importSource').open=false;openReviewBoard(true);render();if(isDesktop())$('review').scrollIntoView({behavior:'auto',block:'start'});status((historical?historical.title+' · '+historical.year:'Партия загружена')+': '+h.length+' полуходов.');return true;
  }catch(e){status('Не удалось прочитать PGN: '+e.message);return false;}
 }
 function loadText(text){
