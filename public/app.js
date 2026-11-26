@@ -15,7 +15,7 @@ import {normalizePgn,splitPgn,buildPgn} from './pgn.js';
 import {Engine,setEngineOnlineLock} from './engine.js';
 import {enginePath} from './engine-path.js';
 import {evaluateMove,displayScore,scoreValue} from './metrics.js';
-const $=id=>document.getElementById(id), status=t=>$('status').textContent=t;
+const $=id=>document.getElementById(id), status=t=>{$('status').textContent=t;$('reviewBoardStatus').textContent=t;};
 let training=null,importing=false,analysisDepth=null,game=null, moves=[], positions=[], results=[], cursor=0, flipped=false, engine=null, busy=false, runId=0, imported=[], startFen='', pgn='', historical=null,onlineLocked=false,onlineReviewName='';
 initThemes();initBoardMotion();
 const navigation=initNavigation();
@@ -23,6 +23,7 @@ let reviewFocus=false,reviewStripMoves=null;
 function syncReviewFocus(){const visible=!document.querySelector('[data-screen="review"]').hidden;document.body.classList.toggle('review-board-focus',!!(visible&&reviewFocus&&game&&!onlineLocked&&!training?.active()));$('reviewOpenBoard').hidden=!game;}
 function openReviewBoard(value){reviewFocus=!!value;syncReviewFocus();window.scrollTo({top:0,behavior:'auto'});}
 document.addEventListener('jc-screen',syncReviewFocus);
+globalThis.JohanHandleBack=()=>{if(onlineLocked)return true;if(training?.active()){if(!$('playCancel').disabled)$('playCancel').click();return true;}if(document.body.classList.contains('review-board-focus')){openReviewBoard(false);return true;}return false;};
 $('reviewOpenBoard').onclick=()=>openReviewBoard(true);$('reviewCloseBoard').onclick=()=>openReviewBoard(false);$('reviewAnalyze').onclick=()=>{if(busy)$('stop').click();else $('analyze').click();};
 const player=c=>game?.getHeaders()[c==='w'?'White':'Black']|| (c==='w'?'Белые':'Чёрные');
 const own=()=>player('b').toLowerCase()===(onlineReviewName||$('user').value.trim()).toLowerCase()?'b':'w';
@@ -95,7 +96,7 @@ function renderMoveList(){
   renderedMoves=moves;moveRows=[];const frag=document.createDocumentFragment();
   moves.forEach((m,i)=>{
    const button=elem('button',undefined,'move'),kind=elem('span','—','neutral'),score=elem('span','—');
-   button.append(elem('span',label(i)),kind,score);button.onclick=()=>go(i+1);
+   button.append(elem('span',label(i)),kind,score);button.onclick=()=>{go(i+1);openReviewBoard(true);};
    moveRows.push({button,kind,score,result:undefined});frag.append(button);
   });list.replaceChildren(frag);
  }
@@ -110,7 +111,7 @@ function renderReport(){const sum=$('summary');sum.replaceChildren();const score
  $('askReview').hidden=!globalThis.JohanNative;$('askReview').disabled=!results.length;const t=$('training');t.replaceChildren();const errors=results.filter(r=>(historical||r.color===own())&&r.loss>=5).sort((a,b)=>b.loss-a.loss).slice(0,5);if(!errors.length)t.textContent=results.length?'Пока существенных ошибок по нашей шкале нет.':'После анализа здесь появятся самые важные ошибки.';else for(const r of errors){const d=elem('div',undefined,'training-row');d.append(elem('div',label(r.index)+' · '+r.label+' · потеря '+r.loss.toFixed(1)+' п.п. шанса на победу (модель)'));const b=elem('button','Открыть позицию до ошибки');b.onclick=()=>{go(r.index);openReviewBoard(true);};d.append(b);const replay=elem('button','Переиграть со Stockfish');replay.onclick=()=>{if(!busy&&!importing&&!training?.active())training.startReplay(positions[r.index],r.color);};replay.disabled=busy;d.append(replay);t.append(d);}
 }
 function chart(){const canvas=$('chart'),ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;ctx.clearRect(0,0,w,h);ctx.strokeStyle='#75869b';ctx.beginPath();ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();if(!results.length)return;const y=s=>h/2-Math.max(-1,Math.min(1,s/600))*(h/2-8);const x=i=>i/Math.max(1,moves.length)*(w-12)+6;const vals=[scoreValue(results[0].bestScore)*(results[0].color==='w'?1:-1),...results.map(r=>scoreValue(r.playedScore)*(r.color==='w'?1:-1))];ctx.strokeStyle='#d8b77d';ctx.lineWidth=3;ctx.beginPath();vals.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.stroke();ctx.strokeStyle='#e6e7e7';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x(cursor),0);ctx.lineTo(x(cursor),h);ctx.stroke();}
-$('chart').onclick=e=>{const r=$('chart').getBoundingClientRect();go(Math.round((e.clientX-r.left)/r.width*moves.length));};
+$('chart').onclick=e=>{const r=$('chart').getBoundingClientRect();go(Math.round((e.clientX-r.left)/r.width*moves.length));openReviewBoard(true);};
 $('export').onclick=()=>{const blob=new Blob([JSON.stringify({version:'0.1.0',pgn,user:$('user').value,depth:analysisDepth??Number($('depth').value),complete:results.length===moves.length,results},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='johan-chess-review.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 
 function coachContext(){

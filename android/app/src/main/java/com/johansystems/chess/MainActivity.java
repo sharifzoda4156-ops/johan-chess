@@ -186,7 +186,8 @@ public final class MainActivity extends Activity {
             return;
         }
         if(protectedOnline||lichess!=null&&lichess.locked())return;
-        super.onBackPressed();
+        if(web==null){super.onBackPressed();return;}
+        web.evaluateJavascript("typeof window.JohanHandleBack==='function' && window.JohanHandleBack()",value->{if(!isDestroyed()&&!protectedOnline&&(lichess==null||!lichess.locked())&&!"true".equals(value))super.onBackPressed();});
     }
     @Override protected void onDestroy() {
         if(lichess!=null)lichess.close();lichessExecutor.shutdownNow();

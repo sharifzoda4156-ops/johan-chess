@@ -41,14 +41,14 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
    if(s.adaptive&&s.standard&&!s.replay){try{localStorage.setItem('jc-bot-level:'+s.user.toLowerCase(),String(adaptiveLevel(s.levelIndex,end.result,s.color)));}catch{}}
   }
   $('playPromotion').hidden=true;for(const d of $('playBoard').children)d.disabled=true;
-  $('playResign').disabled=true;$('playCancel').disabled=true;$('playReview').hidden=!hasMoves;settings(true);historyList();unlock();
+  $('playResign').disabled=true;$('playCancel').disabled=true;$('playReview').hidden=!hasMoves;$('playArea').hidden=true;settings(true);historyList();unlock();
   status(end.reason+' · '+end.result+(hasMoves?' · можно разобрать партию':' · нет ходов для анализа'));
   if(hasMoves)review(pgn,true,s.user);
  }
  function cancel(message){
   const s=session;session=null;serial++;stopEngine(s);selected=null;promotions=[];finished=null;
   $('playPromotion').hidden=true;for(const d of $('playBoard').children)d.disabled=true;
-  $('playResign').disabled=true;$('playCancel').disabled=true;$('playReview').hidden=true;settings(true);historyList();unlock();status(message);
+  $('playResign').disabled=true;$('playCancel').disabled=true;$('playReview').hidden=true;$('playArea').hidden=true;settings(true);historyList();unlock();status(message);
  }
  function tick(){const s=session;if(!s?.clock)return;renderClock();if(remaining(s.clock,performance.now())[s.clock.turn]===0)finish(flagResult(s.game,s.clock.turn));}
  function move(m){

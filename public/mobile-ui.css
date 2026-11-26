@@ -367,3 +367,8 @@ body.review-board-focus #coach{height:58px;min-height:0;margin:0;padding:5px 12p
  .game-move-strip{height:26px;min-height:26px;max-height:26px;padding-block:3px}
  body.review-board-focus #coach{height:42px}
 }
+
+body:not(.review-board-focus) #review>.layout{grid-template-columns:minmax(0,1fr)}
+.review-title{display:flex;flex-direction:column;min-width:0;align-items:center;flex:1;gap:1px}
+#reviewBoardStatus{font-size:10px;letter-spacing:0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:100%;line-height:1.2}
+@media(orientation:landscape) and (max-height:550px){.review-title .game-title{font-size:15px}.game-topbar button{min-height:34px}.game-toolbar button{min-height:42px}}
