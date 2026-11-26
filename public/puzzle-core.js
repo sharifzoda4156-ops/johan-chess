@@ -10,7 +10,7 @@ export const PACK=[
  {id:'tac-01',theme:'tactics',fen:'4k3/8/8/3q4/8/4N3/8/4K3 w - - 0 1',goal:'capture',target:'q',title:'Выиграй ферзя',explanation:'Конь перепрыгивает другие фигуры и атакует по букве Г.'},
  {id:'tac-02',theme:'tactics',fen:'4k3/8/8/5N2/4q3/8/8/6K1 w - - 0 1',goal:'fork',target:'q',title:'Коневой двойной удар',explanation:'Дай шах конём, одновременно атакуя ферзя.'},
  {id:'tac-03',theme:'tactics',fen:'6k1/8/8/3Q4/5n2/8/8/4K3 b - - 0 1',goal:'capture',target:'q',title:'Найди взятие за чёрных',explanation:'Сначала проверь, что атакует твой конь.'},
- {id:'tac-04',theme:'tactics',fen:'4k3/8/8/8/4Q3/8/5b2/6K1 b - - 0 1',goal:'capture',target:'q',title:'Диагональ слона',explanation:'Проследи диагональ слона до ферзя.'}
+ {id:'tac-04',theme:'tactics',fen:'4k3/8/8/8/4Q3/5b2/8/6K1 b - - 0 1',goal:'capture',target:'q',title:'Диагональ слона',explanation:'Проследи диагональ слона до ферзя.'}
 ];
 export const uci=m=>m.from+m.to+(m.promotion||'');
 export function accepts(puzzle,game,move){
