@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Chess} from 'chess.js';
-import {displayName,profileStats,gameHistory,ratingCards,profileAwards} from '../public/profile-core.js';
+import {displayName,profileStats,gameHistory,ratingCards} from '../public/profile-core.js';
 test('display name only from connected identity, with nickname fallback',()=>{
  assert.equal(displayName({connected:true,name:'  Alice  '},'Johan'),'Alice');
  assert.equal(displayName({connected:false,name:'Alice'},'Johan'),'Johan');
@@ -27,10 +27,4 @@ test('history is player scoped, uses PGN result and matches review fingerprint',
  assert.equal(imported.result,'win');assert.equal(imported.color,'b');assert.equal(imported.rating,1200);assert.equal(imported.accuracy,88);
  assert.equal(rows.find(r=>r.source==='training').rating,null);
  assert.deepEqual(gameHistory([], [{pgn}], [], 'other',Chess),[]);
-});
-test('awards reflect actual progress without awarding empty profiles',()=>{
- const empty={played:0,wins:0,reviewed:0},puzzles={solved:[],bestStreak:0};
- assert.ok(profileAwards(empty,puzzles).every(x=>!x.earned));
- const rows=profileAwards({...empty,played:1,wins:1},{solved:Array(10).fill('x'),bestStreak:5});
- assert.equal(rows.filter(x=>x.earned).length,4);
 });

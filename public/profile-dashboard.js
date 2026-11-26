@@ -1,14 +1,17 @@
-import {gameHistory,ratingCards,profileAwards} from './profile-core.js';
+import {gameHistory,ratingCards} from './profile-core.js';
+import {earnedAchievements,achievementCards} from './achievement-core.js';
 const $=id=>document.getElementById(id);
 const el=(tag,text,cls)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(cls)node.className=cls;return node;};
 const key=user=>user.trim().toLowerCase();
 const modes={rapid:'Рапид',blitz:'Блиц',bullet:'Пуля',daily:'Заочные'};
 export function initProfileDashboard({Chess,getUser,setUser,openGame,canSync}){
- let scope='',remote=[],ratings=[],data=null,expanded=false,request=0,loading=false,notice='';
+ let scope='',remote=[],ratings=[],data=null,expanded=false,awardsExpanded=false,earned=[],request=0,loading=false,notice='';
+ const awardKey=()=> 'jc-treasure-achievements-v1:'+scope;
  function align(){
   const next=key(getUser());
   if(next===scope)return;
-  scope=next;remote=[];ratings=[];expanded=false;request++;loading=false;notice='';
+  scope=next;remote=[];ratings=[];expanded=false;awardsExpanded=false;request++;loading=false;notice='';earned=[];
+  if(scope)try{const value=JSON.parse(localStorage.getItem(awardKey())||'[]');if(Array.isArray(value))earned=value;}catch{}
  }
  function render(){
   align();if(!data)return;
@@ -30,9 +33,15 @@ export function initProfileDashboard({Chess,getUser,setUser,openGame,canSync}){
   }
   $('profileMore').hidden=rows.length<=5;$('profileMore').textContent=expanded?'Свернуть историю':'Показать все партии';$('profileMore').setAttribute('aria-expanded',String(expanded));
   const awards=$('profileAwards');awards.replaceChildren();
-  for(const item of profileAwards(data.stats,data.puzzles)){const card=el('div',undefined,'profile-award'+(item.earned?' earned':''));const symbol=el('span',item.icon,'profile-award-icon');symbol.setAttribute('aria-hidden','true');card.append(symbol,el('strong',item.title),el('small',item.earned?'Получено':item.value+' / '+item.target));awards.append(card);}
+  const nextEarned=earnedAchievements(rows,Chess,earned);
+  if(scope&&JSON.stringify(nextEarned)!==JSON.stringify(earned)){earned=nextEarned;try{localStorage.setItem(awardKey(),JSON.stringify(earned));}catch{}}
+  const cards=achievementCards(nextEarned).sort((a,b)=>Number(b.earned)-Number(a.earned)||a.id-b.id);
+  $('profileAwardsCount').textContent=nextEarned.length+' / '+cards.length;
+  $('profileAwardsMore').textContent=awardsExpanded?'Свернуть':'Все награды';$('profileAwardsMore').setAttribute('aria-expanded',String(awardsExpanded));
+  for(const item of cards.slice(0,awardsExpanded?cards.length:6)){const card=el('div',undefined,'profile-award'+(item.earned?' earned':''));const symbol=el('img',undefined,'profile-award-icon');symbol.src='awards/'+item.icon+'.svg';symbol.alt='';symbol.width=32;symbol.height=32;card.append(symbol,el('strong',item.title),el('small',item.description),el('small',item.earned?'Получено':'Не получено','profile-award-state'));awards.append(card);}
  }
  $('profileMore').onclick=()=>{expanded=!expanded;render();};
+ $('profileAwardsMore').onclick=()=>{awardsExpanded=!awardsExpanded;render();};
  $('profileSaveUser').onclick=()=>{
   const nick=$('profileUser').value.trim();
   if(!/^[a-zA-Z0-9_-]{1,40}$/.test(nick)){$('profileUserStatus').textContent='Введи корректный ник Chess.com.';return;}

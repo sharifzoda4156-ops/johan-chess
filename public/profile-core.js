@@ -40,7 +40,3 @@ export function ratingCards(raw){
   return Number.isInteger(n)&&n>0?[{key,label,rating:n}]:[];
  });
 }
-export function profileAwards(stats,puzzles){
- const values=[['♟','Первая партия',stats.played,1],['♜','Первая победа',stats.wins,1],['◎','Первый разбор',stats.reviewed,1],['◆','Тактик',puzzles.solved.length,10],['✦','Серия из пяти',puzzles.bestStreak,5],['♞','Десять тренировок',stats.played,10]];
- return values.map(([icon,title,value,target])=>({icon,title,value:Math.min(target,Math.max(0,Number(value)||0)),target,earned:value>=target}));
-}
