@@ -7,6 +7,7 @@ import {initNavigation} from './navigation.js';
 import {initTraining} from './training.js';
 import {initCoach,rememberGame} from './android-coach.js';
 import {Chess} from './chess.js';
+import {normalizePgn,splitPgn,buildPgn} from './pgn.js';
 import {Engine} from './engine.js';
 import {enginePath} from './engine-path.js';
 import {evaluateMove,displayScore,scoreValue} from './metrics.js';
@@ -19,11 +20,28 @@ const own=()=>player('b').toLowerCase()===$('user').value.trim().toLowerCase()?'
 const uci=m=>m.from+m.to+(m.promotion||'');
 function load(text,study=null){
  if(busy||training?.active())return false;
- try{const c=new Chess();c.loadPgn(text);const h=c.history({verbose:true});if(!h.length)throw Error('В PGN нет ходов. Экспортируй полную партию.');
+ try{const c=new Chess();c.loadPgn(normalizePgn(text));const h=c.history({verbose:true});if(!h.length)throw Error('В PGN нет ходов. Экспортируй полную партию.');
  historical=study;game=c;moves=h;startFen=h[0].before;positions=[startFen,...h.map(m=>m.after)];pgn=text;results=[];analysisDepth=null;cursor=0;flipped=historical?historical.result==='0-1':own()==='b';$('review').hidden=false;$('analyze').disabled=false;$('export').disabled=true;$('progress').hidden=true;render();status((historical?historical.title+' · '+historical.year:'Партия загружена')+': '+h.length+' полуходов.');return true;
  }catch(e){status('Не удалось прочитать PGN: '+e.message);return false;}
 }
-$('load').onclick=()=>{if(!importing)load($('pgn').value);};
+function loadText(text){
+  if(importing)return false;
+  const list=splitPgn(text);
+  if(list.length>1){
+    imported=list.map(g=>({pgn:g}));const select=$('games');select.replaceChildren();
+    list.forEach((g,i)=>{const t=n=>(g.match(new RegExp('\\[' +n+ '\\s+"([^"]*)"'))||[])[1]||'?';const o=document.createElement('option');o.value=i;o.textContent=`${i+1}. ${t('White')} — ${t('Black')} · ${t('Date')}`;select.append(o);});
+    select.value='0';select.hidden=false;
+    if(!load(list[0]))return false;
+    status(`Найдено партий: ${list.length}. Выбери партию в списке.`);return true;
+  }
+  imported=[];$('games').hidden=true;return load(text);
+}
+$('load').onclick=()=>{loadText($('pgn').value);};
+$('pgnFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f||importing)return;if(f.size>5*1024*1024){status('Файл больше 5 МБ.');return;}try{loadText(await f.text());}catch(err){status('Не удалось прочитать файл: '+err.message);}};
+function currentPgn(){return buildPgn({headers:game.getHeaders(),moves,results,depth:analysisDepth??Number($('depth').value)});}
+function syncPgnButtons(){$('exportPgn').disabled=!results.length;$('copyPgn').disabled=!game;}
+$('exportPgn').onclick=()=>{if(!game||!results.length)return;const url=URL.createObjectURL(new Blob([currentPgn()],{type:'application/x-chess-pgn'}));const a=document.createElement('a');a.href=url;a.download='johan-chess-analysis.pgn';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+$('copyPgn').onclick=async()=>{if(!game)return;const text=currentPgn();try{await navigator.clipboard.writeText(text);status('PGN скопирован.');}catch{$('pgn').value=text;$('manual').open=true;status('Буфер обмена недоступен: PGN помещён в поле ввода.');}};
 $('fetch').onclick=async()=>{if(busy||importing||training?.active())return;importing=true;const b=$('fetch');for(const id of ['fetch','load','games','user'])$(id).disabled=true;status('Загружаю завершённые партии…');try{const r=await fetch('/api/games?user='+encodeURIComponent($('user').value.trim()));const data=await r.json();if(!r.ok)throw Error(data.error);imported=data.games||[];if(!imported.length)throw Error('Партии не найдены');const select=$('games');select.replaceChildren();imported.forEach((g,i)=>{const o=document.createElement('option');o.value=i;o.textContent=`${g.white} — ${g.black} · ${g.timeClass||''} · ${new Date(g.ended*1000).toLocaleDateString('ru')}`;select.append(o);});select.hidden=false;load(imported[0].pgn);}catch(e){status(e.message);$('manual').open=true;}finally{importing=false;for(const id of ['fetch','load','games','user'])$(id).disabled=busy||!!training?.active();}};
 $('games').onchange=()=>{if(importing)return;const g=imported[Number($('games').value)];if(g)load(g.pgn);};
 function setBusy(v){busy=v;for(const id of ['fetch','load','games','user','depth'])$(id).disabled=v;$('analyze').disabled=v||!game;$('stop').hidden=!v;}
@@ -38,7 +56,7 @@ $('analyze').onclick=async()=>{
  }catch(e){if(id===runId)status('Анализ прерван: '+e.message);}finally{if(id===runId){local?.close();engine=null;setBusy(false);render();$('export').disabled=!results.length;}}
 };
 $('stop').onclick=()=>{runId++;engine?.close();engine=null;setBusy(false);status('Анализ остановлен. Частичный отчёт сохранён на экране.');$('export').disabled=!results.length;render();};
-function render(){if(!game)return;renderBoard();renderCoach();renderReport();}
+function render(){if(!game)return;syncPgnButtons();renderBoard();renderCoach();renderReport();}
 function renderBoard(){const c=new Chess(positions[cursor]),board=$('board');board.replaceChildren();const rows=c.board();const ranks=Array.from({length:8},(_,i)=>flipped?7-i:i),files=[...ranks];const last=moves[cursor-1];for(const [ri,r] of ranks.entries())for(const [fi,f] of files.entries()){const sq='abcdefgh'[f]+(8-r),p=rows[r][f];const d=document.createElement('div');d.className='square '+((r+f)%2?'dark':'light')+(last&&(sq===last.from||sq===last.to)?' last':'');d.setAttribute('aria-label',sq+(p?' '+p.color+p.type:''));if(p)d.append(pieceGraphic(p));if(fi===0){const s=document.createElement('span');s.className='coord';s.textContent=8-r;d.append(s);}if(ri===7){const s=document.createElement('span');s.className='coord file';s.textContent='abcdefgh'[f];d.append(s);}board.append(d);}
  $('top').textContent=player(flipped?'w':'b');$('bottom').textContent=player(flipped?'b':'w');$('moveNumber').textContent=cursor?label(cursor-1):'Старт';$('first').disabled=$('back').disabled=cursor===0;$('next').disabled=$('last').disabled=cursor===moves.length;
 }
