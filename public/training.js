@@ -1,9 +1,9 @@
+import {pieceGraphic} from './piece-art.js';
 import {Chess} from './chess.js';
 import {Engine} from './engine.js';
 import {enginePath} from './engine-path.js';
 import {LEVELS,DEFAULT_ADAPTIVE,CONTROLS,opposite,resultFor,clockText,makeClock,remaining,nextClock,terminal,flagResult,adaptiveLevel,parseUci} from './training-core.js';
 const $=id=>document.getElementById(id);
-const glyph={p:'♟︎',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'};
 const STORAGE='jc-training-history-v1';
 function readHistory(){try{const data=JSON.parse(localStorage.getItem(STORAGE)||'[]');return Array.isArray(data)?data.filter(x=>x&&typeof x.pgn==='string'):[];}catch{return [];}}
 function storeHistory(record){try{localStorage.setItem(STORAGE,JSON.stringify([record,...readHistory()].slice(0,30)));return true;}catch{return false;}}
@@ -28,7 +28,7 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
    const square='abcdefgh'[f]+(8-r),p=rows[r][f],d=document.createElement('button');
    d.type='button';d.className='square '+((r+f)%2?'dark':'light')+(last&&(last.from===square||last.to===square)?' last':'')+(selected===square?' selected':'')+(targets.some(m=>m.to===square)?' target':'');
    d.setAttribute('aria-label',square+(p?' '+p.color+p.type:''));d.disabled=s.starting||s.thinking||s.game.turn()!==s.color||promotions.length>0;
-   if(p){const el=document.createElement('span');el.className='piece '+(p.color==='w'?'white':'black');el.textContent=glyph[p.type];d.append(el);}
+   if(p)d.append(pieceGraphic(p));
    if(fi===0){const el=document.createElement('span');el.className='coord';el.textContent=8-r;d.append(el);}
    if(ri===7){const el=document.createElement('span');el.className='coord file';el.textContent='abcdefgh'[f];d.append(el);}
    d.onclick=()=>click(square);b.append(d);
