@@ -1,10 +1,19 @@
-# Online Lichess alpha
+# Online Lichess (Web & Android)
 Official API and fair play: https://lichess.org/api ; https://lichess.org/page/fair-play ; https://lichess.org/page/api-tips .
-Android OAuth PKCE S256 and encrypted token, no VPS. Browser loopback callback checks state. Native bridge uses fixed Lichess endpoints and separates ordinary serial requests from event/game/seek streams. 429 waits one minute.
-Standard real-time chess only; automatic seek 10+0, 15+10, 30+20; direct 3+2 and 5+0 challenges also allowed. Server decides pairing, moves, clocks, outcomes and ratings. UI clocks are projections. Matchmaking and live game lock training navigation, cancel local engine work, and reject coach inference. Completed PGN can be opened in Stockfish.
-Social: Lichess follow/unfollow, account ratings, profile URL via Android share, incoming challenge refresh, completed standard-game history. No mutual-friend system, private messages or notifications when app is closed. Lichess and Chess.com identities remain separate.
-Device verification required: OAuth loopback; seek cancellation and game-start race; live stream reconnect, background/resume, promotion, draw/resign/abort, end status, unsupported variants, 429, history and share. No Android build or live two-account test performed here.
 
-The online lock is persisted across process restarts for unresolved matches. Final server status is followed by a fresh ongoing-game check before releasing the lock; a revision guard rejects stale reconciliation. Active game browser escape is disabled. Native Back asks for surrender; other sections stay locked until confirmed server completion. Play on other devices while offline is not detectable; fair play remains the user's responsibility. The friends view loads up to 200 followed players and game history up to 20 recent records.
+## Dual Transport Architecture
+- **Android APK (`Lichess.java` + `JohanLichess` WebMessage bridge)**:
+  - OAuth2 Authorization Code + PKCE (`S256`) using loopback `127.0.0.1` callback server. Drains bounded HTTP request headers before sending HTTP 200/400 so system browsers do not hit `ERR_CONNECTION_RESET`. Supports immediate `cancelLogin`.
+  - Tokens encrypted in Android Keystore (AES-GCM); tokens never enter WebView JavaScript.
+  - Pushes `jc-lichess-update` events to WebView on stream/lock/challenge/opponentGone changes instead of relying on unconditional polling.
+- **Browser / GitHub Pages (`public/lichess-web.js`)**:
+  - Official OAuth2 Authorization Code + PKCE (`S256`, `client_id: johan-chess-web`, dynamic `redirect_uri = location.origin + location.pathname`).
+  - Verifies `state` in `sessionStorage`, strips `?code=&state=` via `history.replaceState`, stores `{token, username}` in `localStorage` (`jc-lichess-web-v1`), and revokes tokens via `DELETE /api/token` on logout.
+  - Real-time NDJSON streaming via `fetch` + `ReadableStream` + `AbortController` for `/api/stream/event`, `/api/board/seek`, `/api/challenge/{user}`, and `/api/board/game/stream/{id}` with push-driven `onUpdate` callbacks and `beforeunload` active-game protection.
 
-Anti-cheat: FLAG_SECURE, navigation and engine/coach lock, no move suggestions. Explicit Back surrender confirmation remains. No client absence deadline, automatic resignation or offline surrender queue. On Activity pause the live stream disconnects; on return reconcile and reconnect. Game clocks continue on Lichess. The server's opponentGone event supplies the claim countdown; only after the announced delay may the player manually claim victory or draw through Board API. Reset eligibility on return, reconnect or game end. Missing delay never enables claim. Server may reject stale claims. Legacy auto-resignation flags are discarded. Sources: https://lichess.org/api#tag/Board ; https://lichess.org/faq#leaving . Physical device and two-account validation required.
+## Gameplay, Social & Fair Play
+- Standard real-time chess only: automatic seek `10+0`, `15+10`, `30+20`; direct challenges also allow `3+2` and `5+0`.
+- Server decides pairing, moves, clocks, outcomes, and ratings. UI displays captured material, check highlight, and projected clocks.
+- **Anti-cheat / Fair play**: during matchmaking and live games, navigation tabs are locked, local Stockfish and ChatGPT Coach are blocked, no legal-move hints/dots are rendered, and Android sets `FLAG_SECURE`.
+- **Opponent presence**: server `opponentGone` events supply the official claim countdown (`claimWinInSeconds`); only after the announced delay may the player claim victory or draw through the Board API.
+- Completed standard games can be opened directly in Stockfish Game Review.
