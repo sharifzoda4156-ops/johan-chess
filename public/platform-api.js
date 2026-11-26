@@ -52,3 +52,30 @@ export async function webLichessPgn(id,fetcher=globalThis.fetch){
   try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>1048576){await reader.cancel();throw Error('PGN слишком большой');}text+=decoder.decode(value,{stream:true});}return text+decoder.decode();}finally{reader.releaseLock();}
  }catch{throw Error('Не удалось загрузить партию Lichess. Вставь PGN вручную.');}
 }
+
+export async function webChessComGame(user,kind,gameId,fetcher=globalThis.fetch,pages=isPages()){
+ const nick=String(user||'').trim().toLowerCase();
+ if(!/^[a-z0-9_-]{1,40}$/.test(nick))throw Error('Укажи корректный ник участника Chess.com в поле выше.');
+ if(!['live','daily'].includes(kind)||!/^[0-9]{1,20}$/.test(String(gameId||'')))throw Error('Некорректная ссылка Chess.com');
+ if(!pages){
+  const q=new URLSearchParams({user:nick,kind,id:String(gameId)});
+  const r=await fetcher('/api/chesscom-game?'+q,{signal:AbortSignal.timeout(20000)});
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok||!data.pgn)throw Error(data.error||'Не удалось загрузить партию Chess.com.');
+  return data.pgn;
+ }
+ const urlPattern=new RegExp('^https://(?:www\\.)?chess\\.com/game/'+kind+'/'+gameId+'/?$');
+ const signal=AbortSignal.timeout(20000);
+ async function get(suffix){const r=await fetcher(playerBase+nick+'/'+suffix,{signal});if(!r.ok)throw Error('Chess.com HTTP '+r.status);return r.json();}
+ try{
+  const {archives}=await get('games/archives');
+  for(const archive of (Array.isArray(archives)?archives:[]).slice(-3).reverse()){
+   const m=/\/(\d{4})\/(\d{2})$/.exec(archive);if(!m)continue;
+   const result=await get('games/'+m[1]+'/'+m[2]);
+   const match=(result.games||[]).find(g=>g.rules==='chess'&&g.pgn&&urlPattern.test(g.url||''));
+   if(match)return match.pgn;
+  }
+ }catch{throw Error('Chess.com недоступен из браузера. Вставь PGN вручную.');}
+ throw Error('Партия не найдена в последних трёх архивах этого игрока. Укажи ник участника или вставь PGN.');
+}
+

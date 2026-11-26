@@ -4,7 +4,7 @@ import {readFile,stat} from 'node:fs/promises';
 import {resolve,extname,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('./public/',import.meta.url));
-const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.wasm':'application/wasm','.json':'application/json; charset=utf-8'};
+const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.wasm':'application/wasm','.json':'application/json; charset=utf-8','.svg':'image/svg+xml; charset=utf-8','.tsv':'text/tab-separated-values; charset=utf-8','.webmanifest':'application/manifest+json; charset=utf-8','.png':'image/png','.ico':'image/x-icon'};
 const cache=new Map();
 const respond=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
 async function api(path){
@@ -23,6 +23,21 @@ const server=http.createServer(async(req,res)=>{
   if(u.pathname==='/api/player-stats'){
    const user=(u.searchParams.get('user')||'').toLowerCase();if(!/^[a-z0-9_-]{1,40}$/.test(user))return respond(res,400,{error:'Некорректный ник'});
    try{return respond(res,200,await api(user+'/stats'));}catch{return respond(res,502,{error:'Рейтинги Chess.com недоступны'});}
+  }
+  if(u.pathname==='/api/chesscom-game'){
+   const user=(u.searchParams.get('user')||'').toLowerCase(),kind=u.searchParams.get('kind')||'',id=u.searchParams.get('id')||'';
+   if(!/^[a-z0-9_-]{1,40}$/.test(user)||!['live','daily'].includes(kind)||!/^[0-9]{1,20}$/.test(id))return respond(res,400,{error:'Нужен корректный ник и ссылка Chess.com'});
+   try{
+    const {archives}=await api(user+'/games/archives');
+    const urlPattern=new RegExp('^https://(?:www\\.)?chess\\.com/game/'+kind+'/'+id+'/?$');
+    for(const url of (archives||[]).slice(-3).reverse()){
+      const m=url.match(/\/(\d{4})\/(\d{2})$/);if(!m)continue;
+      const result=await api(`${user}/games/${m[1]}/${m[2]}`);
+      const match=(result.games||[]).find(g=>g.rules==='chess'&&g.pgn&&urlPattern.test(g.url||''));
+      if(match)return respond(res,200,{pgn:match.pgn});
+    }
+    return respond(res,404,{error:'Партия не найдена в последних трёх архивах этого игрока. Укажи ник участника или вставь PGN.'});
+   }catch(e){return respond(res,502,{error:'Импорт Chess.com не удался: '+e.message});}
   }
   if(u.pathname==='/api/games'){
    const user=(u.searchParams.get('user')||'').toLowerCase();if(!/^[a-z0-9_-]{1,40}$/.test(user))return respond(res,400,{error:'Некорректный ник'});

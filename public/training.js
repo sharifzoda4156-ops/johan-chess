@@ -1,4 +1,5 @@
 import {renderBoardView,clearBoardView,moveDuration,roundMotionFactor} from './board-view.js';
+import {confirmDialog} from './dialog.js';
 import {Chess} from './chess.js';
 import {Engine} from './engine.js';
 import {enginePath} from './engine-path.js';
@@ -110,8 +111,8 @@ export function initTraining({canStart,lock,unlock,review,getUser}){
   }catch(e){if(session===s)cancel('Не удалось запустить Stockfish: '+e.message);return false;}
  }
  $('playStart').onclick=()=>start();
- $('playCancel').onclick=()=>{if(session&&confirm('Прервать тренировку без результата?'))cancel('Тренировка отменена.');};
- $('playResign').onclick=()=>{if(session&&!session.starting&&confirm('Сдаться?')){tick();if(session)finish({result:resultFor(opposite(session.color)),reason:'Игрок сдался'});}};
+ $('playCancel').onclick=async()=>{const s=session;if(!s)return;if(await confirmDialog({title:'Прервать тренировку?',message:'Текущая партия завершится без результата и не попадёт в историю.',confirmText:'Прервать',danger:true})&&session===s)cancel('Тренировка отменена.');};
+ $('playResign').onclick=async()=>{const s=session;if(!s||s.starting)return;if(await confirmDialog({title:'Сдаться?',message:'Партия завершится поражением и сохранится для разбора.',confirmText:'Сдаться',danger:true})&&session===s){tick();if(session===s)finish({result:resultFor(opposite(session.color)),reason:'Игрок сдался'});}};
  $('playReview').onclick=()=>{if(finished&&!session&&canStart())review(finished.pgn,true,finished.user);};
  $('playOpenHistory').onclick=()=>{if(!session&&canStart()){const g=readHistory()[Number($('playHistory').value)];if(g)review(g.pgn,true,g.user);}};
  for(const p of ['q','r','b','n'])$('promote-'+p).onclick=()=>{const m=promotions.find(x=>x.promotion===p);if(m)human(m);};

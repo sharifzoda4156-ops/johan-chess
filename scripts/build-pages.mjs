@@ -8,9 +8,7 @@ await cp(new URL('public/',root),out,{recursive:true});
 const file=new URL('index.html',out);
 let html=await readFile(file,'utf8');
 if(!html.includes('<html lang="ru">'))throw Error('Expected HTML root');
-html=html.replace('<html lang="ru">','<html lang="ru" data-hosting="pages">')
- .replace('В Chess.com или Lichess выбери «Поделиться» → Johan Chess. Или вставь PGN / ссылку ниже. Для ссылки Chess.com нужен ник участника в поле выше.','Вставь PGN, ссылку Lichess или загрузи файл. Для Chess.com можно загрузить последние партии по нику. Системная передача из приложений доступна на Android.')
- .replace('placeholder="PGN или ссылка"','placeholder="PGN или ссылка Lichess"');
+html=html.replace('<html lang="ru">','<html lang="ru" data-hosting="pages">');
 await writeFile(file,html);
 await writeFile(new URL('.nojekyll',out),'');
 await cp(new URL('README.md',root),new URL('SOURCE-AND-LICENSES.md',out));
