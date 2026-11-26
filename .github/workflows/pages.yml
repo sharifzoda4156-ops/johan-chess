@@ -1,0 +1,63 @@
+name: Web Pages
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'public/**'
+      - 'scripts/**'
+      - 'test/**'
+      - 'package.json'
+      - '.github/workflows/pages.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'public/**'
+      - 'scripts/**'
+      - 'test/**'
+      - 'package.json'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install
+      - run: npm test
+      - run: node scripts/build-pages.mjs
+      - run: npm install --no-save --ignore-scripts playwright@1.51.1
+      - run: npx playwright install --with-deps chromium
+      - name: Browser smoke under Pages path
+        run: |
+          mkdir -p "$RUNNER_TEMP/pages"
+          cp -r dist "$RUNNER_TEMP/pages/johan-chess"
+          python3 -m http.server 4174 --bind 127.0.0.1 --directory "$RUNNER_TEMP/pages" > "$RUNNER_TEMP/pages-server.log" 2>&1 &
+          for i in {1..30}; do curl -fsS http://127.0.0.1:4174/johan-chess/ >/dev/null && break; sleep 1; done
+          node scripts/web-smoke.mjs
+      - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - uses: actions/deploy-pages@v4
+        id: deployment
