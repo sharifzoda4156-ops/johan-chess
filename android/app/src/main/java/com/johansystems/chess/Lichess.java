@@ -211,7 +211,7 @@ final class Lichess {
     private synchronized void startGame(String raw)throws Exception{
         String next=id(raw);
         if(next.equals(gameId)&&game!=null)return;
-        if(game!=null)game.cancel();if(waiting!=null){waiting.cancel();waiting=null;}
+        if(game!=null){game.cancel();game=null;}if(waiting!=null){waiting.cancel();waiting=null;}
         revision++;gameId=next;terminal=false;needsSync=true;full=null;state=null;
         opponent.reset();transportLost=true;
         notice="Подключаюсь к партии";persistLock();
@@ -236,7 +236,19 @@ final class Lichess {
             else if("gameFinish".equals(type)&&!terminal){JSONObject g=msg.optJSONObject("game");if(g!=null&&gameId.equals(g.optString("gameId",g.optString("id")))){revision++;needsSync=true;persistLock();}}
         }else if(s==game){
             if("gameFull".equals(type)){full=msg;state=msg.getJSONObject("state");}
-            else if("gameState".equals(type)&&full!=null)state=msg;
+            else if("gameState".equals(type)&&full!=null){
+                String oldMoves=state==null?"":state.optString("moves"),newMoves=msg.optString("moves");
+                // An actual opponent move is also proof of return, even if a gone:false event was lost.
+                if(opponent.gone()&&!newMoves.equals(oldMoves)&&newMoves.startsWith(oldMoves)){
+                    int before=oldMoves.trim().isEmpty()?0:oldMoves.trim().split("\\s+").length;
+                    int after=newMoves.trim().isEmpty()?0:newMoves.trim().split("\\s+").length;
+                    JSONObject white=full.optJSONObject("white");
+                    String fen=full.optString("initialFen","startpos");boolean whiteFirst="startpos".equals(fen)||fen.isEmpty()||fen.contains(" w ");
+                    boolean mineWhite=white!=null&&username.equalsIgnoreCase(white.optString("id"));
+                    if(after>before&&(after-before>=2||((before%2==0)==whiteFirst)!=mineWhite))opponent.reset();
+                }
+                state=msg;
+            }
             else if("opponentGone".equals(type)&&full!=null&&!terminal){
                 Object delay=msg.opt("claimWinInSeconds");
                 Integer seconds=delay instanceof Number?msg.optInt("claimWinInSeconds",-1):null;
