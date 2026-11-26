@@ -21,10 +21,12 @@ const $=id=>document.getElementById(id), status=t=>{$('status').textContent=t;$(
 let training=null,importing=false,analysisDepth=null,game=null, moves=[], positions=[], results=[], cursor=0, flipped=false, engine=null, busy=false, runId=0, imported=[], startFen='', pgn='', historical=null,onlineLocked=false,onlineReviewName='';
 initThemes();initBoardMotion();
 const navigation=initNavigation();
+const isDesktop=()=>globalThis.matchMedia?.('(min-width: 900px)').matches===true;
 let reviewFocus=false,reviewStripMoves=null;
-function syncReviewFocus(){const visible=!document.querySelector('[data-screen="review"]').hidden;document.body.classList.toggle('review-board-focus',!!(visible&&reviewFocus&&game&&!onlineLocked&&!training?.active()));$('reviewOpenBoard').hidden=!game;}
-function openReviewBoard(value){reviewFocus=!!value;syncReviewFocus();window.scrollTo({top:0,behavior:'auto'});}
+function syncReviewFocus(){const visible=!document.querySelector('[data-screen="review"]').hidden;const focus=!!(visible&&reviewFocus&&game&&!onlineLocked&&!training?.active()&&!isDesktop());document.body.classList.toggle('review-board-focus',focus);$('reviewOpenBoard').hidden=!game||isDesktop();}
+function openReviewBoard(value){reviewFocus=!!value;syncReviewFocus();if(!isDesktop())window.scrollTo({top:0,behavior:'auto'});}
 document.addEventListener('jc-screen',syncReviewFocus);
+globalThis.matchMedia?.('(min-width: 900px)').addEventListener?.('change',syncReviewFocus);
 globalThis.JohanHandleBack=()=>{if(hasOpenDialog()){closeOpenDialog();return true;}if(onlineLocked)return true;if(training?.active()){if(!$('playCancel').disabled)$('playCancel').click();return true;}if(document.body.classList.contains('review-board-focus')){openReviewBoard(false);return true;}return false;};
 $('reviewOpenBoard').onclick=()=>openReviewBoard(true);$('reviewCloseBoard').onclick=()=>openReviewBoard(false);$('reviewAnalyze').onclick=()=>{if(busy)$('stop').click();else $('analyze').click();};
 const player=c=>game?.getHeaders()[c==='w'?'White':'Black']|| (c==='w'?'Белые':'Чёрные');
@@ -33,7 +35,7 @@ const uci=m=>m.from+m.to+(m.promotion||'');
 function load(text,study=null){
  if(busy||onlineLocked||training?.active())return false;
  try{const c=new Chess();c.loadPgn(normalizePgn(text));const h=c.history({verbose:true});if(!h.length)throw Error('В PGN нет ходов. Экспортируй полную партию.');
- historical=study;onlineReviewName='';game=c;moves=h;startFen=h[0].before;positions=[startFen,...h.map(m=>m.after)];pgn=text;results=[];analysisDepth=null;cursor=0;flipped=historical?historical.result==='0-1':own()==='b';$('review').hidden=false;$('analyze').disabled=false;$('export').disabled=true;$('progress').hidden=true;openReviewBoard(true);render();status((historical?historical.title+' · '+historical.year:'Партия загружена')+': '+h.length+' полуходов.');return true;
+ historical=study;onlineReviewName='';game=c;moves=h;startFen=h[0].before;positions=[startFen,...h.map(m=>m.after)];pgn=text;results=[];analysisDepth=null;cursor=0;flipped=historical?historical.result==='0-1':own()==='b';$('review').hidden=false;$('analyze').disabled=false;$('export').disabled=true;$('progress').hidden=true;if(isDesktop()&&$('importSource'))$('importSource').open=false;openReviewBoard(true);render();if(isDesktop())$('review').scrollIntoView({behavior:'auto',block:'start'});status((historical?historical.title+' · '+historical.year:'Партия загружена')+': '+h.length+' полуходов.');return true;
  }catch(e){status('Не удалось прочитать PGN: '+e.message);return false;}
 }
 function loadText(text){
@@ -124,6 +126,8 @@ function coachContext(){
  return {user,game:{source:historical?'historical':onlineReviewName?'lichess':h.Site==='Johan Chess'?'training':'import',historical:historical?{id:historical.id,title:historical.title,year:historical.year,source:historical.source}:null,termination:h.Termination||'',timeControl:h.TimeControl||'',white:player('w'),black:player('b'),date:h.Date||'',result:h.Result||'*',color,startFen,position:positions[cursor],cursor,moves:moves.map(m=>m.san),depth:analysisDepth??Number($('depth').value),complete:results.length===moves.length,analysis:results}};
 }
 $('coachUnavailable').hidden=!!globalThis.JohanNative;
+if($('libraryCoachNote'))$('libraryCoachNote').hidden=!!globalThis.JohanNative;
+if($('libraryBack'))$('libraryBack').hidden=!globalThis.JohanNative;
 let accountStatus=null;
 try{const nick=localStorage.getItem('jc-profile-nick');if(/^[a-zA-Z0-9_-]{1,40}$/.test(nick||''))$('user').value=nick;}catch{}
 const dashboard=initProfileDashboard({Chess,getUser:()=>$('user').value.trim(),setUser:nick=>{if(busy||importing||training?.active())return false;$('user').value=nick;imported=[];$('games').hidden=true;$('review').hidden=true;game=null;pgn='';historical=null;results=[];openReviewBoard(false);$('analyze').disabled=true;try{localStorage.setItem('jc-profile-nick',nick);}catch{}refreshProfile();document.dispatchEvent(new CustomEvent('jc-profile-user',{detail:nick}));return true;},openGame:text=>{if(busy||importing||training?.active())return false;navigation.show('review');if(!load(text))return false;$('games').hidden=true;openReviewBoard(true);return true;},canSync:()=>!busy&&!importing&&!training?.active()});

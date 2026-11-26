@@ -29,6 +29,7 @@ try{
   await page.goto(url,{waitUntil:'load'});
   await page.waitForFunction(()=>document.querySelector('#homePlayed').textContent!=='—');
   assert.equal(await page.locator('html').getAttribute('data-hosting'),'pages');
+  assert.ok(await page.evaluate(()=>[...document.querySelectorAll('img.brand-logo')].every(img=>img.complete&&img.naturalWidth>0)),'Brand logo SVG loaded');
   await page.locator('[data-tab="profile"]').click();
   await page.locator('#profileAwards .profile-award').first().waitFor();
   assert.ok(await page.evaluate(()=>[...document.querySelectorAll('#profileAwards img')].every(img=>img.complete&&img.naturalWidth>0)),'Award SVGs loaded');
@@ -39,8 +40,6 @@ try{
   assert.equal(await page.locator('#puzzleBoard [data-square]').count(),64);
   await page.locator('#journeyBack').click();
   await page.locator('[data-tab="coach"]').click();
-  await page.locator('#coachUnavailable').waitFor();
-  await page.locator('[data-go="library"]').click();
   await page.waitForFunction(()=>Number(document.querySelector('#studyOpeningCount').textContent)>0);
   assert.equal(await page.locator('#studyBoard [data-square]').count(),64);
   await page.locator('#studyNext').click();
@@ -54,7 +53,8 @@ try{
   await page.locator('#load').click();
   await page.locator('#board [data-square="e2"]').waitFor();
   assert.equal(lichessCalls,2);
-  await page.locator('#reviewCloseBoard').click();
+  if(viewport.width<900)await page.locator('#reviewCloseBoard').click();
+  else{assert.ok(await page.locator('#review .report').isVisible(),'Desktop review shows report side by side');await page.evaluate(()=>{const d=document.getElementById('importSource');if(d)d.open=true;});}
   await page.locator('#pgn').fill('[Result "1-0"]\n\n1. e4 e5 2. Nf3 Nc6 1-0');
   await page.locator('#load').click();
   await page.locator('#board [data-square="e2"]').waitFor();
@@ -64,9 +64,9 @@ try{
   stable(reviewBox,await boardBox(page,'#board'));
   await page.locator('#flip').click();
   stable(reviewBox,await boardBox(page,'#board'));
-  await page.locator('#reviewCloseBoard').click();
+  if(viewport.width<900)await page.locator('#reviewCloseBoard').click();
   await page.locator('[data-tab="home"]').click();
-  await page.locator('[data-go="play"]').click();
+  await page.locator('[data-go="play"]').first().click();
   await page.locator('#playTime').selectOption('free');
   await page.locator('#playLevel').selectOption('0');
   await page.locator('#playStart').click();
