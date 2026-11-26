@@ -1,3 +1,4 @@
+import {platformFetch} from './platform-api.js';
 import {cacheGet,cachePut,cacheKeys} from './puzzle-cache.js';
 const CATALOG='catalog-v1',TTL=6*60*60*1000;
 let current=null,loadedAt=0,retryAfter=0;
@@ -20,7 +21,7 @@ export function matchingPacks(c,theme,band,target){
 }
 async function fetchText(path){
  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),15000);
- try{const r=await fetch(path,{signal:ctrl.signal,cache:'no-store'});if(!r.ok)throw Error('Данные GitHub недоступны');return await r.text();}finally{clearTimeout(timer);}
+ try{const r=await platformFetch(path,{signal:ctrl.signal,cache:'no-store'});if(!r.ok)throw Error('Данные GitHub недоступны');return await r.text();}finally{clearTimeout(timer);}
 }
 async function catalog(){
  if(current&&Date.now()-loadedAt<TTL)return current;
