@@ -1,11 +1,6 @@
 name: Publish Lichess puzzle data
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/puzzle-data.yml'
-      - 'scripts/publish-puzzle-data.mjs'
 permissions:
   contents: write
 concurrency:
@@ -38,7 +33,7 @@ jobs:
       - name: Validate starter before publishing
         run: |
           cp "$RUNNER_TEMP/puzzle-data/starter.json" public/lichess-puzzles.json
-          npm test
+          node --test test/puzzle.test.mjs test/puzzle-download.test.mjs
       - name: Upload immutable-version data files
         shell: bash
         run: |

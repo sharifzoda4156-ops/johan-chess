@@ -1,0 +1,31 @@
+name: Quality checks
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'public/**'
+      - 'lib/**'
+      - 'scripts/**'
+      - 'test/**'
+      - 'server.mjs'
+      - 'package.json'
+      - '.github/workflows/quality.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts
+      - name: Check JavaScript syntax
+        run: find public lib scripts test -type f \( -name '*.js' -o -name '*.mjs' \) -print0 | xargs -0 -n1 node --check
+      - run: npm test

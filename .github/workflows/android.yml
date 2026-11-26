@@ -12,12 +12,6 @@ jobs:
         with:
           node-version: '22'
       - run: npm install
-      - name: Fetch 1000 published starter puzzles
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl --fail --location --retry 3 --max-filesize 1048576 "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/puzzle-catalog/starter.json" -o public/lichess-puzzles.json
-          node --input-type=module -e 'import fs from "node:fs";const p=JSON.parse(fs.readFileSync("public/lichess-puzzles.json"));if(p.license!=="CC0-1.0"||p.puzzles.length!==1000)throw Error("Invalid starter");'
       - run: npm test
       - uses: actions/setup-java@v4
         with:

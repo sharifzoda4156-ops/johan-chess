@@ -12,7 +12,7 @@ function db(){
 const result=req=>new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
 const completed=tx=>new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onabort=tx.onerror=()=>reject(tx.error||Error('Cache write failed'));});
 export function evictions(entries,key,size,limit=LIMIT){
- const others=entries.filter(e=>e.key!==key).sort((a,b)=>a.used-b.used);
+ const others=entries.filter(e=>e.key!==key).sort((a,b)=>(a.key==='catalog-v1')-(b.key==='catalog-v1')||a.used-b.used);
  let total=others.reduce((n,e)=>n+e.size,0)+size;const remove=[];
  for(const e of others){if(total<=limit)break;remove.push(e.key);total-=e.size;}
  return remove;

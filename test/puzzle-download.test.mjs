@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {requestSpec,validRange,downloadPuzzleData} from '../lib/puzzle-download.mjs';
-import {parseCatalog,matchingPacks,decodePack} from '../public/puzzle-remote.js';
+import {parseCatalog,matchingPacks,decodePack,packCandidates,packKey} from '../public/puzzle-remote.js';
 import {evictions} from '../public/puzzle-cache.js';
 
 const row={id:'abc01',fen:'test fixture',moves:['e2e4','e7e5'],rating:1100,themes:['fork']};
@@ -45,4 +45,9 @@ test('cache evicts oldest entries, replacement does not double count',()=>{
  const items=[{key:'a',size:20,used:1},{key:'b',size:20,used:2},{key:'c',size:10,used:3}];
  assert.deepEqual(evictions(items,'d',25,50),['a','b']);
  assert.deepEqual(evictions(items,'b',20,50),[]);
+});
+
+test('evicted RAM pack can be reused from disk; catalog stays cached until ordinary packs are evicted',()=>{
+ const other={...descriptor,asset:'band-6-0.bin',min:1200,max:1399};const c={tag,packs:[descriptor,other]};const a=packKey(tag,descriptor),b=packKey(tag,other);const groups=packCandidates(c,'all','adaptive',1100,new Set([b]),new Set([a]),new Set([a]));assert.deepEqual(groups.cached,[descriptor]);assert.deepEqual(groups.fresh,[]);
+ assert.deepEqual(evictions([{key:'catalog-v1',size:20,used:1},{key:'old-pack',size:25,used:2}],'new-pack',25,50),['old-pack']);
 });
