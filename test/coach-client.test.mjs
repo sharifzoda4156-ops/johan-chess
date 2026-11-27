@@ -47,3 +47,12 @@ test('token-scoped account key matches the existing local-memory format and isol
  const {memoryKey}=await import('../public/coach-memory.js');
  assert.ok(memoryKey(a,'Johan'));assert.notEqual(memoryKey(a,'Johan'),memoryKey(a,'Other'));
 });
+
+test('memory proposal travels only on an opted-in successful workflow response',async()=>{
+ const id='mem123',proposal={action:'replace',summary:'Нужно тренировать эндшпиль'};
+ for(const [permission,conclusion,update,expected] of [[true,'success',proposal,proposal],[false,'success',proposal,null],[true,'failure',proposal,null],[true,'success',{...proposal,goal:'bad'},null]]){
+   const f=async url=>url.includes('/runs?')?res({workflow_runs:[{id:1,display_title:'coach '+id}]}):url.endsWith('/runs/1')?res({status:'completed',conclusion}):url.endsWith('/jobs')?res({jobs:[{id:2}]}):url.includes('annotations')?res([{message:b64({request_id:id,ok:true,answer:'Ответ',memoryUpdate:update})}]):res(null,204);
+   const r=await askCoach({question:'q',memoryUpdate:permission},{token:TOKEN,repo:'o/r',id,sleeper:async()=>{},fetcher:f});
+   assert.deepEqual(r.memoryUpdate,expected);
+ }
+});
