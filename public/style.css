@@ -410,10 +410,16 @@ input[type=checkbox]{width:20px;height:20px;min-height:0;vertical-align:middle;a
 .side-filter button[aria-pressed=true]{background:rgba(34,197,94,.16);color:var(--accent);border-color:rgba(34,197,94,.38)}
 .sound-setting{display:flex;align-items:center;gap:10px;margin:10px 0 4px;font-size:14px;color:var(--ink);cursor:pointer}
 
-#playBoard .square:disabled,#puzzleBoard .square:disabled,#onlineBoard .square:disabled{opacity:1}
-#playBoard .square:not(:disabled):active,#puzzleBoard .square:not(:disabled):active{transform:none}
-#playBoard .square.light:not(:disabled):active,#puzzleBoard .square.light:not(:disabled):active{background:var(--light-square)}
-#playBoard .square.dark:not(:disabled):active,#puzzleBoard .square.dark:not(:disabled):active{background:var(--dark-square)}
+#playBoard .square:disabled,#puzzleBoard .square:disabled,#onlineBoard .square:disabled,#board .square:disabled{opacity:1}
+#playBoard .square:not(:disabled):active,#puzzleBoard .square:not(:disabled):active,#onlineBoard .square:not(:disabled):active,#board .square:not(:disabled):active{transform:none}
+#playBoard .square.light:hover,#playBoard .square.light:not(:disabled):active,
+#puzzleBoard .square.light:hover,#puzzleBoard .square.light:not(:disabled):active,
+#onlineBoard .square.light:hover,#onlineBoard .square.light:not(:disabled):active,
+#board .square.light:hover,#board .square.light:not(:disabled):active{background:var(--light-square);border-color:transparent}
+#playBoard .square.dark:hover,#playBoard .square.dark:not(:disabled):active,
+#puzzleBoard .square.dark:hover,#puzzleBoard .square.dark:not(:disabled):active,
+#onlineBoard .square.dark:hover,#onlineBoard .square.dark:not(:disabled):active,
+#board .square.dark:hover,#board .square.dark:not(:disabled):active{background:var(--dark-square);border-color:transparent}
 #playBoard .square:focus-visible,#puzzleBoard .square:focus-visible,#onlineBoard .square:focus-visible{
  outline:2px solid var(--accent);outline-offset:-3px;z-index:5;
 }

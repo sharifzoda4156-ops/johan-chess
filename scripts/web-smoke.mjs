@@ -126,8 +126,22 @@ try{
   await page.mouse.move(e4.x+e4.width/2,e4.y+e4.height/2,{steps:6});
   await page.mouse.up();
   await page.waitForFunction(()=>document.querySelector('#playBoard [data-square="e4"]')?.getAttribute('aria-label')==='e4 wp');
-  await page.waitForFunction(()=>document.querySelector('#playMoves').textContent.trim().split(/\s+/).length>=3 && document.querySelector('#playStatus').textContent.startsWith('Твой ход'),{},{timeout:30000});
+  await page.waitForFunction(()=>document.querySelector('#playMoves').children.length>=2 && document.querySelector('#playStatus').textContent.startsWith('Твой ход'),{},{timeout:30000});
   stable(playBox,await boardBox(page,'#playBoard'));
+  // Browse previous move and return to live
+  await page.locator('#playPrevMove').click();
+  await page.locator('#playLivePill').waitFor({state:'visible'});
+  await page.locator('#playNextMove').click();
+  await page.locator('#playLivePill').waitFor({state:'hidden'});
+  // 2-step Stockfish hint: 1st tap highlights piece, 2nd tap draws arrow
+  await page.locator('#playHint').click();
+  await page.waitForFunction(()=>document.querySelectorAll('#playBoard .square.hint-piece').length===1,{},{timeout:20000});
+  await page.locator('#playHint').click();
+  await page.waitForFunction(()=>document.querySelectorAll('#playBoard .board-arrows-layer polygon').length===1);
+  // Undo last move pair returns cleanly to start position
+  await page.locator('#playUndo').click();
+  await page.waitForFunction(()=>document.querySelector('#playMoves').children.length===0 && document.querySelector('#playBoard [data-square="e2"]')?.getAttribute('aria-label')==='e2 wp');
+  await page.locator('#playOptionsBtn').click();
   await page.locator('#playCancel').click();
   await page.locator('[data-dialog="confirm"] [data-dialog-action="confirm"]').click();
   await page.locator('[data-tab="home"]').click();

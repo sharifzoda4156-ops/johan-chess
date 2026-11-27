@@ -8,5 +8,6 @@ export class Engine{
  async setSkill(level){if(!Number.isInteger(level)||level<0||level>20)throw Error('Некорректная сложность');this.worker.postMessage('setoption name UCI_LimitStrength value false');this.worker.postMessage('setoption name Skill Level value '+level);await this.wait('isready',l=>l==='readyok');}
  async choose(fen,moves,milliseconds){this.worker.postMessage('position fen '+fen+(moves.length?' moves '+moves.join(' '):''));const line=await this.wait('go movetime '+Math.max(1,Math.floor(milliseconds)),l=>l.startsWith('bestmove '),30000);return line.split(/\s+/)[1];}
  async search(fen,moves,depth,only){let info=null;this.worker.postMessage('position fen '+fen+(moves.length?' moves '+moves.join(' '):''));const line=await this.wait('go depth '+depth+(only?' searchmoves '+only:''),l=>l.startsWith('bestmove '),120000,l=>{const x=parseInfo(l);if(x&&(!info||x.depth>=info.depth))info=x;});if(!info)throw Error('Нет оценки движка: '+line);return {...info,best:line.split(/\s+/)[1]};}
+ stopSearch(){if(this.closed||!this.waiter)return;try{this.worker.postMessage('stop');}catch{}}
  close(){if(this.closed)return;this.closed=true;running.delete(this);this.waiter?.fail(Error('Анализ остановлен'));this.worker.terminate();}
 }

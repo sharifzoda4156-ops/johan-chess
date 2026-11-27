@@ -1,7 +1,7 @@
 import {Chess} from './chess.js';
-import {renderBoardView,clearBoardView,roundMotionFactor,decoratePromotionButtons} from './board-view.js';
+import {renderBoardView,clearBoardView,roundMotionFactor,decoratePromotionButtons,getBoardMotion,setBoardMotion} from './board-view.js';
 import {findKingSquare,renderMaterial} from './material.js';
-import {playSound,soundForMove} from './sound.js';
+import {playSound,soundForMove,isSoundEnabled,saveSoundEnabled} from './sound.js';
 import {confirmDialog} from './dialog.js';
 import {liveClockText} from './training-core.js';
 import {matchControl,validNick,validGameId,readOnlineGame,serverClock,resultText,completedPgn} from './online-core.js';
@@ -13,28 +13,64 @@ if(native)native.onmessage=e=>{try{const r=JSON.parse(e.data),p=pending.get(r.id
 function nativeCall(op,args={}){return new Promise((resolve,reject)=>{const id=String(++seq),timer=setTimeout(()=>{pending.delete(id);reject(Error('Lichess не ответил'));},op==='login'?330000:100000);pending.set(id,{resolve,reject,timer});try{native.postMessage(JSON.stringify({id,op,...args}));}catch(e){clearTimeout(timer);pending.delete(id);reject(e);}});}
 
 const el=(tag,value,cls)=>{const a=document.createElement(tag);if(value!==undefined)a.textContent=value;if(cls)a.className=cls;return a;};
-const text=(id,value)=>{const a=$(id);value=String(value??'');if(a.textContent!==value)a.textContent=value;};
+const text=(id,value)=>{const a=$(id);if(!a)return;value=String(value??'');if(a.textContent!==value)a.textContent=value;};
+function buildFrames(initialFen,moves){
+ const c=initialFen&&initialFen!=='startpos'?new Chess(initialFen):new Chess();
+ const frames=[{fen:c.fen(),last:null}];
+ const sans=[];
+ for(const u of moves){
+  const m=c.move({from:u.slice(0,2),to:u.slice(2,4),...(u.length===5?{promotion:u[4]}:{})});
+  if(!m)break;
+  sans.push(m.san);
+  frames.push({fen:c.fen(),last:m});
+ }
+ return {frames,sans};
+}
+function statusReason(status){
+ return ({mate:'Мат',resign:'Сдача',stalemate:'Пат',timeout:'Время истекло',outoftime:'Время истекло',draw:'Ничья',aborted:'Партия отменена',noStart:'Партия не началась'})[status]||'Партия завершена';
+}
 
 export function initOnline({canStart,lock,review,openOnline}){
  let snap={connected:false,locked:false},game=null,signature='',receivedAt=0,selected=null,promotion=[],sending=false,awaiting=false,awaitingSlow=false,awaitTimer=null,optimistic=null,working=false,polling=false,active=false,uiLock=false,history=[],friendRows=[],lastAccount='',error='',syncAttempt='',lastGame='',challengeKey='',claimAt=0;
+ let frames=[],sans=[],renderedStripSig='',viewPly=null,hasUnreadMove=false,flipped=false,optionsOpen=false,chatOpen=false,viewingFinished=false,resultDismissedFor='';
  const webClient=native?null:createWebLichess({onUpdate:s=>handlePush(s)});
  const call=(op,args={})=>native?nativeCall(op,args):webClient.call(op,args);
 
  function clearOptimistic(){if(awaitTimer!==null){clearTimeout(awaitTimer);awaitTimer=null;}optimistic=null;awaiting=false;awaitingSlow=false;}
  function setLock(v){v=!!v;if(v!==uiLock){uiLock=v;lock(v);}}
  const say=s=>{error=s;text('onlineStatus',s);};
+ function syncSheetPrefs(){
+  if($('onlineSoundToggle'))$('onlineSoundToggle').checked=isSoundEnabled();
+  if($('onlineMotionSelect'))$('onlineMotionSelect').value=getBoardMotion();
+ }
+ function setOptionsOpen(open){
+  optionsOpen=!!open;
+  if(optionsOpen){chatOpen=false;if($('onlineChatSheet'))$('onlineChatSheet').hidden=true;syncSheetPrefs();}
+  if($('onlineOptionsSheet'))$('onlineOptionsSheet').hidden=!optionsOpen;
+ }
+ function setChatOpen(open){
+  chatOpen=!!open;
+  if(chatOpen){optionsOpen=false;if($('onlineOptionsSheet'))$('onlineOptionsSheet').hidden=true;if($('onlineChatBadge'))$('onlineChatBadge').hidden=true;}
+  if($('onlineChatSheet'))$('onlineChatSheet').hidden=!chatOpen;
+ }
+ function showBoardShell(){
+  return !!game&&!snap.waiting&&(!game.done||viewingFinished);
+ }
  function controls(){
-  const connected=snap.connected,blocked=working||uiLock;
-  $('onlineLogin').hidden=connected;$('onlineLogout').hidden=!connected;$('onlineAccount').hidden=!connected;$('onlineSocial').hidden=!connected||uiLock;$('onlineLobby').hidden=!connected||!!(game&&!game.done)||snap.waiting;
+  const connected=snap.connected,blocked=working||uiLock,inBoard=showBoardShell();
+  $('onlineLogin').hidden=connected;$('onlineLogout').hidden=!connected;$('onlineAccount').hidden=!connected||inBoard;$('onlineSocial').hidden=!connected||uiLock||inBoard;$('onlineLobby').hidden=!connected||!!(game&&!game.done)||snap.waiting||inBoard;
   text('onlineProfileStatus',connected?snap.username:'Подключить');
   $('onlineLogin').disabled=working||uiLock;$('onlineLogout').disabled=blocked;$('onlineRefresh').disabled=working||!connected;
   $('onlineSeek').disabled=blocked||!snap.eventReady||!canStart();$('onlineChallenge').disabled=blocked||!snap.eventReady||!canStart();$('onlineCancel').hidden=!snap.waiting;$('onlineCancel').disabled=working;
-  $('onlineGame').hidden=!game||snap.waiting;document.body.classList.toggle('online-board-focus',!!game&&!game.done&&!snap.waiting&&uiLock);$('onlineHistoryRefresh').disabled=blocked;$('onlineFriendSearch').disabled=blocked;$('onlineFriendsRefresh').disabled=blocked;
+  $('onlineGame').hidden=!inBoard;
+  document.body.classList.toggle('online-board-focus',inBoard&&(uiLock||viewingFinished));
+  $('onlineHistoryRefresh').disabled=blocked;$('onlineFriendSearch').disabled=blocked;$('onlineFriendsRefresh').disabled=blocked;
   $('onlineWaiting').hidden=!snap.waiting;$('onlineReconnect').hidden=!(snap.locked&&!snap.waiting&&(!game||snap.needsSync||awaitingSlow));$('onlineOpponentGone').hidden=!snap.opponentGone||!game||game.done;
   $('onlineClaimActions').hidden=!snap.claimReady||!game||game.done||snap.needsSync;
   for(const id of ['onlineClaimVictory','onlineClaimDraw'])$(id).disabled=working||sending||!snap.claimReady;
   const showSlow=awaitingSlow&&awaiting;
   $('onlineGameNotice').hidden=!(game&&!game.done&&(snap.needsSync||showSlow||error));$('onlineGameNoticeText').textContent=error||(snap.needsSync?'Связь потеряна':showSlow?'Ожидаю подтверждение Lichess':'');$('onlineGameReconnect').hidden=!(snap.needsSync||showSlow);
+  if($('onlineSignal'))$('onlineSignal').classList.toggle('offline',!!snap.needsSync);
  }
  function profileView(){text('onlineName',snap.username||'');const perf=snap.account?.perfs||{};for(const [type,id] of [['blitz','onlineBlitzRating'],['rapid','onlineRapidRating'],['classical','onlineClassicalRating']]){const r=perf[type];text(id,Number.isFinite(r?.rating)?r.rating+(r.prov?'?':''):'—');}}
  function tick(){
@@ -45,33 +81,99 @@ export function initOnline({canStart,lock,review,openOnline}){
   if(!game)return;
   const viewGame=optimistic?{...game,game:optimistic.game,moves:[...game.moves,optimistic.uci]}:game;
   const times=serverClock(viewGame,Math.max(0,performance.now()-receivedAt));
-  const oppColor=game.color==='w'?'b':'w';
-  const topMs=times[oppColor],bottomMs=times[game.color];
+  const topColor=flipped?game.color:(game.color==='w'?'b':'w');
+  const bottomColor=topColor==='w'?'b':'w';
+  const topMs=times[topColor],bottomMs=times[bottomColor];
   text('onlineTopClock',liveClockText(topMs));text('onlineBottomClock',liveClockText(bottomMs));
   $('onlineTopClock').classList.toggle('low-time',!game.done&&topMs<20000);
   $('onlineBottomClock').classList.toggle('low-time',!game.done&&bottomMs<20000);
  }
+ function syncMoveStrip(liveSans,activePly){
+  const list=$('onlineMoveStrip');if(!list)return;
+  const sig=liveSans.join(' ');
+  if(renderedStripSig!==sig){
+   renderedStripSig=sig;
+   const frag=document.createDocumentFragment();
+   for(let i=0;i<liveSans.length;i++){
+    const b=document.createElement('button');
+    b.type='button';
+    b.dataset.ply=String(i+1);
+    b.textContent=(i%2===0?Math.floor(i/2)+1+'. ':'')+liveSans[i];
+    b.onclick=()=>jumpPly(i+1);
+    frag.append(b);
+   }
+   list.replaceChildren(frag);
+   list.scrollLeft=list.scrollWidth;
+  }
+  const prev=list.querySelector('[aria-current="step"]');
+  if(prev)prev.removeAttribute('aria-current');
+  const cur=activePly>0?list.children[activePly-1]:null;
+  if(cur){
+   cur.setAttribute('aria-current','step');
+   list.scrollLeft=Math.max(0,cur.offsetLeft-list.offsetLeft-(list.clientWidth-cur.offsetWidth)/2);
+  }else list.scrollLeft=0;
+ }
+ function currentFrames(){
+  if(!optimistic)return {list:frames,sansList:sans};
+  return {list:[...frames,{fen:optimistic.game.fen(),last:optimistic.last}],sansList:[...sans,optimistic.last.san]};
+ }
+ function jumpPly(target){
+  if(!game)return;
+  const {list}=currentFrames();
+  const max=list.length-1;
+  const clamped=Math.max(0,Math.min(target,max));
+  const prev=viewPly===null?max:viewPly;
+  if(clamped===prev)return;
+  selected=null;
+  viewPly=clamped>=max?null:clamped;
+  if(viewPly===null)hasUnreadMove=false;
+  const step=clamped===prev+1&&list[clamped]?.last?[list[clamped].last]:[];
+  if(step.length)playSound(soundForMove(step[0]));
+  draw(step);
+ }
  function draw(animateMoves=[]){
   if(!game){clearBoardView($('onlineBoard'));return;}
-  const chess=optimistic?optimistic.game:game.game;
-  const mine=game.color,turn=chess.turn(),playable=!game.done&&turn===mine&&!snap.needsSync&&!sending&&!awaiting&&!working&&!promotion.length;
-  const targets=selected&&playable?chess.moves({square:selected,verbose:true}).map(m=>m.to):[];
-  const rows=chess.board(),checkSquare=chess.isCheck()?findKingSquare(rows,turn):null;
-  const lastMove=optimistic?optimistic.last:chess.history({verbose:true}).at(-1);
-  renderBoardView($('onlineBoard'),{rows,flip:mine==='b',interactive:true,disabled:!playable,onClick:click,onDrop:drop,selected,targets,last:lastMove,checkSquare,animateMoves,motionFactor:roundMotionFactor(snap.full?.clock?.initial,snap.full?.clock?.increment,game.done)});
-  renderMaterial($('onlineTopMat'),rows,mine==='w'?'b':'w');
-  renderMaterial($('onlineBottomMat'),rows,mine);
+  const {list,sansList}=currentFrames();
+  const maxPly=Math.max(0,list.length-1);
+  const browsing=viewPly!==null&&viewPly<maxPly;
+  const displayPly=browsing?viewPly:maxPly;
+  const frame=list[displayPly]||list[maxPly];
+  const liveChess=optimistic?optimistic.game:game.game;
+  const displayChess=browsing&&frame?new Chess(frame.fen):liveChess;
+  const mine=game.color,turn=liveChess.turn(),livePlayable=!browsing&&!game.done&&turn===mine&&!snap.needsSync&&!sending&&!awaiting&&!working&&!promotion.length;
+  const targets=selected&&livePlayable?liveChess.moves({square:selected,verbose:true}).map(m=>m.to):[];
+  const rows=displayChess.board(),checkSquare=displayChess.isCheck()?findKingSquare(rows,displayChess.turn()):null;
+  const lastMove=frame?.last||null;
+  const boardFlip=flipped?mine==='w':mine==='b';
+  renderBoardView($('onlineBoard'),{rows,flip:boardFlip,interactive:true,disabled:browsing?false:!livePlayable,onClick:click,onDrop:drop,selected:browsing?null:selected,targets,last:lastMove,checkSquare,animateMoves,motionFactor:roundMotionFactor(snap.full?.clock?.initial,snap.full?.clock?.increment,game.done)});
+  const topColor=boardFlip?'w':'b',bottomColor=topColor==='w'?'b':'w';
+  renderMaterial($('onlineTopMat'),rows,topColor);
+  renderMaterial($('onlineBottomMat'),rows,bottomColor);
   if(promotion.length)decoratePromotionButtons($('onlinePromotion'),mine,'onlinePromote');
   $('onlinePromotion').hidden=!promotion.length;
-  const player=c=>c==='w'?game.white:game.black,label=p=>[p?.name||p?.id||'Игрок',p?.rating].filter(Boolean).join(' · ');
-  text('onlineTop',label(player(mine==='w'?'b':'w')));text('onlineBottom',label(player(mine)));
+  const player=c=>c==='w'?game.white:game.black,label=p=>[p?.name||p?.id||'Игрок',p?.rating?'('+p.rating+')':''].filter(Boolean).join(' ');
+  text('onlineTop',label(player(topColor)));text('onlineBottom',label(player(bottomColor)));
   const viewTurnText=game.done?resultText(game):snap.needsSync?'Связь потеряна · обнови':awaitingSlow?'Ожидаю подтверждение Lichess':turn===mine?'Твой ход':'Ход соперника';
   text('onlineTurn',viewTurnText);
-  $('onlineGameActions').hidden=game.done;$('onlineReviewGame').hidden=!game.done||!game.moves.length||snap.locked;
-  $('onlineDrawNo').hidden=!game.drawOffer;$('onlineDraw').querySelector('span').textContent=game.drawOffer?'Принять':'Ничья';
-  const list=$('onlineMoveStrip'),sans=chess.history().map((m,i)=>i%2===0?Math.floor(i/2)+1+'. '+m:m).join(' ');if(list.textContent!==sans){list.textContent=sans;list.scrollLeft=list.scrollWidth;}
-  $('onlineTopClock').classList.toggle('running',!game.done&&turn!==mine);$('onlineBottomClock').classList.toggle('running',!game.done&&turn===mine);
-  for(const id of ['onlineResign','onlineDraw','onlineDrawNo'])$(id).disabled=working||sending||game.done||snap.needsSync;
+  if($('onlineLivePill'))$('onlineLivePill').hidden=!browsing;
+  if($('onlinePrevMove'))$('onlinePrevMove').disabled=displayPly<=0;
+  if($('onlineNextMove'))$('onlineNextMove').disabled=!browsing;
+  if($('onlineLiveDot'))$('onlineLiveDot').hidden=!hasUnreadMove;
+  if($('onlineDrawBanner'))$('onlineDrawBanner').hidden=!game.drawOffer||game.done;
+  $('onlineReviewGame').hidden=!game.done||!game.moves.length||snap.locked;
+  if($('onlineDraw')?.querySelector('span'))$('onlineDraw').querySelector('span').textContent=game.drawOffer?'Принять ничью':'Предложить ничью';
+  syncMoveStrip(sansList,displayPly);
+  $('onlineTopClock').classList.toggle('running',!game.done&&turn===topColor);$('onlineBottomClock').classList.toggle('running',!game.done&&turn===bottomColor);
+  for(const id of ['onlineResign','onlineDraw','onlineDrawNo','onlineDrawAccept']){if($(id))$(id).disabled=working||sending||game.done||snap.needsSync;}
+  if($('onlineResultCard')){
+   const showRes=game.done&&viewingFinished&&resultDismissedFor!==snap.gameId;
+   $('onlineResultCard').hidden=!showRes;
+   if(showRes){
+    text('onlineResultTitle',resultText(game));
+    text('onlineResultSub',statusReason(game.status));
+    if($('onlineResultReview'))$('onlineResultReview').hidden=!game.moves.length||snap.locked;
+   }
+  }
   tick();
  }
  function challenges(){
@@ -92,23 +194,30 @@ export function initOnline({canStart,lock,review,openOnline}){
   if(s.username!==lastAccount){lastAccount=s.username;history=[];friendRows=[];renderHistory();renderFriends();$('onlinePlayer').replaceChildren();}
   const sig=JSON.stringify([s.gameId,s.full?.id,s.state]);
   if(sig!==signature){
-   signature=sig;const old=game,prevOpt=optimistic;game=null;selected=null;promotion=[];clearOptimistic();
+   signature=sig;const old=game,prevOpt=optimistic,sameGame=!!(old&&lastGame===s.gameId);
+   game=null;selected=null;promotion=[];clearOptimistic();
    if(s.full&&s.state){
     try{
      game=readOnlineGame(s.full,s.state,s.username,Chess);receivedAt=performance.now();
-     const matchedOpt=prevOpt&&lastGame===s.gameId&&game.moves.length>prevOpt.baseLen&&game.moves[prevOpt.baseLen]===prevOpt.uci;
+     const built=buildFrames(s.full.initialFen,game.moves);
+     frames=built.frames;sans=built.sans;
+     if(!sameGame){flipped=false;viewPly=null;hasUnreadMove=false;resultDismissedFor='';setOptionsOpen(false);setChatOpen(false);}
+     if(!game.done)viewingFinished=true;
+     else if(sameGame&&!old.done){viewingFinished=true;resultDismissedFor='';setOptionsOpen(false);}
+     const matchedOpt=prevOpt&&sameGame&&game.moves.length>prevOpt.baseLen&&game.moves[prevOpt.baseLen]===prevOpt.uci;
      let moves=[];
      if(matchedOpt){
-      // Already rendered and sounded our optimistic move; only animate an opponent reply if it also arrived.
       if(game.moves.length===prevOpt.baseLen+2)moves=[game.game.history({verbose:true}).at(-1)];
-     }else if(old&&lastGame===s.gameId&&game.moves.length===old.moves.length+1&&old.moves.every((u,i)=>u===game.moves[i])){
+     }else if(sameGame&&game.moves.length===old.moves.length+1&&old.moves.every((u,i)=>u===game.moves[i])){
       moves=[game.game.history({verbose:true}).at(-1)];
      }
-     lastGame=s.gameId;draw(moves);
+     const browsing=viewPly!==null&&viewPly<frames.length-1;
+     if(browsing&&moves.length)hasUnreadMove=true;
+     lastGame=s.gameId;draw(browsing?[]:moves);
      if(moves.length)playSound(soundForMove(moves[0],game.game));
-     else if(old&&!old.done&&game.done&&!matchedOpt)playSound('end');
+     else if(sameGame&&!old.done&&game.done&&!matchedOpt)playSound('end');
     }catch(e){say(e.message+' · открой Lichess для этой партии');}
-   }else clearBoardView($('onlineBoard'));
+   }else{frames=[];sans=[];viewPly=null;hasUnreadMove=false;viewingFinished=false;clearBoardView($('onlineBoard'));}
   }else if(previous.needsSync!==s.needsSync||previous.locked!==s.locked)draw();
   const ck=JSON.stringify([s.incoming,s.locked,s.eventReady]);if(ck!==challengeKey){challengeKey=ck;challenges();}
   if(s.notice&&!error)text('onlineStatus',s.notice);else if(!error)text('onlineStatus',s.connected?'':'Войди через Lichess, чтобы играть онлайн.');
@@ -135,7 +244,7 @@ export function initOnline({canStart,lock,review,openOnline}){
   for(const u of game.moves)preview.move({from:u.slice(0,2),to:u.slice(2,4),...(u.length===5?{promotion:u[4]}:{})});
   const applied=preview.move({from:move.from,to:move.to,...(move.promotion?{promotion:move.promotion}:{})});
   if(!applied)return;
-  sending=true;awaiting=true;awaitingSlow=false;selected=null;promotion=[];
+  sending=true;awaiting=true;awaitingSlow=false;selected=null;promotion=[];viewPly=null;hasUnreadMove=false;
   optimistic={baseLen:game.moves.length,uci,game:preview,last:applied};
   if(awaitTimer!==null)clearTimeout(awaitTimer);
   awaitTimer=setTimeout(()=>{if(awaiting){awaitingSlow=true;controls();draw();}},1500);
@@ -156,12 +265,20 @@ export function initOnline({canStart,lock,review,openOnline}){
   }
  }
  function drop(from,to){
-  if(!game||game.done||game.game.turn()!==game.color||sending||awaiting||working||snap.needsSync||promotion.length)return;
+  if(!game)return;
+  if(viewPly!==null){jumpPly(currentFrames().list.length-1);return;}
+  if(game.done||game.game.turn()!==game.color||sending||awaiting||working||snap.needsSync||promotion.length)return;
   const options=game.game.moves({square:from,verbose:true}).filter(m=>m.to===to);
   if(options.length>1){promotion=options;draw();return;}
   if(options.length===1){sendMove(options[0],'drag');return;}
  }
- function click(square){if(!game||game.done||game.game.turn()!==game.color||sending||awaiting||working||snap.needsSync||promotion.length)return;if(selected){const options=game.game.moves({square:selected,verbose:true}).filter(m=>m.to===square);if(options.length>1){promotion=options;draw();return;}if(options.length===1){sendMove(options[0],'tap');return;}}selected=game.game.get(square)?.color===game.color&&square!==selected?square:null;draw();}
+ function click(square){
+  if(!game)return;
+  if(viewPly!==null){jumpPly(currentFrames().list.length-1);return;}
+  if(game.done||game.game.turn()!==game.color||sending||awaiting||working||snap.needsSync||promotion.length)return;
+  if(selected){const options=game.game.moves({square:selected,verbose:true}).filter(m=>m.to===square);if(options.length>1){promotion=options;draw();return;}if(options.length===1){sendMove(options[0],'tap');return;}}
+  selected=game.game.get(square)?.color===game.color&&square!==selected?square:null;draw();
+ }
  async function gameAction(name,confirmCfg){if(!game||game.done||working||sending||snap.needsSync)return;const targetId=snap.gameId;if(confirmCfg&&!(await confirmDialog(confirmCfg)))return;if(!game||game.done||working||sending||snap.needsSync||snap.gameId!==targetId)return;action(async()=>{await call('gameAction',{gameId:targetId,action:name});});}
  function renderFriends(){
   const box=$('onlineFriends'),frag=document.createDocumentFragment();
@@ -199,7 +316,8 @@ export function initOnline({canStart,lock,review,openOnline}){
   if(!frag.childNodes.length)frag.append(el('p','Завершённых партий пока нет или история не загружена.','muted'));
   box.replaceChildren(frag);
  }
- function openReview(id){if(!validGameId(id)||uiLock||!canStart())return;action(async()=>{const r=await call('pgn',{gameId:id});if(!completedPgn(r.pgn,Chess))throw Error('Нужна завершённая партия с ходами');review(r.pgn,snap.username);});}
+ function openReview(id){if(!validGameId(id)||uiLock||!canStart())return;viewingFinished=false;controls();action(async()=>{const r=await call('pgn',{gameId:id});if(!completedPgn(r.pgn,Chess))throw Error('Нужна завершённая партия с ходами');review(r.pgn,snap.username);});}
+ function leaveFinishedBoard(){viewingFinished=false;setOptionsOpen(false);setChatOpen(false);controls();}
 
  $('onlineLogin').onclick=()=>action(async()=>{say(native?'Продолжи вход в браузере.':'Перенаправляю на Lichess…');apply(await call('login'));});
  $('onlineLogout').onclick=async()=>{if(working||uiLock)return;if(await confirmDialog({title:'Выйти из Lichess?',message:'Токен доступа будет отозван и удалён с устройства.',confirmText:'Выйти',danger:true}))action(async()=>{apply(await call('logout'));});};
@@ -212,10 +330,32 @@ export function initOnline({canStart,lock,review,openOnline}){
  $('onlineFriendsRefresh').onclick=()=>action(async()=>{friendRows=(await call('friends')).users||[];renderFriends();});
  $('onlineHistoryRefresh').onclick=()=>action(async()=>{history=(await call('history')).games||[];renderHistory();});
  $('onlineReviewGame').onclick=()=>openReview(snap.gameId);
- $('onlineResign').onclick=()=>gameAction('resign',{title:'Сдаться в онлайн-партии?',message:'Партия на Lichess завершится вашим поражением.',confirmText:'Сдаться',danger:true});
+ if($('onlineResultReview'))$('onlineResultReview').onclick=()=>openReview(snap.gameId);
+ if($('onlineResultLobby'))$('onlineResultLobby').onclick=leaveFinishedBoard;
+ if($('onlineResultClose'))$('onlineResultClose').onclick=()=>{resultDismissedFor=snap.gameId;draw();};
+ if($('onlineBackBtn'))$('onlineBackBtn').onclick=()=>{if(game?.done)leaveFinishedBoard();else setOptionsOpen(true);};
+ if($('onlineOptionsBtn'))$('onlineOptionsBtn').onclick=()=>setOptionsOpen(true);
+ if($('onlineOptionsClose'))$('onlineOptionsClose').onclick=()=>setOptionsOpen(false);
+ if($('onlineOptionsSheet'))$('onlineOptionsSheet').onclick=e=>{if(e.target===$('onlineOptionsSheet'))setOptionsOpen(false);};
+ if($('onlineChatBtn'))$('onlineChatBtn').onclick=()=>setChatOpen(true);
+ if($('onlineChatClose'))$('onlineChatClose').onclick=()=>setChatOpen(false);
+ if($('onlineChatSheet'))$('onlineChatSheet').onclick=e=>{if(e.target===$('onlineChatSheet'))setChatOpen(false);};
+ if($('onlinePrevMove'))$('onlinePrevMove').onclick=()=>{const {list}=currentFrames();const cur=viewPly===null?list.length-1:viewPly;jumpPly(cur-1);};
+ if($('onlineNextMove'))$('onlineNextMove').onclick=()=>{const {list}=currentFrames();const cur=viewPly===null?list.length-1:viewPly;jumpPly(cur+1);};
+ if($('onlineLivePill'))$('onlineLivePill').onclick=()=>jumpPly(currentFrames().list.length-1);
+ if($('onlineFlipToggle'))$('onlineFlipToggle').onclick=()=>{flipped=!flipped;setOptionsOpen(false);draw();};
+ if($('onlineSoundToggle'))$('onlineSoundToggle').onchange=e=>{saveSoundEnabled(e.target.checked);const p=$('soundEnabled');if(p)p.checked=e.target.checked;if(e.target.checked)playSound('move');};
+ if($('onlineMotionSelect'))$('onlineMotionSelect').onchange=e=>{setBoardMotion(e.target.value);};
+ $('onlineResign').onclick=()=>{setOptionsOpen(false);gameAction('resign',{title:'Сдаться в онлайн-партии?',message:'Партия на Lichess завершится вашим поражением.',confirmText:'Сдаться',danger:true});};
  $('onlineClaimVictory').onclick=()=>{if(snap.claimReady)gameAction('claim-victory',{title:'Потребовать победу?',message:'Соперник покинул игру. Зафиксировать победу на Lichess?',confirmText:'Потребовать победу'});};
  $('onlineClaimDraw').onclick=()=>{if(snap.claimReady)gameAction('claim-draw',{title:'Зафиксировать ничью?',message:'Завершить партию вничью из-за ухода соперника?',confirmText:'Ничья'});};
- $('onlineDraw').onclick=()=>gameAction('draw/yes');$('onlineDrawNo').onclick=()=>gameAction('draw/no');
+ $('onlineDraw').onclick=()=>{
+  setOptionsOpen(false);
+  if(game?.drawOffer)gameAction('draw/yes');
+  else gameAction('draw/yes',{title:'Предложить ничью?',message:'Отправить сопернику предложение ничьей на Lichess?',confirmText:'Предложить'});
+ };
+ if($('onlineDrawAccept'))$('onlineDrawAccept').onclick=()=>gameAction('draw/yes');
+ $('onlineDrawNo').onclick=()=>gameAction('draw/no');
  for(const type of ['q','r','b','n'])$('onlinePromote'+type).onclick=()=>{const m=promotion.find(x=>x.promotion===type);if(m)sendMove(m,'tap');};
  $('onlinePromotionCancel').onclick=()=>{promotion=[];draw();};
 
@@ -279,5 +419,13 @@ export function initOnline({canStart,lock,review,openOnline}){
   });
  }
 
- return {locked:()=>uiLock};
+ return {
+  locked:()=>uiLock,
+  handleBack:()=>{
+   if(optionsOpen){setOptionsOpen(false);return true;}
+   if(chatOpen){setChatOpen(false);return true;}
+   if(viewingFinished&&game?.done){leaveFinishedBoard();return true;}
+   return false;
+  }
+ };
 }
