@@ -46,7 +46,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          url=$(gh api repos/ggml-org/llama.cpp/releases/latest --jq '[.assets[]|select(.name|test("bin-ubuntu-x64\\.(tar\\.gz|zip)$"))][0].browser_download_url')
+          # /releases/latest can point to a non-build tag; take the newest release that ships the CPU ubuntu build.
+          url=$(gh api 'repos/ggml-org/llama.cpp/releases?per_page=10' --jq '[.[].assets[]|select(.name|test("bin-ubuntu-x64\\.tar\\.gz$"))][0].browser_download_url')
           [ -n "$url" ] || { echo "llama.cpp asset not found"; exit 1; }
           mkdir -p llama && curl -fL "$url" | tar -xz -C llama --strip-components=1
           ls llama | head
