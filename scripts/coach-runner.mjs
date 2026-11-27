@@ -7,7 +7,8 @@ import {createRequire} from 'node:module';
 import {Chess} from 'chess.js';
 import {decodePayload,classify,buildMessages,criticalPositionFacts} from '../lib/coach-runner-core.mjs';
 
-import {createGameTools,runCoachAgent} from '../lib/coach-agent.mjs';
+import {createGameTools,runCoachAgent,GAME_TOOLS} from '../lib/coach-agent.mjs';
+import {createStudyTools,combineCoachTools} from '../lib/coach-study-tools.mjs';
 import {createSearchCollector,verifiedSearchLine} from '../lib/coach-stockfish-line.mjs';
 
 const require=createRequire(import.meta.url);
@@ -62,9 +63,10 @@ async function request(messages,tools){
 try{
   const payload=decodePayload(process.env.COACH_PAYLOAD_B64);
   const {rows,facts,fens,searchLines}=payload.game?await analyze(payload.game):{rows:[],facts:[],fens:[],searchLines:[]};
-  const execute=createGameTools({game:payload.game,rows,fens,searchLines,Chess});
+  const gameTools=createGameTools({game:payload.game,rows,fens,searchLines,Chess});
+  const {execute,schemas}=combineCoachTools(gameTools,createStudyTools({Chess}),GAME_TOOLS);
   const messages=buildMessages(payload,rows,facts);
-  const {answer,usage}=await runCoachAgent({messages,request,execute});
+  const {answer,usage}=await runCoachAgent({messages,request,execute,schemas});
   if(!answer)throw Error('Пустой ответ модели');
   save({ok:true,answer,usage});
   console.log('answer ready,',answer.length,'chars');
