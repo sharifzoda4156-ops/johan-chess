@@ -20,7 +20,7 @@ import {Engine,setEngineOnlineLock} from './engine.js';
 import {enginePath} from './engine-path.js';
 import {evaluateMove,displayScore,scoreValue} from './metrics.js';
 const $=id=>document.getElementById(id), status=t=>{$('status').textContent=t;$('reviewBoardStatus').textContent=t;};
-let training=null,importing=false,analysisDepth=null,game=null, moves=[], positions=[], results=[], cursor=0, flipped=false, engine=null, busy=false, runId=0, imported=[], startFen='', pgn='', historical=null,onlineLocked=false,onlineReviewName='',sideFilter='both';
+let training=null,onlineUI=null,importing=false,analysisDepth=null,game=null, moves=[], positions=[], results=[], cursor=0, flipped=false, engine=null, busy=false, runId=0, imported=[], startFen='', pgn='', historical=null,onlineLocked=false,onlineReviewName='',sideFilter='both';
 initThemes();initBoardMotion();initSoundSetting();
 const navigation=initNavigation();
 const isDesktop=()=>globalThis.matchMedia?.('(min-width: 900px)').matches===true;
@@ -31,13 +31,13 @@ document.addEventListener('jc-screen',syncReviewFocus);
 globalThis.matchMedia?.('(min-width: 900px)').addEventListener?.('change',syncReviewFocus);
 globalThis.JohanHandleBack=()=>{
  if(hasOpenDialog()){closeOpenDialog();return true;}
+ if(onlineUI?.handleBack?.())return true;
  if(onlineLocked)return true;
- if(training?.active()){if(!$('playCancel').disabled)$('playCancel').click();return true;}
+ if(training?.handleBack?.())return true;
  if(document.body.classList.contains('review-board-focus')){openReviewBoard(false);return true;}
  const puzzlesScreen=document.querySelector('[data-screen="puzzles"]');
  if(puzzlesScreen&&!puzzlesScreen.hidden&&$('puzzleReview')&&!$('puzzleReview').hidden){$('reviewPuzzleClose')?.click();return true;}
  if(document.body.classList.contains('puzzle-focus')){$('journeyBack')?.click();return true;}
- if(training?.handleBack?.())return true;
  const cur=navigation.current();
  if(cur==='account'){navigation.show('profile');return true;}
  if(cur==='library'&&globalThis.JohanNative){navigation.show('coach');return true;}
@@ -259,7 +259,7 @@ training=initTraining({
  goHome:()=>navigation.show('home'),
  goOnline:({friend}={})=>{navigation.show('online');if(friend&&$('onlineFriendNick')&&!$('onlineSocial').hidden){$('onlineFriendNick').scrollIntoView({behavior:scrollBehavior(),block:'center'});$('onlineFriendNick').focus();}}
 });
-initOnline({
+onlineUI=initOnline({
  canStart:()=>!onlineLocked&&!busy&&!importing&&!training?.active()&&!coachBusy(),
  lock:value=>{onlineLocked=value;setEngineOnlineLock(value);if(value){if(busy)$('stop').click();training?.interrupt();}navigation.setOnline(value);},
  review:(text,nick)=>{if(onlineLocked||busy||importing||training?.active())return;navigation.show('review');if(load(text)){onlineReviewName=nick;flipped=own()==='b';render();$('games').hidden=true;$('analyze').click();}},

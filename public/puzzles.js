@@ -17,7 +17,7 @@ export const getPuzzleTraining=user=>summarizeTraining(read('training',user,{}))
 
 function elem(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;}
 export function initPuzzles(getUser){
- let replying=false,puzzle=null,game=null,step=0,selected=null,highlight=null,promotion=[],done=false,assisted=false,user='',progress=cleanProgress(null),lastId=null,training=normalizeTraining(null),storageFailed=false,starting=false,remotePacks=[],excluded=new Set(),visited=new Set(),pendingTheme=false;
+ let replying=false,puzzle=null,game=null,step=0,selected=null,highlight=null,puzzleHint=null,promotion=[],done=false,assisted=false,user='',progress=cleanProgress(null),lastId=null,training=normalizeTraining(null),storageFailed=false,starting=false,remotePacks=[],excluded=new Set(),visited=new Set(),pendingTheme=false;
  let mode='journey',map=true,active=false,journey=normalizeJourney(null),daily=normalizeDaily(null),date=dayKey(),calendarDay=date,hearts=5,attemptTarget=1100,view='solve',dailyOutcome=null,feedback=null,previousFeedback=null,reviewFrames=[],reviewAt=0,retryPractice=false;
  const timer=createPuzzleTimer(),modes={journey:'modeJourney',daily:'modeDaily',classic:'modeClassic'};
  const status=(s,cls='')=>{$('puzzleStatus').textContent=s;$('puzzleStatus').className=cls;};
@@ -129,13 +129,17 @@ export function initPuzzles(getUser){
   if(!game){clearBoardView(board);previousFeedback=null;return;}
   const rows=game.board(),checkSquare=game.isCheck()?findKingSquare(rows,game.turn()):null;
   const targets=selected&&!done&&!promotion.length?game.moves({square:selected,verbose:true}).map(m=>m.to):[];
-  renderBoardView(board,{rows,flip:puzzle.color==='b',interactive:true,disabled:starting||done||replying||!!promotion.length,onClick:click,onDrop:drop,selected,targets,marked:highlight||[],markClass:'puzzle-mark',checkSquare,animateMoves});
+  const activeHint=!done&&puzzleHint&&puzzleHint.stepIndex===step?puzzleHint:null;
+  const hintSquare=activeHint?activeHint.from:null;
+  const hintTarget=activeHint&&activeHint.stage>=2?activeHint.to:null;
+  const arrows=activeHint&&activeHint.stage>=2?[{from:activeHint.from,to:activeHint.to,brush:'hint'}]:[];
+  renderBoardView(board,{rows,flip:puzzle.color==='b',interactive:true,disabled:starting||done||replying||!!promotion.length,onClick:click,onDrop:drop,selected,targets,marked:highlight||[],markClass:'puzzle-mark',checkSquare,hintSquare,hintTarget,arrows,animateMoves});
   if(previousFeedback)board.querySelector('[data-square="'+previousFeedback+'"]')?.removeAttribute('data-feedback');
   if(feedback)board.querySelector('[data-square="'+feedback.square+'"]')?.setAttribute('data-feedback',feedback.kind);
   previousFeedback=feedback?.square||null;
  }
  async function start({reset=false}={}){
-  if(starting||replying)return;starting=true;pendingTheme=false;timer.pause();const wasPractice=retryPractice;view='solve';dailyOutcome=null;feedback=null;retryPractice=false;$('journeyDelta').textContent='';$('dailyShareText').hidden=true;
+  if(starting||replying)return;starting=true;pendingTheme=false;timer.pause();const wasPractice=retryPractice;view='solve';dailyOutcome=null;feedback=null;puzzleHint=null;retryPractice=false;$('journeyDelta').textContent='';$('dailyShareText').hidden=true;
   $('puzzleNext').disabled=$('puzzleTheme').disabled=$('puzzleBand').disabled=true;
   if(!reset&&puzzle&&!done&&mode!=='daily'&&!wasPractice){record('skipped');progress={...progress,streak:0};save();if(mode==='journey'){journey=breakJourney(journey);saveMode('journey',journey);}}
   puzzle=null;game=null;step=0;selected=null;highlight=null;promotion=[];done=false;assisted=false;hearts=5;timer.reset();attemptTarget=training.target;
@@ -168,7 +172,7 @@ export function initPuzzles(getUser){
  }
  function finish(reveal=false,animateMoves=[]){
   if(done||!game)return;
-  done=true;selected=null;promotion=[];timer.pause();refreshClock();
+  done=true;selected=null;promotion=[];puzzleHint=null;timer.pause();refreshClock();
   if(mode==='daily'){
    if(!reveal){daily=completeDaily(daily,date,{id:puzzle.id,seconds:timer.seconds(),hearts});saveMode('daily',daily);status('Задача дня решена!','puzzle-success');dailyOutcome='solved';}
    else{status('Решение показано · серия не засчитана');dailyOutcome='failed';}
@@ -186,7 +190,7 @@ export function initPuzzles(getUser){
  }
  function tryMove(m,via='tap'){
   if(done||replying||!game)return;
-  promotion=[];selected=null;highlight=null;
+  promotion=[];selected=null;highlight=null;puzzleHint=null;
   const next=advancePuzzle(puzzle,game,step,m,Chess);
   if(next){feedback={square:next.played.to,kind:'correct'};const playedAnim={...next.played,dragged:via==='drag'};const applyReply=animation=>{game=next.game;step=next.index;const last=next.reply||next.played;highlight=[last.from,last.to];if(next.done){playSound('end');finish(false,animation);return;}if(next.reply)playSound(soundForMove(next.reply,game));status('Верно! Соперник ответил '+next.reply.san+'. Продолжай.','puzzle-success');draw(animation);syncTimer();};
    if(next.reply&&replyDelay()>0){const current=puzzle,intermediate=new Chess(next.played.after);game=intermediate;replying=true;highlight=[next.played.from,next.played.to];$('puzzleNext').disabled=true;status('Верно! Ответ соперника…','puzzle-success');playSound(soundForMove(next.played,intermediate));draw([playedAnim]);syncTimer();setTimeout(()=>{if(puzzle!==current||game!==intermediate)return;replying=false;if(userNow()!==user){enter();return;}$('puzzleNext').disabled=mode==='daily';applyReply(active?[next.reply]:[]);},replyDelay());}
@@ -219,7 +223,7 @@ export function initPuzzles(getUser){
  function abandon(){
   replying=false;timer.pause();
   if(mode==='journey'&&puzzle&&!done&&!retryPractice){journey=breakJourney(journey);saveMode('journey',journey);record('skipped');progress={...progress,streak:0};save();}
-  puzzle=null;game=null;promotion=[];selected=null;done=false;lastId=null;view='solve';dailyOutcome=null;feedback=null;draw();
+  puzzle=null;game=null;promotion=[];selected=null;puzzleHint=null;done=false;lastId=null;view='solve';dailyOutcome=null;feedback=null;draw();
  }
  function switchMode(next){
   if(starting||replying||next===mode)return;
@@ -233,13 +237,29 @@ export function initPuzzles(getUser){
  $('puzzleArchive').onclick=()=>{map=true;modeControls();stats();};
  $('puzzleNext').onclick=()=>start({reset:mode==='daily'});
  $('puzzleTheme').onchange=$('puzzleBand').onchange=()=>{if(puzzle)abandon();lastId=null;modeControls();stats();};
- $('puzzleHint').onclick=()=>{if(done||replying||!game)return;assisted=true;feedback=null;penalty();if(mode==='daily'&&hearts===0){failDaily();return;}highlight=[puzzle.solution[step].slice(0,2)];selected=null;status('Подсказка: начни с выделенной фигуры.');draw();stats();};
- $('puzzleReveal').onclick=()=>{if(done||replying||!game)return;while(step<puzzle.solution.length){const m=game.move(parseUci(puzzle.solution[step++]));highlight=[m.from,m.to];}finish(true);};
+ $('puzzleHint').onclick=()=>{
+  if(done||replying||!game||!puzzle?.solution?.[step])return;
+  const sol=puzzle.solution[step],from=sol.slice(0,2),to=sol.slice(2,4);
+  if(puzzleHint&&puzzleHint.stepIndex===step&&puzzleHint.stage===1){
+   puzzleHint={stepIndex:step,from,to,stage:2};
+   status('Подсказка: сыграй указанный ход.');
+   draw();
+   return;
+  }
+  if(puzzleHint&&puzzleHint.stepIndex===step&&puzzleHint.stage>=2)return;
+  assisted=true;feedback=null;penalty();
+  if(mode==='daily'&&hearts===0){failDaily();return;}
+  puzzleHint={stepIndex:step,from,to,stage:1};
+  selected=null;highlight=null;
+  status('Подсказка: начни с подсвеченной фигуры (нажми ещё раз для хода).');
+  draw();stats();
+ };
+ $('puzzleReveal').onclick=()=>{if(done||replying||!game)return;puzzleHint=null;while(step<puzzle.solution.length){const m=game.move(parseUci(puzzle.solution[step++]));highlight=[m.from,m.to];}finish(true);};
  for(const type of ['q','r','b','n'])$('puzzle-promote-'+type).onclick=()=>{const m=promotion.find(x=>x.promotion===type);if(m)tryMove(m);};
  $('puzzle-promote-cancel').onclick=()=>{promotion=[];draw();};
  function failDaily(){
   if(done||!game||mode!=='daily')return;
-  done=true;selected=null;promotion=[];timer.pause();dailyOutcome='failed';status('Попытки закончились. Разбери решение и попробуй снова.','puzzle-wrong');
+  done=true;selected=null;promotion=[];puzzleHint=null;timer.pause();dailyOutcome='failed';status('Попытки закончились. Разбери решение и попробуй снова.','puzzle-wrong');
   draw();stats();showDailyResult();
  }
  function showDailyResult(){
