@@ -59,9 +59,54 @@ export function initTraining({canStart,lock,unlock,review,getUser,goHome,goOnlin
   if(optionsOpen){chatOpen=false;if($('playChatSheet'))$('playChatSheet').hidden=true;syncSheetPrefs();}
   if($('playOptionsSheet'))$('playOptionsSheet').hidden=!optionsOpen;
  }
+ function renderBotChat(){
+  const box=$('playChatLog'),s=session;
+  if(!box||!s)return;
+  const frag=document.createDocumentFragment();
+  for(const msg of s.chat){
+   const b=document.createElement('div');
+   b.className='chat-bubble '+(msg.mine?'mine':'theirs');
+   const who=document.createElement('small');who.textContent=msg.who;
+   const body=document.createElement('div');body.textContent=msg.text;
+   b.append(who,body);frag.append(b);
+  }
+  if(!frag.childNodes.length){
+   const empty=document.createElement('p');empty.className='chat-empty';empty.textContent='Начни партию — здесь появятся реплики бота.';
+   frag.append(empty);
+  }
+  box.replaceChildren(frag);
+  box.scrollTop=box.scrollHeight;
+ }
+ function pushChat(s,who,text,mine=false){
+  if(!s||!text)return;
+  s.chat=[...s.chat,{who,text,mine}].slice(-60);
+  if(session===s){
+   renderBotChat();
+   if(!mine&&!chatOpen&&$('playChatBadge'))$('playChatBadge').hidden=false;
+  }
+ }
+ function botReactToMove(s,m){
+  if(!s||!m||s.sans.length-s.lastQuipPly<4)return;
+  const botName='Stockfish · ур. '+s.level;
+  if(m.flags?.includes('k')||m.flags?.includes('q')){
+   s.lastQuipPly=s.sans.length;
+   pushChat(s,botName,m.color===s.color?'Надёжная рокировка! Король в безопасности.':'Я спрятал короля — перехожу к активной игре.');
+  }else if(m.captured==='q'){
+   s.lastQuipPly=s.sans.length;
+   pushChat(s,botName,'Ферзь ушёл с доски — борьба становится острее!');
+  }else if(s.game.isCheck()){
+   s.lastQuipPly=s.sans.length;
+   pushChat(s,botName,m.color===s.color?'Острый шах! Ищу лучшую защиту.':'Шах! Проверь все поля отступления.');
+  }
+ }
  function setChatOpen(open){
   chatOpen=!!open;
-  if(chatOpen){optionsOpen=false;if($('playOptionsSheet'))$('playOptionsSheet').hidden=true;if($('playChatBadge'))$('playChatBadge').hidden=true;}
+  if(chatOpen){
+   optionsOpen=false;
+   if($('playOptionsSheet'))$('playOptionsSheet').hidden=true;
+   if($('playChatBadge'))$('playChatBadge').hidden=true;
+   renderBotChat();
+  }
   if($('playChatSheet'))$('playChatSheet').hidden=!chatOpen;
  }
  function renderClock(){
@@ -195,6 +240,9 @@ export function initTraining({canStart,lock,unlock,review,getUser,goHome,goOnlin
   }
   historyList();
   status(end.reason+' · '+end.result);
+  const botName='Stockfish · ур. '+s.level;
+  const finMsg=end.result==='1/2-1/2'?'Боевая ничья! Хорошая партия.':end.result===resultFor(s.color)?'Отличная победа! Можешь открыть разбор, чтобы увидеть яркие моменты.':'На этот раз я оказался сильнее. Загляни в разбор — там видны ключевые моменты.';
+  pushChat(s,botName,finMsg);
   draw();
   if($('playResultCard')){
    $('playResultTitle').textContent=outcomeTitle(end,s.color);
@@ -220,6 +268,7 @@ export function initTraining({canStart,lock,unlock,review,getUser,goHome,goOnlin
   draw(browsing?[]:[{...s.last,dragged:via==='drag'}]);
   playSound(soundForMove(s.last,s.game));
   const end=terminal(s.game);if(end){finish(end);return true;}
+  botReactToMove(s,s.last);
   return true;
  }
  async function bot(){
@@ -330,6 +379,7 @@ export function initTraining({canStart,lock,unlock,review,getUser,goHome,goOnlin
   if(top?.clock)s.clock={...top.clock,turn:s.game.turn(),since:performance.now()};
   else if(s.clock)s.clock={...s.clock,turn:s.game.turn(),since:performance.now()};
   status(s.game.isCheck()?'Ход отменён · шах!':'Ход отменён · твой ход');
+  pushChat(s,'Stockfish · ур. '+s.level,'Ход отменён — попробуем другой план!');
   draw();
  }
  async function start(overrides={}){
@@ -344,13 +394,14 @@ export function initTraining({canStart,lock,unlock,review,getUser,goHome,goOnlin
   const control=$('playTime').value;if(!CONTROLS[control])return false;
   const color=overrides.color??($('playColor').value==='random'?(Math.random()<.5?'w':'b'):$('playColor').value);
   const level=LEVELS[levelIndex],id=++serial,standard=game.fen()===new Chess().fen();
-  const s={id,game,user,color,flipped:false,level,levelIndex,adaptive,standard,control,replay:!!overrides.replay,startFen:game.fen(),clock:null,engine:null,starting:true,thinking:false,hinting:false,done:false,end:null,turnToken:0,last:null,sans:[],frames:[{fen:game.fen(),last:null,clock:null}],viewPly:null,hasUnreadMove:false,renderedPly:-1,chat:[]};
+  const s={id,game,user,color,flipped:false,level,levelIndex,adaptive,standard,control,replay:!!overrides.replay,startFen:game.fen(),clock:null,engine:null,starting:true,thinking:false,hinting:false,done:false,end:null,turnToken:0,last:null,sans:[],frames:[{fen:game.fen(),last:null,clock:null}],viewPly:null,hasUnreadMove:false,renderedPly:-1,chat:[],lastQuipPly:-4};
   game.setHeader('Event',overrides.replay?'Johan Chess · повтор позиции':'Johan Chess · тренировка');
   game.setHeader('Site','Johan Chess');game.setHeader('Date',new Date().toISOString().slice(0,10).replaceAll('-','.'));
   game.setHeader('White',color==='w'?user:'Stockfish '+level);game.setHeader('Black',color==='b'?user:'Stockfish '+level);
   game.setHeader('Result','*');game.setHeader('TimeControl',control==='free'?'-':String(CONTROLS[control].base/1000)+'+'+String(CONTROLS[control].increment/1000));
   session=s;finished=null;selected=null;promotions=[];hint=null;
   setOptionsOpen(false);setChatOpen(false);
+  if($('playChatBadge'))$('playChatBadge').hidden=true;
   clearBoardView($('playBoard'));lock();settings(false);
   $('playArea').hidden=false;
   if($('playResultCard'))$('playResultCard').hidden=true;
@@ -358,6 +409,7 @@ export function initTraining({canStart,lock,unlock,review,getUser,goHome,goOnlin
   if($('playReview'))$('playReview').hidden=true;
   $('playTopClock').textContent=$('playBottomClock').textContent=clockText(CONTROLS[control].base);
   $('playTopClock').classList.remove('low-time');$('playBottomClock').classList.remove('low-time');
+  pushChat(s,'Stockfish · ур. '+level,'Привет! Уровень Stockfish '+level+'. Удачи в партии!');
   status('Запускаю Stockfish…');draw();
   try{
    s.engine=new Engine(enginePath);await s.engine.init();if(session!==s)return false;
@@ -403,6 +455,17 @@ export function initTraining({canStart,lock,unlock,review,getUser,goHome,goOnlin
  if($('playChatBtn'))$('playChatBtn').onclick=()=>setChatOpen(true);
  if($('playChatClose'))$('playChatClose').onclick=()=>setChatOpen(false);
  if($('playChatSheet'))$('playChatSheet').onclick=e=>{if(e.target===$('playChatSheet'))setChatOpen(false);};
+ const BOT_REPLIES={
+  'Удачи!':'Спасибо, и тебе отличной игры!',
+  'Хороший ход!':'Стараюсь держать напряжение на доске!',
+  'Сложная позиция!':'Согласен, здесь важен каждый темп.',
+  'Спасибо за партию!':'Всегда рад сыграть ещё раз!'
+ };
+ for(const b of document.querySelectorAll('#playChatQuick button'))b.onclick=()=>{
+  const s=session,msg=b.dataset.msg;if(!s||!msg)return;
+  pushChat(s,s.user,msg,true);
+  pushChat(s,'Stockfish · ур. '+s.level,BOT_REPLIES[msg]||'Отличный настрой! Продолжаем игру.');
+ };
  if($('playHint'))$('playHint').onclick=()=>requestHint();
  if($('playUndo'))$('playUndo').onclick=()=>undoMove();
  if($('playPrevMove'))$('playPrevMove').onclick=()=>{const s=session;if(!s)return;const cur=s.viewPly===null?s.frames.length-1:s.viewPly;jumpPly(cur-1);};

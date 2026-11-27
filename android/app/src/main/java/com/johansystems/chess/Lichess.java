@@ -32,7 +32,7 @@ final class Lichess {
     private volatile ServerSocket loginSocket;
     private volatile boolean loginCanceled=false;
     private JSONObject account=new JSONObject(),full=null,state=null;
-    private JSONArray ongoing=new JSONArray(),incoming=new JSONArray();
+    private JSONArray ongoing=new JSONArray(),incoming=new JSONArray(),chat=new JSONArray();
     private String gameId="",notice="";
     private Stream events,game,waiting;
     private boolean terminal=false;
@@ -227,7 +227,7 @@ final class Lichess {
         String next=id(raw);
         if(next.equals(gameId)&&game!=null)return;
         if(game!=null){game.cancel();game=null;}if(waiting!=null){waiting.cancel();waiting=null;}
-        revision++;gameId=next;terminal=false;needsSync=true;full=null;state=null;
+        revision++;gameId=next;terminal=false;needsSync=true;full=null;state=null;chat=new JSONArray();
         opponent.reset();transportLost=true;
         notice="Подключаюсь к партии";persistLock();
         if(foreground){game=new Stream("game","/api/board/game/stream/"+next,"GET",null);game.start();}
@@ -265,6 +265,19 @@ final class Lichess {
                 }
                 state=msg;
             }
+            else if("chatLine".equals(type)){
+                String room=msg.optString("room","player"),txt=msg.optString("text","").trim();
+                if("player".equals(room)&&!txt.isEmpty()){
+                    if(txt.length()>200)txt=txt.substring(0,200);
+                    JSONArray nextChat=new JSONArray();
+                    int startIdx=Math.max(0,chat.length()-99);
+                    for(int i=startIdx;i<chat.length();i++)nextChat.put(chat.opt(i));
+                    nextChat.put(new JSONObject().put("username",msg.optString("username","Lichess")).put("text",txt).put("room",room));
+                    chat=nextChat;
+                    activity.notifyLichessUpdate();
+                }
+                return;
+            }
             else if("opponentGone".equals(type)&&full!=null&&!terminal){
                 Object delay=msg.opt("claimWinInSeconds");
                 Integer seconds=delay instanceof Number?msg.optInt("claimWinInSeconds",-1):null;
@@ -292,12 +305,12 @@ final class Lichess {
             String next="";
             for(int i=0;i<playing.length();i++){JSONObject p=playing.getJSONObject(i);if(!"correspondence".equals(p.optString("speed"))){next=id(p.getString("gameId"));if(next.equals(gameId))break;}}
             if(!next.isEmpty()){if(game==null||!next.equals(gameId)||needsSync){if(game!=null){game.cancel();game=null;}startGame(next);}}
-            else if(waiting==null){if(!gameId.isEmpty()&&!terminal){if(game!=null)game.cancel();game=null;gameId="";full=state=null;notice="Партия завершена на Lichess. Проверь историю.";}opponent.reset();transportLost=false;needsSync=false;persistLock();}
+            else if(waiting==null){if(!gameId.isEmpty()&&!terminal){if(game!=null)game.cancel();game=null;gameId="";full=state=null;chat=new JSONArray();notice="Партия завершена на Lichess. Проверь историю.";}opponent.reset();transportLost=false;needsSync=false;persistLock();}
             if(!notice.startsWith("Партия завершена"))notice="";return snapshot();
         }
     }
     synchronized JSONObject snapshot()throws Exception{
-        JSONObject out=new JSONObject().put("connected",!token.isEmpty()).put("username",username).put("account",account).put("locked",locked()).put("needsSync",needsSync).put("eventReady",events!=null&&events.ready).put("waiting",waiting!=null).put("gameId",gameId).put("terminal",terminal).put("notice",notice).put("incoming",incoming).put("ongoing",ongoing).put("opponentGone",live()&&!needsSync&&opponent.gone()).put("claimRemaining",live()&&!needsSync?opponent.remaining(SystemClock.elapsedRealtime()):-1).put("claimReady",live()&&!needsSync&&opponent.canClaim(SystemClock.elapsedRealtime()));
+        JSONObject out=new JSONObject().put("connected",!token.isEmpty()).put("username",username).put("account",account).put("locked",locked()).put("needsSync",needsSync).put("eventReady",events!=null&&events.ready).put("waiting",waiting!=null).put("gameId",gameId).put("terminal",terminal).put("notice",notice).put("incoming",incoming).put("ongoing",ongoing).put("chat",chat).put("opponentGone",live()&&!needsSync&&opponent.gone()).put("claimRemaining",live()&&!needsSync?opponent.remaining(SystemClock.elapsedRealtime()):-1).put("claimReady",live()&&!needsSync&&opponent.canClaim(SystemClock.elapsedRealtime()));
         if(full!=null)out.put("full",full);if(state!=null)out.put("state",state);
         return out;
     }
@@ -326,6 +339,12 @@ final class Lichess {
     }
     private JSONObject action(JSONObject r)throws Exception{
         String target=id(r.getString("gameId")),action=r.getString("action"),suffix;
+        if("chat".equals(action)){
+            synchronized(this){if(!target.equals(gameId)||!foreground||needsSync||full==null||state==null)throw new IOException("Нет подключённой партии");}
+            String txt=r.optString("text","").trim();
+            if(txt.isEmpty()||txt.length()>140)throw new IOException("Сообщение должно быть от 1 до 140 символов");
+            return json("/api/board/game/"+target+"/chat","POST",form("room","player","text",txt));
+        }
         synchronized(this){
             if(!target.equals(gameId)||terminal||!foreground||needsSync||full==null||state==null||game==null||!game.ready)throw new IOException("Нет активной подключённой партии");
             if(("claim-victory".equals(action)||"claim-draw".equals(action))&&!opponent.canClaim(SystemClock.elapsedRealtime()))throw new IOException("Lichess ещё не разрешил завершить партию");
@@ -346,7 +365,7 @@ final class Lichess {
             case "logout":
                 if(locked())throw new IOException("Сначала заверши партию");
                 requireLogin();request("/api/token","DELETE",token,null,"application/json",10000);
-                synchronized(this){stopStreams();save("","");account=new JSONObject();incoming=ongoing=new JSONArray();gameId="";full=state=null;terminal=false;needsSync=false;persistLock();return snapshot();}
+                synchronized(this){stopStreams();save("","");account=new JSONObject();incoming=ongoing=chat=new JSONArray();gameId="";full=state=null;terminal=false;needsSync=false;persistLock();return snapshot();}
             case "seek":return match(r,false);
             case "challenge":return match(r,true);
             case "cancel":return cancel();

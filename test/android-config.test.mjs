@@ -32,12 +32,14 @@ test('MainActivity implements Onyx bars, file chooser, saveFile, oversized repli
  assert.match(java,/"cancelLogin"\.equals\(op\)/);
 });
 
-test('Lichess.java drains OAuth headers, supports cancelLogin and pushes WebView updates',()=>{
+test('Lichess.java drains OAuth headers, supports cancelLogin, live chat and pushes WebView updates',()=>{
  const java=read('android/app/src/main/java/com/johansystems/chess/Lichess.java');
  assert.match(java,/readHeaderLine\(/);
  assert.match(java,/void cancelLogin\(\)/);
  assert.match(java,/case "cancelLogin":/);
  assert.match(java,/activity\.notifyLichessUpdate\(\)/);
+ assert.match(java,/"chatLine"\.equals\(type\)/);
+ assert.match(java,/\/api\/board\/game\/"\+target\+"\/chat/);
 });
 
 test('ChessImport.java returns aligned game metadata fields',()=>{

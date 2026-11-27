@@ -87,7 +87,7 @@ export function createWebLichess({
  navigatorApi=globalThis.navigator,
  now=()=>Date.now()
 }={}){
- let token='',username='',account={},full=null,state=null,ongoing=[],incoming=[],gameId='',notice='';
+ let token='',username='',account={},full=null,state=null,ongoing=[],incoming=[],chat=[],gameId='',notice='';
  let terminal=false,needsSync=false,rateUntil=0,revision=0;
  let eventsStream=null,gameStream=null,waitStream=null;
  const opponent=createOpponentPresence();
@@ -134,6 +134,7 @@ export function createWebLichess({
    notice,
    incoming:incoming.slice(),
    ongoing:ongoing.slice(),
+   chat:chat.slice(),
    opponentGone:live()&&!needsSync&&opponent.gone(),
    claimRemaining:live()&&!needsSync?opponent.remaining(t):-1,
    claimReady:live()&&!needsSync&&opponent.canClaim(t)
@@ -243,7 +244,7 @@ export function createWebLichess({
   if(next===gameId&&gameStream)return;
   if(gameStream){cancelStream(gameStream);gameStream=null;}
   if(waitStream){cancelStream(waitStream);waitStream=null;}
-  revision++;gameId=next;terminal=false;needsSync=true;full=null;state=null;
+  revision++;gameId=next;terminal=false;needsSync=true;full=null;state=null;chat=[];
   opponent.reset();notice='Подключаюсь к партии';
   gameStream=startStream('game','/api/board/game/stream/'+next,'GET',null);
   emit();
@@ -284,6 +285,14 @@ export function createWebLichess({
      if(after>before&&(after-before>=2||((before%2===0)===whiteFirst)!==mineWhite))opponent.reset();
     }
     state=msg;
+   }else if(type==='chatLine'){
+    const room=String(msg.room||'player');
+    const txt=String(msg.text||'').trim();
+    if(room==='player'&&txt){
+     chat=[...chat,{username:String(msg.username||'Lichess'),text:txt.slice(0,200),room}].slice(-100);
+     emit();
+    }
+    return;
    }else if(type==='opponentGone'&&full&&!terminal){
     const delay=typeof msg.claimWinInSeconds==='number'?msg.claimWinInSeconds:null;
     if(typeof msg.gone==='boolean')opponent.update(msg.gone,delay,now());
@@ -472,6 +481,12 @@ export function createWebLichess({
 
  async function gameAction(r){
   const target=checkId(r.gameId),act=String(r.action||'');
+  if(act==='chat'){
+   if(target!==gameId||needsSync||!full||!state)throw Error('Нет подключённой партии');
+   const text=String(r.text||'').trim();
+   if(!text||text.length>140)throw Error('Сообщение должно быть от 1 до 140 символов');
+   return jsonReq('/api/board/game/'+target+'/chat','POST',formBody({room:'player',text}));
+  }
   if(target!==gameId||terminal||needsSync||!full||!state||!gameStream||!gameStream.ready){
    throw Error('Нет активной подключённой партии');
   }
@@ -494,7 +509,7 @@ export function createWebLichess({
   requireLogin();
   const current=token;
   try{await request('/api/token',{method:'DELETE',auth:current,accept:'application/json',limit:10000});}catch{}
-  stopStreams();saveSession('','');account={};incoming=[];ongoing=[];gameId='';full=state=null;terminal=false;needsSync=false;notice='';
+  stopStreams();saveSession('','');account={};incoming=[];ongoing=[];chat=[];gameId='';full=state=null;terminal=false;needsSync=false;notice='';
   emit();
   return snapshot();
  }
