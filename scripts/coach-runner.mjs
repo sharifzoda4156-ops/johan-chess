@@ -5,7 +5,7 @@ import {mkdirSync,writeFileSync} from 'node:fs';
 import {dirname} from 'node:path';
 import {createRequire} from 'node:module';
 import {Chess} from 'chess.js';
-import {decodePayload,parseScore,classify,buildMessages,cleanAnswer} from '../lib/coach-runner-core.mjs';
+import {decodePayload,parseScore,classify,buildMessages,cleanAnswer,criticalPositionFacts} from '../lib/coach-runner-core.mjs';
 
 const require=createRequire(import.meta.url);
 const out=process.env.COACH_OUT||'out/answer.json';
@@ -45,7 +45,8 @@ async function analyze(game,depth=12){
     const c=new Chess(fens[i]);
     evals.push(c.isGameOver()?(c.isCheckmate()?-2000:0):await sf.eval(fens[i],depth));
   }}finally{sf.close();}
-  return classify(evals,sans,new Chess(game.startFen||undefined).turn());
+  const rows=classify(evals,sans,new Chess(game.startFen||undefined).turn());
+  return {rows,facts:criticalPositionFacts(rows,fens,game.color,Chess)};
 }
 
 async function ask(messages){
@@ -57,8 +58,8 @@ async function ask(messages){
 
 try{
   const payload=decodePayload(process.env.COACH_PAYLOAD_B64);
-  const rows=payload.game?await analyze(payload.game):[];
-  const {answer,usage}=await ask(buildMessages(payload,rows));
+  const {rows,facts}=payload.game?await analyze(payload.game):{rows:[],facts:[]};
+  const {answer,usage}=await ask(buildMessages(payload,rows,facts));
   if(!answer)throw Error('Пустой ответ модели');
   save({ok:true,answer,usage});
   console.log('answer ready,',answer.length,'chars');

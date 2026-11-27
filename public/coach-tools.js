@@ -1,5 +1,6 @@
 import {parseOpenings,searchOpenings,historicalPgn} from './study-core.js';
 import {evaluateMove} from './metrics.js';
+import {positionFeatures} from './position-features.js';
 const finished=r=>['1-0','0-1','1/2-1/2'].includes(r);
 const uci=m=>m.from+m.to+(m.promotion||'');
 const local=(storage,key)=>{try{const a=JSON.parse(storage.getItem(key)||'[]');return Array.isArray(a)?a:[];}catch{return [];}};
@@ -72,7 +73,7 @@ export function createCoachTools({Chess,Engine,enginePath,storage,fetcher=fetch,
    }
   }finally{session.engine?.close();}
   guard();const summarize=color=>{const a=entries.filter(r=>r.color===color);return {moves:a.length,accuracy:a.length?a.reduce((sum,r)=>sum+r.accuracy,0)/a.length:null,errors:a.filter(r=>r.loss>=5).length};};
-  return {game:metadata(ref,g),requestedDepth:depth,from,next:next<n?next:null,covered:entries.length,total:n,complete:from===0&&next===n,reason,white:summarize('w'),black:summarize('b'),critical:entries.filter(r=>r.loss>=5).sort((a,b)=>b.loss-a.loss).slice(0,8),evaluations:entries.slice(0,24).map(r=>({index:r.index,san:r.san,loss:r.loss,bestSan:r.bestSan,bestScore:r.bestScore,playedScore:r.playedScore}))};
+  return {game:metadata(ref,g),requestedDepth:depth,from,next:next<n?next:null,covered:entries.length,total:n,complete:from===0&&next===n,reason,white:summarize('w'),black:summarize('b'),critical:entries.filter(r=>r.loss>=5).sort((a,b)=>b.loss-a.loss).slice(0,8).map(r=>({...r,position:positionFeatures(new Chess(validated.moves[r.index].before))})),evaluations:entries.slice(0,24).map(r=>({index:r.index,san:r.san,loss:r.loss,bestSan:r.bestSan,bestScore:r.bestScore,playedScore:r.playedScore}))};
  }
  return async function execute(name,args){
   try{
@@ -82,7 +83,7 @@ export function createCoachTools({Chess,Engine,enginePath,storage,fetcher=fetch,
    switch(name){
     case 'game_list':value=await list(args.source);break;
     case 'game_moves':{const g=get(args.game_id);value={...metadata(args.game_id,g),startFen:g.startFen,moves:g.moves};break;}
-    case 'stockfish_move':value=await analyze(args.game_id,args.ply,args.depth);break;
+    case 'stockfish_move':{const g=get(args.game_id),validated=validatedGame(g,Chess);const r=await analyze(args.game_id,args.ply,args.depth);value={...r,position:positionFeatures(new Chess(validated.moves[args.ply].before))};break;}
     case 'game_report':value=await report(args.game_id,args.from,args.count,args.depth);break;
     case 'puzzle_search':{
      if(typeof args.theme!=='string'||!/^([A-Za-z][A-Za-z0-9]{0,39}|all)$/.test(args.theme)||!Number.isInteger(args.min)||!Number.isInteger(args.max)||args.min<0||args.max>9999||args.min>args.max)throw Error('Неверный фильтр задач');

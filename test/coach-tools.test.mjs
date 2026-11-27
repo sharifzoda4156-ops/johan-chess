@@ -15,8 +15,8 @@ test('local completed game and Stockfish search are scoped to validated moves; c
  const list=await run('game_list',{source:'local'});assert.equal(list.data.length,1);
  assert.equal((await run('stockfish_move',{game_id:'missing',ply:0,depth:10})).ok,false);
  assert.equal((await run('stockfish_move',{game_id:'current',ply:-1,depth:10})).ok,false);
- const a=await run('stockfish_move',{game_id:'current',ply:0,depth:10});assert.equal(a.data.bestSan,'d4');assert.equal(a.data.cacheHit,false);assert.equal(searches,2);assert.equal(closed,1);
- const b=await run('stockfish_move',{game_id:'current',ply:0,depth:10});assert.equal(b.data.cacheHit,true);assert.equal(searches,2);
+ const a=await run('stockfish_move',{game_id:'current',ply:0,depth:10});assert.equal(a.data.bestSan,'d4');assert.equal(a.data.cacheHit,false);assert.equal(a.data.position.fen,game.startFen);assert.equal(searches,2);assert.equal(closed,1);
+ const b=await run('stockfish_move',{game_id:'current',ply:0,depth:10});assert.equal(b.data.cacheHit,true);assert.deepEqual(b.data.position,a.data.position);assert.equal(searches,2);
 });
 
 test('full saved report is returned without starting a worker, partial ranges are explicit',async()=>{

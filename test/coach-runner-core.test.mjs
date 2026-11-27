@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {decodePayload,parseScore,classify,criticalMoments,buildMessages,cleanAnswer} from '../lib/coach-runner-core.mjs';
+import {Chess} from 'chess.js';
+import {decodePayload,parseScore,classify,criticalMoments,buildMessages,cleanAnswer,criticalPositionFacts} from '../lib/coach-runner-core.mjs';
 const enc=o=>Buffer.from(JSON.stringify(o)).toString('base64');
 
 test('decodePayload validates and trims',()=>{
@@ -29,3 +30,16 @@ test('buildMessages includes stockfish facts only',()=>{
   assert.equal(m.at(-1).content,'Что не так?');
 });
 test('cleanAnswer strips think blocks',()=>assert.equal(cleanAnswer('<think>x</think> Ответ'),'Ответ'));
+
+test('runner includes bounded facts only for selected critical moments, before and after the actual move',()=>{
+  const chess=new Chess(),fens=[chess.fen()],moves=['e4','e5','Nf3','Nc6','Bb5','a6','Ba4','Nf6'];
+  for(const san of moves){chess.move(san);fens.push(chess.fen());}
+  const rows=moves.map((san,index)=>({index,san,color:index%2?'b':'w',loss:100+index,label:'ошибка'}));
+  const facts=criticalPositionFacts(rows,fens,'w',Chess);
+  assert.deepEqual(facts.map(f=>f.ply),[2,4,6]);
+  for(const f of facts){assert.equal(f.before.fen,fens[f.ply]);assert.equal(f.after.fen,fens[f.ply+1]);}
+  const payload=decodePayload(enc({question:'Объясни',game:{moves,result:'1-0',color:'w'}}));
+  assert.ok(buildMessages(payload,rows,facts)[0].content.includes(JSON.stringify(facts)));
+  assert.ok(!buildMessages(payload,rows)[0].content.includes('Факты позиции:'));
+  assert.deepEqual(criticalPositionFacts([],fens,'w',Chess),[]);
+});
