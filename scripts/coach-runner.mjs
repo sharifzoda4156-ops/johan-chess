@@ -8,7 +8,7 @@ import {Chess} from 'chess.js';
 import {decodePayload,classify,buildMessages,criticalPositionFacts} from '../lib/coach-runner-core.mjs';
 
 import {createGameTools,runCoachAgent,GAME_TOOLS} from '../lib/coach-agent.mjs';
-import {createStudyTools,combineCoachTools} from '../lib/coach-study-tools.mjs';
+import {createStudyTools,combineCoachTools,STUDY_TOOLS,TRAINING_STATS_TOOL} from '../lib/coach-study-tools.mjs';
 import {createSearchCollector,verifiedSearchLine} from '../lib/coach-stockfish-line.mjs';
 import {createAnswerVerifier,ANSWER_RULES} from '../lib/coach-answer-verifier.mjs';
 
@@ -65,7 +65,7 @@ try{
   const payload=decodePayload(process.env.COACH_PAYLOAD_B64);
   const {rows,facts,fens,searchLines}=payload.game?await analyze(payload.game):{rows:[],facts:[],fens:[],searchLines:[]};
   const gameTools=createGameTools({game:payload.game,rows,fens,searchLines,Chess});
-  const {execute,schemas}=combineCoachTools(gameTools,createStudyTools({Chess}),GAME_TOOLS);
+  const {execute,schemas}=combineCoachTools(gameTools,createStudyTools({Chess,stats:payload.stats}),GAME_TOOLS,payload.stats?[...STUDY_TOOLS,TRAINING_STATS_TOOL]:STUDY_TOOLS);
   const verifier=createAnswerVerifier({game:payload.game,fens,Chess});
   const messages=buildMessages(payload,rows,facts);
   messages[0]={...messages[0],content:messages[0].content+'\n'+ANSWER_RULES};

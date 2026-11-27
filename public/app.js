@@ -599,7 +599,7 @@ document.addEventListener('jc-account',e=>{accountStatus=e.detail;refreshProfile
 $('profileConnect').onclick=()=>{if(onlineLocked)return;navigation.show('account');};
 refreshProfile();
 const puzzleUI=initPuzzles(()=>$('user').value.trim());
-initCoach(coachContext,{Engine,enginePath,onlineLocked:()=>onlineLocked,canAnalyze:()=>!onlineLocked&&!busy&&!importing&&!training?.active()});
+initCoach(coachContext,{Engine,enginePath,onlineLocked:()=>onlineLocked,canAnalyze:()=>!onlineLocked&&!busy&&!importing&&!training?.active(),trainingStats:user=>profileStats(readLocal('jc-training-history-v1'),readLocal('jc-coach-games:'+String(user||'').trim().toLowerCase()),user,Chess)});
 training=initTraining({
  canStart:()=>!onlineLocked&&!busy&&!importing,
  getUser:()=>$('user').value.trim(),
