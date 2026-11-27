@@ -104,13 +104,16 @@ export function initCoach(provider,options){
    const profile={goal:memory.goal,focus:memory.focus,notes:memory.notes,summary:memory.shareHistory?memory.summary:''};
    const compact=shouldCompact(memory,history),previous=coachHistory(memory,history),memoryAllowed=memory.shareHistory;
    const sameProfile=()=>requestKey===memoryKey(account,contextProvider().user);
-   const memoryUpdate=createMemoryUpdate(memory,()=>memoryAllowed&&$('aiShareHistory').checked&&sameProfile());
+   const requestToken=getToken();
+   const memoryUpdate=createMemoryUpdate(memory,()=>memoryAllowed&&$('aiShareHistory').checked&&sameProfile()&&getToken()===requestToken);
    $('aiCacheStatus').textContent='';
-   const result=await askCoach({question,history:previous.map(m=>({role:m.role,content:m.content})),game:gamePayload,profile,stats},{token:getToken(),onStatus:say,isCancelled:()=>!!toolOptions?.onlineLocked?.()});
+   const result=await askCoach({question,history:previous.map(m=>({role:m.role,content:m.content})),game:gamePayload,profile,stats,memoryUpdate:compact&&memoryAllowed},{token:requestToken,onStatus:say,isCancelled:()=>!!toolOptions?.onlineLocked?.()});
    if(toolOptions?.onlineLocked?.())throw Error('Ответ отменён: онлайн-партия');
    const answer=typeof result.answer==='string'?result.answer.trim():'';if(!answer)throw Error('Пустой ответ');
+   if(getToken()!==requestToken)throw Error('Ответ отменён: токен изменился');
    const pair=[{role:'user',content:question},{role:'assistant',content:answer,parts:snapshotBoards(answer,g)}];
   if(requestKey!==memoryKey(account,contextProvider().user)){const saved=loadMemory(localStorage,requestKey,Chess);const stored=saveMemory(localStorage,requestKey,{...saved,history:[...saved.history,...pair]},Chess);switchMemory();say(stored.saved?'Ответ сохранён в предыдущем профиле.':'Не удалось сохранить ответ предыдущего профиля.');return;}
+  if(compact&&memoryAllowed&&result.memoryUpdate)memoryUpdate.execute(result.memoryUpdate);
   memory=memoryUpdate.finish(memory);pendingQuestion='';history.push(...pair);const saved=persist();$('aiSummary').value=memory.summary;$('aiQuestion').value='';showHistory();say(saved?'Ответ получен.':'Ответ получен, но сохранение не удалось.');
  });
  for(const [id,k] of [['aiSummary','summary'],['aiNotes','notes'],['aiGoal','goal'],['aiFocus','focus'],['aiMinutes','minutes'],['aiPlan','plan']])$(id).onchange=()=>{if(!scopeKey||busy)return;memory[k]=k==='minutes'?Number($(id).value):$(id).value;persist();};

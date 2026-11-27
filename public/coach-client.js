@@ -1,5 +1,6 @@
 // Unified coach client (Web + Android WebView): dispatches the GitHub Actions "Coach runner" workflow
 // with a fine-grained PAT (Actions: read/write) and reads the answer from the job annotation.
+import {normalizeMemoryUpdate} from './coach-memory.js';
 export const COACH_REPO='sharifzoda4156-ops/johan-chess';
 export const COACH_WORKFLOW='coach-runner.yml';
 export const COACH_REF='main';
@@ -59,7 +60,7 @@ export async function askCoach(payload,{token,fetcher=globalThis.fetch.bind(glob
     const notes=await api('/check-runs/'+job.id+'/annotations?per_page=50');
     for(const n of notes||[]){
       let a=null;try{a=decodeAnswer(n.message);}catch{}
-      if(a&&a.request_id===id){if(!a.ok)throw Error(a.error||'Ошибка раннера');return {answer:a.answer,usage:a.usage||null,runUrl:run.html_url};}
+      if(a&&a.request_id===id){if(!a.ok)throw Error(a.error||'Ошибка раннера');check();return {answer:a.answer,usage:a.usage||null,runUrl:run.html_url,memoryUpdate:payload.memoryUpdate===true&&run.conclusion==='success'?normalizeMemoryUpdate(a.memoryUpdate):null};}
     }
   }
   throw Error(run.conclusion==='success'?'Ответ не найден в результатах запуска.':'Запуск завершился с ошибкой ('+run.conclusion+').');

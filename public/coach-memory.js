@@ -74,14 +74,19 @@ export function coachHistory(memory,history){
 }
 // One transaction per completed coach turn. The model chooses what to retain,
 // replace or remove. No data are persisted until the final answer succeeds.
+export function normalizeMemoryUpdate(args){
+ if(!args||typeof args!=='object'||Array.isArray(args)||Object.keys(args).sort().join(',')!=='action,summary'||!['replace','keep'].includes(args.action)||typeof args.summary!=='string'||args.summary.length>2400||args.action==='keep'&&args.summary!=='')return null;
+ return {action:args.action,summary:args.summary.trim()};
+}
 export function createMemoryUpdate(memory,allowed){
  let staged=null;
  return {
   execute(args){
    if(!memory.shareHistory||!allowed())return {ok:false,error:'Память отключена или профиль изменился'};
    if(staged!==null)return {ok:false,error:'Память уже обработана в этом запросе'};
-   if(!args||typeof args!=='object'||Array.isArray(args)||Object.keys(args).sort().join(',')!=='action,summary'||!['replace','keep'].includes(args.action)||typeof args.summary!=='string'||args.summary.length>2400||args.action==='keep'&&args.summary!=='')return {ok:false,error:'Неверный формат. Полная сводка до 2400 символов; keep требует пустую строку.'};
-   staged={summary:args.action==='keep'?memory.summary:args.summary.trim()};
+   const update=normalizeMemoryUpdate(args);
+   if(!update)return {ok:false,error:'Неверный формат. Полная сводка до 2400 символов; keep требует пустую строку.'};
+   staged={summary:update.action==='keep'?memory.summary:update.summary};
    return {ok:true,staged:true,action:args.action,characters:staged.summary.length};
   },
   finish(current){
