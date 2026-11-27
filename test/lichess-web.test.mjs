@@ -136,7 +136,7 @@ test('web NDJSON streaming updates game state, locks session and sends moves',as
     {type:'opponentGone',gone:true,claimWinInSeconds:15}
    ]);
   }
-  if(url.includes('/api/board/game/Ab12Cd34/move/')||url.endsWith('/api/board/game/Ab12Cd34/chat')){
+  if(url.includes('/api/board/game/Ab12Cd34/move/')||url.endsWith('/api/board/game/Ab12Cd34/chat')||url.endsWith('/api/board/game/Ab12Cd34/abort')){
    posted.push({url,body:init?.body||''});
    return new Response(JSON.stringify({ok:true}),{status:200});
   }
@@ -156,9 +156,11 @@ test('web NDJSON streaming updates game state, locks session and sends moves',as
  assert.equal(snap.claimReady,false);
  assert.deepEqual(snap.chat,[{username:'Bob',text:'Good luck!',room:'player'}]);
 
- // Sending a legal move and player chat message works while locked; logout is blocked while locked
+ // Sending a legal move, abort, and player chat message works while locked; logout is blocked while locked
  await client.call('gameAction',{gameId:'Ab12Cd34',action:'move',move:'e2e4'});
  assert.ok(posted.some(p=>p.url.endsWith('/move/e2e4')));
+ await client.call('gameAction',{gameId:'Ab12Cd34',action:'abort'});
+ assert.ok(posted.some(p=>p.url.endsWith('/abort')));
  await client.call('gameAction',{gameId:'Ab12Cd34',action:'chat',text:'Удачи!'});
  const chatPost=posted.find(p=>p.url.endsWith('/chat'));
  assert.ok(chatPost&&chatPost.body.includes('room=player')&&chatPost.body.includes('text='));
