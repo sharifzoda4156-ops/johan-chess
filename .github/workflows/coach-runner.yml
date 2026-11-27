@@ -1,0 +1,74 @@
+name: Coach runner
+run-name: coach ${{ inputs.request_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      request_id:
+        description: 'Client-generated request id (A-Za-z0-9_-)'
+        required: true
+      payload_b64:
+        description: 'Base64 JSON: {question, history, game, profile}'
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: coach-${{ inputs.request_id }}
+  cancel-in-progress: true
+env:
+  # Override with repository variables COACH_GGUF_URL / COACH_GGUF_NAME after publishing the fine-tuned weights.
+  GGUF_URL: ${{ vars.COACH_GGUF_URL || 'https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf' }}
+  GGUF_NAME: ${{ vars.COACH_GGUF_NAME || 'Qwen3.5-9B-Q4_K_M.gguf' }}
+jobs:
+  coach:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts
+      - name: Validate request id
+        run: |
+          [[ "${{ inputs.request_id }}" =~ ^[A-Za-z0-9_-]{6,64}$ ]] || { echo "bad request_id"; exit 1; }
+      - name: Restore GGUF cache
+        id: gguf
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: gguf-${{ env.GGUF_NAME }}-${{ hashFiles('.github/workflows/coach-runner.yml') }}
+      - name: Download GGUF
+        if: steps.gguf.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p models
+          curl -fL --retry 5 --retry-delay 5 -o "models/$GGUF_NAME" "$GGUF_URL"
+      - name: Install llama.cpp (prebuilt CPU build)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          url=$(gh api repos/ggml-org/llama.cpp/releases/latest --jq '[.assets[]|select(.name|test("bin-ubuntu-x64\\.(tar\\.gz|zip)$"))][0].browser_download_url')
+          [ -n "$url" ] || { echo "llama.cpp asset not found"; exit 1; }
+          mkdir -p llama && curl -fL "$url" | tar -xz -C llama --strip-components=1
+          ls llama | head
+      - name: Start llama-server
+        run: |
+          nohup llama/llama-server -m "models/$GGUF_NAME" --host 127.0.0.1 --port 8080 -c 8192 -t "$(nproc)" > llama.log 2>&1 &
+          for i in $(seq 1 120); do
+            curl -sf http://127.0.0.1:8080/health >/dev/null && exit 0
+            sleep 5
+          done
+          tail -50 llama.log; exit 1
+      - name: Run coach
+        env:
+          COACH_PAYLOAD_B64: ${{ inputs.payload_b64 }}
+          COACH_REQUEST_ID: ${{ inputs.request_id }}
+          COACH_OUT: out/answer.json
+        run: node scripts/coach-runner.mjs
+      - name: Upload answer
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coach-${{ inputs.request_id }}
+          path: out/answer.json
+          retention-days: 1
+          if-no-files-found: ignore
