@@ -5,7 +5,9 @@ import {mkdirSync,writeFileSync} from 'node:fs';
 import {dirname} from 'node:path';
 import {createRequire} from 'node:module';
 import {Chess} from 'chess.js';
-import {decodePayload,parseScore,classify,buildMessages,cleanAnswer,criticalPositionFacts} from '../lib/coach-runner-core.mjs';
+import {decodePayload,parseScore,classify,buildMessages,criticalPositionFacts} from '../lib/coach-runner-core.mjs';
+
+import {createGameTools,runCoachAgent} from '../lib/coach-agent.mjs';
 
 const require=createRequire(import.meta.url);
 const out=process.env.COACH_OUT||'out/answer.json';
@@ -46,20 +48,21 @@ async function analyze(game,depth=12){
     evals.push(c.isGameOver()?(c.isCheckmate()?-2000:0):await sf.eval(fens[i],depth));
   }}finally{sf.close();}
   const rows=classify(evals,sans,new Chess(game.startFen||undefined).turn());
-  return {rows,facts:criticalPositionFacts(rows,fens,game.color,Chess)};
+  return {rows,fens,facts:criticalPositionFacts(rows,fens,game.color,Chess)};
 }
 
-async function ask(messages){
-  const r=await fetch(llama+'/v1/chat/completions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({messages,temperature:0.6,max_tokens:900,chat_template_kwargs:{enable_thinking:false}})});
+async function request(messages,tools){
+  const r=await fetch(llama+'/v1/chat/completions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({messages,...(tools?{tools,tool_choice:'auto'}:{}),temperature:0.6,max_tokens:900,chat_template_kwargs:{enable_thinking:false}})});
   if(!r.ok)throw Error('llama-server '+r.status+': '+(await r.text()).slice(0,200));
-  const j=await r.json();
-  return {answer:cleanAnswer(j.choices?.[0]?.message?.content),usage:j.usage||null};
+  return r.json();
 }
 
 try{
   const payload=decodePayload(process.env.COACH_PAYLOAD_B64);
-  const {rows,facts}=payload.game?await analyze(payload.game):{rows:[],facts:[]};
-  const {answer,usage}=await ask(buildMessages(payload,rows,facts));
+  const {rows,facts,fens}=payload.game?await analyze(payload.game):{rows:[],facts:[],fens:[]};
+  const execute=createGameTools({game:payload.game,rows,fens,Chess});
+  const messages=buildMessages(payload,rows,facts);
+  const {answer,usage}=await runCoachAgent({messages,request,execute});
   if(!answer)throw Error('Пустой ответ модели');
   save({ok:true,answer,usage});
   console.log('answer ready,',answer.length,'chars');

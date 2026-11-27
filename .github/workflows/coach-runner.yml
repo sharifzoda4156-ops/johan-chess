@@ -53,7 +53,7 @@ jobs:
           ls llama | head
       - name: Start llama-server
         run: |
-          nohup llama/llama-server -m "models/$GGUF_NAME" --host 127.0.0.1 --port 8080 -c 8192 -t "$(nproc)" > llama.log 2>&1 &
+          nohup llama/llama-server -m "models/$GGUF_NAME" --jinja --host 127.0.0.1 --port 8080 -c 8192 -t "$(nproc)" > llama.log 2>&1 &
           for i in $(seq 1 120); do
             curl -sf http://127.0.0.1:8080/health >/dev/null && exit 0
             sleep 5
