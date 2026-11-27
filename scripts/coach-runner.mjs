@@ -12,7 +12,12 @@ const out=process.env.COACH_OUT||'out/answer.json';
 const llama=process.env.LLAMA_URL||'http://127.0.0.1:8080';
 const requestId=String(process.env.COACH_REQUEST_ID||'').replace(/[^A-Za-z0-9_-]/g,'').slice(0,64);
 
-function save(obj){mkdirSync(dirname(out),{recursive:true});writeFileSync(out,JSON.stringify({request_id:requestId,...obj}));}
+function save(obj){
+  const json=JSON.stringify({request_id:requestId,...obj});
+  mkdirSync(dirname(out),{recursive:true});writeFileSync(out,json);
+  // The browser client cannot download artifacts (CORS), so the answer is also published as a job annotation.
+  console.log('::notice title=coach::coach-answer:'+Buffer.from(json).toString('base64'));
+}
 
 class Stockfish{
   constructor(){
