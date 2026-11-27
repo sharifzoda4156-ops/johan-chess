@@ -8,7 +8,8 @@ test('decodePayload validates and trims',()=>{
   const p=decodePayload(enc({question:'  Привет ',history:[{role:'user',content:'a'},{role:'system',content:'x'}],game:{moves:['e4','e5'],result:'1-0',color:'w'}}));
   assert.equal(p.question,'Привет');assert.equal(p.history.length,1);assert.equal(p.game.moves.length,2);assert.equal(p.game.color,'w');
   assert.throws(()=>decodePayload(''));assert.throws(()=>decodePayload('###'));assert.throws(()=>decodePayload(enc({question:' '})));
-  assert.equal(decodePayload(enc({question:'q',game:{moves:[1]}})).game,null);
+  assert.equal(decodePayload(enc({question:'q',game:{moves:[1],result:'1-0'}})).game,null);
+  for(const result of ['*',undefined,'bad'])assert.equal(decodePayload(enc({question:'q',game:{moves:['e4'],result}})).game,null);
 });
 test('parseScore handles cp and mate',()=>{
   assert.equal(parseScore('info depth 5 score cp 34 nodes 1'),34);
