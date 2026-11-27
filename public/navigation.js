@@ -6,7 +6,7 @@ export function initNavigation(){
  function show(requested,{scroll=true}={}){
   const playView=requested==='play-bot'?'bot':requested==='play'?'hub':null;
   const normalized=requested==='play-bot'?'play':requested;
-  const target=normalized==='coach'&&!globalThis.JohanNative?'library':normalized;
+  const target=normalized;
   screen=online?'online':normalizeScreen(target,playing);
   document.body.dataset.activeScreen=screen;
   for(const panel of screens){const hidden=panel.dataset.screen!==screen;if(panel.hidden!==hidden)panel.hidden=hidden;}

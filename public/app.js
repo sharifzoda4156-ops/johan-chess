@@ -43,7 +43,7 @@ globalThis.JohanHandleBack=()=>{
  if(document.body.classList.contains('puzzle-focus')){$('journeyBack')?.click();return true;}
  const cur=navigation.current();
  if(cur==='account'){navigation.show('profile');return true;}
- if(cur==='library'&&globalThis.JohanNative){navigation.show('coach');return true;}
+ if(cur==='library'){navigation.show('coach');return true;}
  if(cur!=='home'){navigation.show('home');return true;}
  return false;
 };
@@ -478,7 +478,7 @@ function renderReport(){
   sum.append(table);
  }
  renderMoveList();chart();
- $('askReview').hidden=!globalThis.JohanNative;$('askReview').disabled=!results.length;
+ $('askReview').hidden=false;$('askReview').disabled=!results.length;
  const t=$('training');t.replaceChildren();
  const errors=results.filter(r=>matchesSideFilter(r)&&r.loss>=5).sort((a,b)=>b.loss-a.loss).slice(0,5);
  if(!errors.length)t.textContent=results.length?'Существенных ошибок в выбранной стороне не найдено!':'После анализа здесь появятся самые важные ошибки.';
@@ -564,9 +564,9 @@ function coachContext(){
  const color=historical?null:h.White?.toLowerCase()===playerName?'w':h.Black?.toLowerCase()===playerName?'b':null;
  return {user,game:{source:historical?'historical':onlineReviewName?'lichess':h.Site==='Johan Chess'?'training':'import',historical:historical?{id:historical.id,title:historical.title,year:historical.year,source:historical.source}:null,termination:h.Termination||'',timeControl:h.TimeControl||'',white:player('w'),black:player('b'),date:h.Date||'',result:h.Result||'*',color,startFen,position:positions[cursor],cursor,moves:moves.map(m=>m.san),depth:analysisDepth??Number($('depth').value),complete:results.length===moves.length,analysis:results}};
 }
-$('coachUnavailable').hidden=!!globalThis.JohanNative;
-if($('libraryCoachNote'))$('libraryCoachNote').hidden=!!globalThis.JohanNative;
-if($('libraryBack'))$('libraryBack').hidden=!globalThis.JohanNative;
+$('coachUnavailable').hidden=true;
+if($('libraryCoachNote'))$('libraryCoachNote').hidden=true;
+if($('libraryBack'))$('libraryBack').hidden=false;
 let accountStatus=null;
 try{const nick=localStorage.getItem('jc-profile-nick');if(/^[a-zA-Z0-9_-]{1,40}$/.test(nick||''))$('user').value=nick;}catch{}
 const dashboard=initProfileDashboard({Chess,getUser:()=>$('user').value.trim(),setUser:nick=>{if(busy||importing||training?.active())return false;$('user').value=nick;imported=[];$('games').hidden=true;$('review').hidden=true;game=null;pgn='';historical=null;results=[];clearExplore();openReviewBoard(false);$('analyze').disabled=true;try{localStorage.setItem('jc-profile-nick',nick);}catch{}refreshProfile();document.dispatchEvent(new CustomEvent('jc-profile-user',{detail:nick}));return true;},openGame:text=>{if(busy||importing||training?.active())return false;navigation.show('review');if(!load(text))return false;$('games').hidden=true;openReviewBoard(true);return true;},canSync:()=>!busy&&!importing&&!training?.active()});
@@ -584,10 +584,9 @@ function refreshProfile(){
  const name=displayName(accountStatus,user);
  $('profileName').textContent=name;$('profileAvatar').textContent=Array.from(name.trim())[0]?.toUpperCase()||'♟';
  $('profileNick').textContent=user?'Chess.com · '+user:'';
- $('profileConnection').textContent=accountStatus?.connected?(accountStatus.sharing?'ChatGPT подключён':'ChatGPT · требуется разрешение плана'):'ChatGPT не подключён';
+ $('profileConnection').textContent=accountStatus?.connected?(accountStatus.sharing?'Тренер подключён':'Тренер · нужно разрешение'):'Тренер не подключён';
  $('profileChatLink').textContent=accountStatus?.connected?(accountStatus.sharing?'Подключён':'Нужно разрешение'):'Подключить';
- $('profileConnect').hidden=!globalThis.JohanNative;
- if(!globalThis.JohanNative)$('profileConnection').textContent='ChatGPT доступен в Android';
+ $('profileConnect').hidden=false;
  $('profilePlayed').textContent=String(s.played);$('profileReviewed').textContent=String(s.reviewed);
  $('profileAccuracy').textContent=s.accuracy===null?'—':s.accuracy.toFixed(1)+'%';
  for(const [id,n] of [['Wins',s.wins],['Draws',s.draws],['Losses',s.losses]])$('profile'+id).textContent=String(n);
@@ -597,7 +596,7 @@ function refreshProfile(){
 document.addEventListener('jc-screen',e=>{if(['home','profile'].includes(e.detail))refreshProfile();});
 document.addEventListener('jc-puzzle-progress',refreshProfile);
 document.addEventListener('jc-account',e=>{accountStatus=e.detail;refreshProfile();});
-$('profileConnect').onclick=()=>{if(onlineLocked)return;navigation.show('account');if(!accountStatus?.connected&&!coachBusy())$('aiLogin').click();};
+$('profileConnect').onclick=()=>{if(onlineLocked)return;navigation.show('account');};
 refreshProfile();
 const puzzleUI=initPuzzles(()=>$('user').value.trim());
 initCoach(coachContext,{Engine,enginePath,onlineLocked:()=>onlineLocked,canAnalyze:()=>!onlineLocked&&!busy&&!importing&&!training?.active()});
@@ -605,7 +604,7 @@ training=initTraining({
  canStart:()=>!onlineLocked&&!busy&&!importing,
  getUser:()=>$('user').value.trim(),
  lock:()=>{navigation.setPlaying(true);$('importPanel').hidden=true;$('review').hidden=true;$('aiPanel').hidden=true;},
- unlock:()=>{navigation.setPlaying(false);$('importPanel').hidden=false;$('review').hidden=!game;$('aiPanel').hidden=!globalThis.JohanNative;},
+ unlock:()=>{navigation.setPlaying(false);$('importPanel').hidden=false;$('review').hidden=!game;$('aiPanel').hidden=false;},
  review:(text,auto,user)=>{navigation.show('review');if(user)$('user').value=user;if(pgn!==text||!game){if(!load(text))return;}openReviewBoard(true);if(auto&&results.length!==moves.length)$('analyze').click();},
  goHome:()=>navigation.show('home'),
  goOnline:({friend}={})=>{navigation.show('online');if(friend&&$('onlineFriendNick')&&!$('onlineSocial').hidden){$('onlineFriendNick').scrollIntoView({behavior:scrollBehavior(),block:'center'});$('onlineFriendNick').focus();}}
@@ -620,11 +619,11 @@ initGameShare({Chess,canUse:()=>!onlineLocked&&!busy&&!importing&&!training?.act
 initStudyLibrary({
  openGame:(pgn,row)=>{if(busy||importing||training?.active()){$('studyLibraryStatus').textContent='Дождись завершения текущей игры или анализа.';return;}navigation.show('review');if(load(pgn,row))openReviewBoard(true);},
  practiceEndgame:theme=>{puzzleUI.selectTheme(theme);navigation.show('puzzles');},
- askOpening:row=>{navigation.show('coach');if(!globalThis.JohanNative)return;$('aiQuestion').value='Объясни идеи и типичные планы дебютной линии Lichess '+row.eco+' '+row.name+': '+row.pgn+'. Не придумывай дополнительные проверенные варианты.';$('aiQuestion').focus();},
+ askOpening:row=>{navigation.show('coach');$('aiQuestion').value='Объясни идеи и типичные планы дебютной линии Lichess '+row.eco+' '+row.name+': '+row.pgn+'. Не придумывай дополнительные проверенные варианты.';$('aiQuestion').focus();},
  playOpening:(fen,color)=>{if(!busy&&!importing&&!training?.active())training.startReplay(fen,color);else $('studyLibraryStatus').textContent='Дождись окончания текущей работы.';}
 });
 $('askReview').onclick=()=>{
- if(onlineLocked||!game||training.active()||!results.length||!globalThis.JohanNative)return;
+ if(onlineLocked||!game||training.active()||!results.length)return;
  navigation.show('coach');
  $('aiQuestion').value=historical?'Разбери историческую партию '+historical.title+'. Объясни ключевые идеи, сильные ходы и критические ошибки обеих сторон по анализу Stockfish. Покажи мини-доски и выводы для моей игры.':'Разбери мою партию по данным Stockfish. Выдели главные ошибки, объясни их причины и предложи конкретную тренировку. Задай мне вопрос о том, что я рассчитывал в критической позиции.';
  $('aiPanel').scrollIntoView({behavior:scrollBehavior()});$('aiQuestion').focus();
