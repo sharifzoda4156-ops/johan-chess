@@ -20,3 +20,36 @@ test('training uses UCI skill and a timed legal-position search, independent of 
   await assert.rejects(e.setSkill(21));
  }finally{e?.close();globalThis.Worker=original;}
 });
+test('Engine.searchMulti configures MultiPV and collects ranked principal variations',async()=>{
+ const original=globalThis.Worker,commands=[];
+ globalThis.Worker=class {
+  constructor(){this.closed=false;}
+  postMessage(command){
+   commands.push(command);
+   const send=lines=>queueMicrotask(()=>{if(!this.closed)for(const data of lines)this.onmessage({data});});
+   if(command==='uci')send(['uciok']);
+   else if(command==='isready')send(['readyok']);
+   else if(command.startsWith('go depth ')){
+    send([
+     'info depth 12 multipv 1 score cp 240 pv f3e5 g4d1',
+     'info depth 12 multipv 2 score cp 15 pv h2h3 g4h5',
+     'bestmove f3e5'
+    ]);
+   }
+  }
+  terminate(){this.closed=true;}
+ };
+ let e;
+ try{
+  e=new Engine('mock');await e.init();
+  const res=await e.searchMulti('start-fen',[],12,2);
+  assert.ok(commands.includes('setoption name MultiPV value 2'));
+  assert.equal(res.best,'f3e5');
+  assert.equal(res.lines.length,2);
+  assert.equal(res.lines[0].move,'f3e5');
+  assert.equal(res.lines[0].score.value,240);
+  assert.equal(res.lines[1].move,'h2h3');
+  assert.equal(res.lines[1].score.value,15);
+ }finally{e?.close();globalThis.Worker=original;}
+});
+

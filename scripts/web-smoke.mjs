@@ -96,6 +96,26 @@ try{
   stable(reviewBox,await boardBox(page,'#board'));
   await page.locator('#flip').click();
   stable(reviewBox,await boardBox(page,'#board'));
+  // Interactive exploration on review board + Undo returns to main line
+  await page.locator('#board [data-square="d7"]').click();
+  await page.locator('#board [data-square="d5"]').click();
+  await page.locator('#reviewExplorePill').waitFor({state:'visible'});
+  await page.locator('#reviewUndo').click();
+  await page.locator('#reviewExplorePill').waitFor({state:'hidden'});
+  // 2-step Stockfish hint on review board
+  await page.locator('#reviewHint').click();
+  await page.waitForFunction(()=>document.querySelectorAll('#board .square.hint-piece').length===1,{},{timeout:25000});
+  await page.locator('#reviewHint').click();
+  await page.waitForFunction(()=>document.querySelectorAll('#board .board-arrows-layer polygon').length>=1);
+  // Run fast Game Review analysis on Scholar's Mate (depth 10) on desktop viewport
+  if(viewport.width>=1200){
+   await page.locator('#depth').selectOption('10');
+   await page.locator('#reviewAnalyze').click();
+   await page.waitForFunction(()=>!document.getElementById('reviewAnalyze')?.classList.contains('running')&&document.querySelectorAll('#summary .gr-table .gr-row').length>=5,{},{timeout:60000});
+   await page.locator('#reviewKeyMove').click();
+   await page.waitForFunction(()=>document.querySelectorAll('#board .square-badge').length===1);
+   assert.ok((await page.locator('#reviewEvalText').textContent()).length>0,'Eval Bar populated after analysis');
+  }
   if(viewport.width<900)await page.locator('#reviewCloseBoard').click();
 
   // Play Hub ("Новая партия") & Bot Setup ("Игра с ботом"): equal 100% widths + Drag & Drop
