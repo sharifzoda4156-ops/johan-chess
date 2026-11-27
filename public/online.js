@@ -32,7 +32,7 @@ function statusReason(status){
 
 export function initOnline({canStart,lock,review,openOnline}){
  let snap={connected:false,locked:false},game=null,signature='',receivedAt=0,selected=null,promotion=[],sending=false,awaiting=false,awaitingSlow=false,awaitTimer=null,optimistic=null,working=false,polling=false,active=false,uiLock=false,history=[],friendRows=[],lastAccount='',error='',syncAttempt='',lastGame='',challengeKey='',claimAt=0;
- let frames=[],sans=[],renderedStripSig='',viewPly=null,hasUnreadMove=false,flipped=false,optionsOpen=false,chatOpen=false,viewingFinished=false,resultDismissedFor='';
+ let frames=[],sans=[],renderedStripSig='',viewPly=null,hasUnreadMove=false,flipped=false,optionsOpen=false,chatOpen=false,viewingFinished=false,resultDismissedFor='',chatLines=[],chatSig='',seenChatCount=0,chatSending=false;
  const webClient=native?null:createWebLichess({onUpdate:s=>handlePush(s)});
  const call=(op,args={})=>native?nativeCall(op,args):webClient.call(op,args);
 
@@ -48,10 +48,55 @@ export function initOnline({canStart,lock,review,openOnline}){
   if(optionsOpen){chatOpen=false;if($('onlineChatSheet'))$('onlineChatSheet').hidden=true;syncSheetPrefs();}
   if($('onlineOptionsSheet'))$('onlineOptionsSheet').hidden=!optionsOpen;
  }
+ function renderOnlineChat(){
+  const box=$('onlineChatLog');if(!box)return;
+  const sig=JSON.stringify(chatLines);
+  if(chatSig!==sig){
+   chatSig=sig;
+   const frag=document.createDocumentFragment();
+   const me=String(snap.username||'').toLowerCase();
+   for(const msg of chatLines){
+    const mine=String(msg.username||'').toLowerCase()===me;
+    const bubble=el('div',undefined,'chat-bubble '+(mine?'mine':'theirs'));
+    bubble.append(el('small',msg.username||'Игрок'),el('div',msg.text||''));
+    frag.append(bubble);
+   }
+   if(!frag.childNodes.length)frag.append(el('p','Пока нет сообщений. Пожелай сопернику удачи!','chat-empty'));
+   box.replaceChildren(frag);
+   box.scrollTop=box.scrollHeight;
+  }
+  const me=String(snap.username||'').toLowerCase();
+  const unread=!chatOpen&&chatLines.slice(seenChatCount).some(m=>String(m.username||'').toLowerCase()!==me);
+  if($('onlineChatBadge'))$('onlineChatBadge').hidden=!unread;
+  const disabled=!game||snap.needsSync||chatSending;
+  if($('onlineChatInput'))$('onlineChatInput').disabled=disabled;
+  if($('onlineChatSend'))$('onlineChatSend').disabled=disabled;
+  for(const b of document.querySelectorAll('#onlineChatQuick button'))b.disabled=disabled;
+ }
  function setChatOpen(open){
   chatOpen=!!open;
-  if(chatOpen){optionsOpen=false;if($('onlineOptionsSheet'))$('onlineOptionsSheet').hidden=true;if($('onlineChatBadge'))$('onlineChatBadge').hidden=true;}
+  if(chatOpen){
+   optionsOpen=false;
+   if($('onlineOptionsSheet'))$('onlineOptionsSheet').hidden=true;
+   seenChatCount=chatLines.length;
+   if($('onlineChatBadge'))$('onlineChatBadge').hidden=true;
+   renderOnlineChat();
+  }
   if($('onlineChatSheet'))$('onlineChatSheet').hidden=!chatOpen;
+ }
+ async function sendChat(raw){
+  const txt=String(raw||'').trim();
+  if(!txt||txt.length>140||!game||snap.needsSync||chatSending)return;
+  chatSending=true;renderOnlineChat();
+  try{
+   await call('gameAction',{gameId:snap.gameId,action:'chat',text:txt});
+   if($('onlineChatInput'))$('onlineChatInput').value='';
+  }catch(e){
+   say(e.message||'Не удалось отправить сообщение');
+   controls();
+  }finally{
+   chatSending=false;renderOnlineChat();
+  }
  }
  function showBoardShell(){
   return !!game&&!snap.waiting&&(!game.done||viewingFinished);
@@ -201,7 +246,7 @@ export function initOnline({canStart,lock,review,openOnline}){
      game=readOnlineGame(s.full,s.state,s.username,Chess);receivedAt=performance.now();
      const built=buildFrames(s.full.initialFen,game.moves);
      frames=built.frames;sans=built.sans;
-     if(!sameGame){flipped=false;viewPly=null;hasUnreadMove=false;resultDismissedFor='';setOptionsOpen(false);setChatOpen(false);}
+     if(!sameGame){flipped=false;viewPly=null;hasUnreadMove=false;resultDismissedFor='';seenChatCount=0;setOptionsOpen(false);setChatOpen(false);}
      if(!game.done)viewingFinished=true;
      else if(sameGame&&!old.done){viewingFinished=true;resultDismissedFor='';setOptionsOpen(false);}
      const matchedOpt=prevOpt&&sameGame&&game.moves.length>prevOpt.baseLen&&game.moves[prevOpt.baseLen]===prevOpt.uci;
@@ -217,8 +262,11 @@ export function initOnline({canStart,lock,review,openOnline}){
      if(moves.length)playSound(soundForMove(moves[0],game.game));
      else if(sameGame&&!old.done&&game.done&&!matchedOpt)playSound('end');
     }catch(e){say(e.message+' · открой Lichess для этой партии');}
-   }else{frames=[];sans=[];viewPly=null;hasUnreadMove=false;viewingFinished=false;clearBoardView($('onlineBoard'));}
+   }else{frames=[];sans=[];viewPly=null;hasUnreadMove=false;viewingFinished=false;chatLines=[];seenChatCount=0;clearBoardView($('onlineBoard'));}
   }else if(previous.needsSync!==s.needsSync||previous.locked!==s.locked)draw();
+  chatLines=Array.isArray(s.chat)?s.chat:[];
+  if(chatOpen)seenChatCount=chatLines.length;
+  renderOnlineChat();
   const ck=JSON.stringify([s.incoming,s.locked,s.eventReady]);if(ck!==challengeKey){challengeKey=ck;challenges();}
   if(s.notice&&!error)text('onlineStatus',s.notice);else if(!error)text('onlineStatus',s.connected?'':'Войди через Lichess, чтобы играть онлайн.');
   if(!s.needsSync)syncAttempt='';
@@ -340,6 +388,8 @@ export function initOnline({canStart,lock,review,openOnline}){
  if($('onlineChatBtn'))$('onlineChatBtn').onclick=()=>setChatOpen(true);
  if($('onlineChatClose'))$('onlineChatClose').onclick=()=>setChatOpen(false);
  if($('onlineChatSheet'))$('onlineChatSheet').onclick=e=>{if(e.target===$('onlineChatSheet'))setChatOpen(false);};
+ if($('onlineChatForm'))$('onlineChatForm').onsubmit=e=>{e.preventDefault();sendChat($('onlineChatInput')?.value);};
+ for(const b of document.querySelectorAll('#onlineChatQuick button'))b.onclick=()=>sendChat(b.dataset.msg);
  if($('onlinePrevMove'))$('onlinePrevMove').onclick=()=>{const {list}=currentFrames();const cur=viewPly===null?list.length-1:viewPly;jumpPly(cur-1);};
  if($('onlineNextMove'))$('onlineNextMove').onclick=()=>{const {list}=currentFrames();const cur=viewPly===null?list.length-1:viewPly;jumpPly(cur+1);};
  if($('onlineLivePill'))$('onlineLivePill').onclick=()=>jumpPly(currentFrames().list.length-1);

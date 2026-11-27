@@ -131,11 +131,13 @@ test('web NDJSON streaming updates game state, locks session and sends moves',as
   if(url.endsWith('/api/board/game/stream/Ab12Cd34')){
    return streamResp([
     {type:'gameFull',id:'Ab12Cd34',variant:{key:'standard'},initialFen:'startpos',clock:{initial:600000,increment:0},white:{id:'alice',name:'Alice',rating:1500},black:{id:'bob',name:'Bob',rating:1480},state:{type:'gameState',moves:'',wtime:600000,btime:600000,status:'started'}},
+    {type:'chatLine',room:'player',username:'Bob',text:'Good luck!'},
+    {type:'chatLine',room:'spectator',username:'Spec',text:'Ignored'},
     {type:'opponentGone',gone:true,claimWinInSeconds:15}
    ]);
   }
-  if(url.includes('/api/board/game/Ab12Cd34/move/')){
-   posted.push(url);
+  if(url.includes('/api/board/game/Ab12Cd34/move/')||url.endsWith('/api/board/game/Ab12Cd34/chat')){
+   posted.push({url,body:init?.body||''});
    return new Response(JSON.stringify({ok:true}),{status:200});
   }
   return new Response('{}',{status:200});
@@ -152,10 +154,15 @@ test('web NDJSON streaming updates game state, locks session and sends moves',as
  assert.equal(snap.full.id,'Ab12Cd34');
  assert.equal(snap.opponentGone,true);
  assert.equal(snap.claimReady,false);
+ assert.deepEqual(snap.chat,[{username:'Bob',text:'Good luck!',room:'player'}]);
 
- // Sending a legal move works while locked; logout is blocked while locked
+ // Sending a legal move and player chat message works while locked; logout is blocked while locked
  await client.call('gameAction',{gameId:'Ab12Cd34',action:'move',move:'e2e4'});
- assert.ok(posted.some(u=>u.endsWith('/move/e2e4')));
+ assert.ok(posted.some(p=>p.url.endsWith('/move/e2e4')));
+ await client.call('gameAction',{gameId:'Ab12Cd34',action:'chat',text:'Удачи!'});
+ const chatPost=posted.find(p=>p.url.endsWith('/chat'));
+ assert.ok(chatPost&&chatPost.body.includes('room=player')&&chatPost.body.includes('text='));
+ await assert.rejects(()=>client.call('gameAction',{gameId:'Ab12Cd34',action:'chat',text:'   '}),/1 до 140/);
  await assert.rejects(()=>client.call('logout'),/онлайн-партии|Сначала заверши/);
 
  // After 15s opponent absence, claimReady becomes true
