@@ -76,3 +76,11 @@ test('tool calls in forced final turn and empty answers fail rather than publish
   assert.equal(n,MAX_TOOL_CALLS+1);
   await assert.rejects(runCoachAgent({messages:initial,request:async()=>reply({content:'<think>x</think>'})}),/Пустой ответ/);
 });
+
+test('stockfish_move exposes only the stored verified line for a bounded completed-game ply',()=>{
+  const f=fixture(),line={bestUci:'d2d4',bestSan:'d4',pvUci:['d2d4','d7d5'],pvSan:['d4','d5'],depth:12,source:'pv'};
+  const run=createGameTools({...f,searchLines:[line,null,null]});
+  assert.deepEqual(run('stockfish_move','{"ply":0}'),{ok:true,data:{ply:0,when:'before',fen:f.fens[0],color:'w',actualSan:'e4',lossCp:0,...line}});
+  for(const args of ['{"ply":1}','{"ply":3}','{"ply":-1}','{"ply":0,"depth":99}','{"ply":0,"fen":"arbitrary"}'])assert.equal(run('stockfish_move',args).ok,false);
+  assert.equal(createGameTools(f)('stockfish_move','{"ply":0}').ok,false);
+});

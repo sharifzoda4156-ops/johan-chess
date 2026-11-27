@@ -5,9 +5,10 @@ import {mkdirSync,writeFileSync} from 'node:fs';
 import {dirname} from 'node:path';
 import {createRequire} from 'node:module';
 import {Chess} from 'chess.js';
-import {decodePayload,parseScore,classify,buildMessages,criticalPositionFacts} from '../lib/coach-runner-core.mjs';
+import {decodePayload,classify,buildMessages,criticalPositionFacts} from '../lib/coach-runner-core.mjs';
 
 import {createGameTools,runCoachAgent} from '../lib/coach-agent.mjs';
+import {createSearchCollector,verifiedSearchLine} from '../lib/coach-stockfish-line.mjs';
 
 const require=createRequire(import.meta.url);
 const out=process.env.COACH_OUT||'out/answer.json';
@@ -33,8 +34,8 @@ class Stockfish{
   async init(){this.send('uci');await this.wait(l=>l==='uciok'?true:undefined);this.send('setoption name Threads value 2');this.send('isready');await this.wait(l=>l==='readyok'?true:undefined);}
   async eval(fen,depth){
     this.send('position fen '+fen);this.send('go depth '+depth);
-    let score=0;
-    return this.wait(l=>{if(l.startsWith('info')){const s=parseScore(l);if(s!==null)score=s;}if(l.startsWith('bestmove'))return score;});
+    const collector=createSearchCollector();
+    return this.wait(l=>collector.push(l));
   }
   close(){try{this.send('quit');}catch{}this.p.kill();}
 }
@@ -42,13 +43,14 @@ class Stockfish{
 async function analyze(game,depth=12){
   const chess=new Chess(game.startFen||undefined),fens=[chess.fen()],sans=[];
   for(const san of game.moves){sans.push(chess.move(san).san);fens.push(chess.fen());}
-  const sf=new Stockfish();await sf.init();const evals=[];
-  try{for(let i=0;i<fens.length;i++){
+  const sf=new Stockfish(),evals=[],searchLines=[];
+  try{await sf.init();for(let i=0;i<fens.length;i++){
     const c=new Chess(fens[i]);
-    evals.push(c.isGameOver()?(c.isCheckmate()?-2000:0):await sf.eval(fens[i],depth));
+    if(c.isGameOver()){evals.push(c.isCheckmate()?-2000:0);searchLines.push(null);}
+    else{const search=await sf.eval(fens[i],depth);evals.push(search.score);searchLines.push(verifiedSearchLine(fens[i],search,Chess));}
   }}finally{sf.close();}
   const rows=classify(evals,sans,new Chess(game.startFen||undefined).turn());
-  return {rows,fens,facts:criticalPositionFacts(rows,fens,game.color,Chess)};
+  return {rows,fens,searchLines,facts:criticalPositionFacts(rows,fens,game.color,Chess)};
 }
 
 async function request(messages,tools){
@@ -59,8 +61,8 @@ async function request(messages,tools){
 
 try{
   const payload=decodePayload(process.env.COACH_PAYLOAD_B64);
-  const {rows,facts,fens}=payload.game?await analyze(payload.game):{rows:[],facts:[],fens:[]};
-  const execute=createGameTools({game:payload.game,rows,fens,Chess});
+  const {rows,facts,fens,searchLines}=payload.game?await analyze(payload.game):{rows:[],facts:[],fens:[],searchLines:[]};
+  const execute=createGameTools({game:payload.game,rows,fens,searchLines,Chess});
   const messages=buildMessages(payload,rows,facts);
   const {answer,usage}=await runCoachAgent({messages,request,execute});
   if(!answer)throw Error('Пустой ответ модели');
