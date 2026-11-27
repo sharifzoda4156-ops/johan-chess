@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {askCoach,tokenOk,encodePayload,decodeAnswer,newRequestId,ANSWER_PREFIX} from '../public/coach-client.js';
+import {askCoach,tokenOk,encodePayload,decodeAnswer,newRequestId,ANSWER_PREFIX,coachAccountKey} from '../public/coach-client.js';
 const TOKEN='github_pat_'+'A'.repeat(30);
 const b64=o=>ANSWER_PREFIX+Buffer.from(JSON.stringify(o)).toString('base64');
 const res=(data,status=200)=>({ok:status<400,status,json:async()=>data});
@@ -33,4 +33,17 @@ test('askCoach errors',async()=>{
   const f=async url=>url.includes('/runs?')?res({workflow_runs:[{id:1,display_title:'coach '+id}]}):url.endsWith('/runs/1')?res({status:'completed',conclusion:'failure'}):url.endsWith('/jobs')?res({jobs:[{id:2}]}):url.includes('annotations')?res([{message:b64({request_id:id,ok:false,error:'boom'})}]):res(null,204);
   await assert.rejects(askCoach({question:'q'},{token:TOKEN,repo:'o/r',id,sleeper:async()=>{},fetcher:f}),/boom/);
   await assert.rejects(askCoach({question:'q'},{token:TOKEN,repo:'o/r',id,sleeper:async()=>{},fetcher:f,isCancelled:()=>true}),/отменён/);
+});
+
+
+test('token-scoped account key matches the existing local-memory format and isolates tokens',async()=>{
+ const {webcrypto}=await import('node:crypto');
+ const a=await coachAccountKey(TOKEN,webcrypto.subtle);
+ assert.match(a,/^[a-f0-9]{64}$/);
+ assert.equal(await coachAccountKey(' '+TOKEN+' ',webcrypto.subtle),a);
+ assert.notEqual(await coachAccountKey('github_pat_'+'B'.repeat(30),webcrypto.subtle),a);
+ assert.equal(await coachAccountKey('',webcrypto.subtle),'');
+ assert.ok(!a.includes(TOKEN));
+ const {memoryKey}=await import('../public/coach-memory.js');
+ assert.ok(memoryKey(a,'Johan'));assert.notEqual(memoryKey(a,'Johan'),memoryKey(a,'Other'));
 });

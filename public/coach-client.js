@@ -6,6 +6,13 @@ export const COACH_REF='main';
 const TOKEN_KEY='jc-coach-pat';
 export const ANSWER_PREFIX='coach-answer:';
 export const tokenOk=t=>typeof t==='string'&&/^(github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,})$/.test(t.trim());
+// Local token-scoped identity, never send this fingerprint to the runner.
+export async function coachAccountKey(token,subtle=globalThis.crypto?.subtle){
+  if(!tokenOk(token))return '';
+  if(!subtle)throw Error('Для локальной памяти требуется защищённый контекст HTTPS');
+  const bytes=await subtle.digest('SHA-256',new TextEncoder().encode('johan-chess:github-pat:'+token.trim()));
+  return Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('');
+}
 export function getToken(storage=globalThis.localStorage){try{return storage.getItem(TOKEN_KEY)||'';}catch{return '';}}
 export function setToken(t,storage=globalThis.localStorage){try{t?storage.setItem(TOKEN_KEY,t.trim()):storage.removeItem(TOKEN_KEY);return true;}catch{return false;}}
 export function newRequestId(rand=()=>Math.random().toString(36).slice(2)){return ('c'+Date.now().toString(36)+rand()+rand()).replace(/[^A-Za-z0-9]/g,'').slice(0,40);}

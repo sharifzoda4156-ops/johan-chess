@@ -3,12 +3,13 @@ import {memoryKey,loadMemory,saveMemory,normalizeMemory,shouldCompact,coachHisto
 import {getPuzzleTraining} from './puzzles.js';
 import {snapshotBoards,renderCoachContent} from './coach-board.js';
 import {confirmDialog} from './dialog.js';
-import {askCoach,getToken,setToken,tokenOk} from './coach-client.js';
+import {askCoach,getToken,setToken,tokenOk,coachAccountKey} from './coach-client.js';
+import {normalizeCoachStats} from './coach-training-stats.js';
 const $=id=>document.getElementById(id);
-const CONSENT_KEY='jc-coach-consent',MODEL='qwen3.5-9b';
+const CONSENT_KEY='jc-coach-public-consent-v2:',MODEL='qwen3.5-9b';
 let active=false,connected=false,pendingQuestion='', history=[], contextProvider=null,toolOptions=null,account='',scopeKey=null,visibleMessages=20,memory=normalizeMemory(null,Chess);
-const consentGiven=()=>{try{return localStorage.getItem(CONSENT_KEY)==='1';}catch{return false;}};
-const setConsent=v=>{try{v?localStorage.setItem(CONSENT_KEY,'1'):localStorage.removeItem(CONSENT_KEY);}catch{}};
+const consentGiven=id=>{try{return !!id&&localStorage.getItem(CONSENT_KEY+id)==='1';}catch{return false;}};
+const setConsent=v=>{if(!account)return false;try{v?localStorage.setItem(CONSENT_KEY+account,'1'):localStorage.removeItem(CONSENT_KEY+account);return true;}catch{return false;}};
 function say(text){$('aiStatus').textContent=text;}
 function sayAccount(text){$('aiAccountStatus').textContent=text;}
 function ready(){return active&&!!scopeKey&&$('aiModel').options.length>0;}
@@ -49,7 +50,7 @@ function showHistory(){
  list.scrollTop=list.scrollHeight;$('aiEmpty').hidden=history.length>0||!!pendingQuestion;
 }
 function syncStatus(s){
-  connected=!!s.connected;active=connected&&Boolean(s.sharing);account=connected?'github':'';switchMemory();
+  connected=!!s.connected;active=connected&&Boolean(s.sharing);account=connected?s.account:'';switchMemory();
   document.dispatchEvent(new CustomEvent('jc-account',{detail:{connected,sharing:!!s.sharing,name:connected?'GitHub':''}}));
   $('aiAccount').textContent=connected?'GitHub токен сохранён':'Не подключён';
   $('aiLogin').textContent=connected?'Заменить токен':'Сохранить токен';$('aiLogin').hidden=false;$('aiModelRow').hidden=true;
@@ -61,7 +62,7 @@ function syncStatus(s){
   $('aiModel').disabled=true;$('aiAsk').disabled=!active;
   sayAccount(active?'Тренер подключён.':connected?'Токен сохранён. Разреши отправку данных в GitHub Actions.':'Токен не добавлен.');syncChat();
 }
-async function refresh(){const t=getToken();syncStatus({connected:tokenOk(t),sharing:tokenOk(t)&&consentGiven()});}
+async function refresh(){const t=getToken();let id='';try{id=await coachAccountKey(t);}catch(e){syncStatus({connected:false,sharing:false,account:''});throw e;}syncStatus({connected:!!id,sharing:consentGiven(id),account:id});}
 let busy=false;
 export const coachBusy=()=>busy;
 async function action(fn,settings=false){
@@ -75,7 +76,10 @@ export function initCoach(provider,options){
   contextProvider=provider;toolOptions=options;
   $('coachUnavailable').hidden=true;$('aiPanel').hidden=false;$('aiCancelLogin').hidden=true;
   $('aiLogin').onclick=()=>action(async()=>{const t=$('aiToken').value.trim();if(!tokenOk(t))throw Error('Неверный формат токена (github_pat_… или ghp_…).');if(!setToken(t))throw Error('Не удалось сохранить токен.');$('aiToken').value='';await refresh();},true);
-  $('aiConsent').onclick=()=>action(async()=>{setConsent(true);await refresh();},true);
+  $('aiConsent').onclick=()=>action(async()=>{
+   if(!await confirmDialog({title:'Публичный GitHub Actions',message:'Вопросы, переданные данные и ответы могут быть доступны всем в публичных запусках GitHub. Не отправляй личные или конфиденциальные данные. Локальное удаление диалога не удаляет записи GitHub.',confirmText:'Понимаю, разрешить'}))return;
+   if(!setConsent(true))throw Error('Не удалось сохранить разрешение');await refresh();
+  },true);
   $('aiRefresh').onclick=()=>action(refresh,true);
   $('aiLogout').onclick=()=>action(async()=>{setToken('');setConsent(false);await refresh();},true);
  $('aiModel').onchange=()=>{if(account)try{localStorage.setItem('jc-coach-model:'+account,$('aiModel').value);}catch{}};
@@ -96,12 +100,13 @@ export function initCoach(provider,options){
    const include=$('aiShare').checked&&!!toolOptions?.canAnalyze();
    const g=include&&ctx.game&&['1-0','0-1','1/2-1/2'].includes(ctx.game.result)&&Array.isArray(ctx.game.moves)?ctx.game:null;
    const gamePayload=g?{white:g.white,black:g.black,result:g.result,startFen:g.startFen,moves:g.moves,color:g.color}:null;
+   const stats=include?normalizeCoachStats({games:toolOptions?.trainingStats?.(ctx.user),puzzles:getPuzzleTraining(ctx.user)}):null;
    const profile={goal:memory.goal,focus:memory.focus,notes:memory.notes,summary:memory.shareHistory?memory.summary:''};
    const compact=shouldCompact(memory,history),previous=coachHistory(memory,history),memoryAllowed=memory.shareHistory;
    const sameProfile=()=>requestKey===memoryKey(account,contextProvider().user);
    const memoryUpdate=createMemoryUpdate(memory,()=>memoryAllowed&&$('aiShareHistory').checked&&sameProfile());
    $('aiCacheStatus').textContent='';
-   const result=await askCoach({question,history:previous.map(m=>({role:m.role,content:m.content})),game:gamePayload,profile},{token:getToken(),onStatus:say,isCancelled:()=>!!toolOptions?.onlineLocked?.()});
+   const result=await askCoach({question,history:previous.map(m=>({role:m.role,content:m.content})),game:gamePayload,profile,stats},{token:getToken(),onStatus:say,isCancelled:()=>!!toolOptions?.onlineLocked?.()});
    if(toolOptions?.onlineLocked?.())throw Error('Ответ отменён: онлайн-партия');
    const answer=typeof result.answer==='string'?result.answer.trim():'';if(!answer)throw Error('Пустой ответ');
    const pair=[{role:'user',content:question},{role:'assistant',content:answer,parts:snapshotBoards(answer,g)}];
