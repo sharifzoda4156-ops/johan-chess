@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Engine} from '../public/engine.js';
+import {Engine,formatEngineProgress} from '../public/engine.js';
 test('training uses UCI skill and a timed legal-position search, independent of review search',async()=>{
  const original=globalThis.Worker,commands=[];
  globalThis.Worker=class {
@@ -52,4 +52,31 @@ test('Engine.searchMulti configures MultiPV and collects ranked principal variat
   assert.equal(res.lines[1].score.value,15);
  }finally{e?.close();globalThis.Worker=original;}
 });
+test('Engine handles __jcProgress updates and surfaces __jcError instead of hanging',async()=>{
+ assert.match(formatEngineProgress({loaded:3670016,total:7340032,percent:50,cached:false}),/50%.*3\.5 \/ 7\.0 МБ/);
+ assert.equal(formatEngineProgress({cached:true,percent:100}),'Запускаю Stockfish…');
+ assert.match(formatEngineProgress({fallback:'asm'}),/совместимости/);
+ const original=globalThis.Worker;
+ const seen=[];
+ globalThis.Worker=class {
+  constructor(){this.closed=false;}
+  postMessage(command){
+   if(command==='uci'){
+    queueMicrotask(()=>{
+     if(this.closed)return;
+     this.onmessage({data:{__jcProgress:{loaded:1048576,total:5242880,percent:20,cached:false}}});
+     this.onmessage({data:{__jcError:'WASM init failed in Opera'}});
+    });
+   }
+  }
+  terminate(){this.closed=true;}
+ };
+ let e;
+ try{
+  e=new Engine('mock',{onProgress:p=>seen.push(p.percent)});
+  await assert.rejects(()=>e.init(),/WASM init failed in Opera/);
+  assert.deepEqual(seen,[20]);
+ }finally{e?.close();globalThis.Worker=original;}
+});
+
 

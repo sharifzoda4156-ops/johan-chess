@@ -56,6 +56,11 @@ export async function buildPages({root=new URL('../',import.meta.url),out=new UR
  await rm(outDir,{recursive:true,force:true});
  await mkdir(outDir,{recursive:true});
  await cp(publicDir,outDir,{recursive:true});
+ try{
+  const asmSrc=fileURLToPath(new URL('node_modules/stockfish/bin/stockfish-18-asm.js',root));
+  await access(asmSrc);
+  await cp(asmSrc,join(outDir,'engine','stockfish-18-asm.js'));
+ }catch{}
 
  const htmlFile=join(outDir,'index.html');
  const html=await readFile(htmlFile,'utf8');
