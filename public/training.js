@@ -3,7 +3,7 @@ import {findKingSquare,renderMaterial} from './material.js';
 import {playSound,soundForMove,isSoundEnabled,saveSoundEnabled} from './sound.js';
 import {confirmDialog} from './dialog.js';
 import {Chess} from './chess.js';
-import {Engine} from './engine.js';
+import {Engine,formatEngineProgress} from './engine.js';
 import {enginePath} from './engine-path.js';
 import {LEVELS,DEFAULT_ADAPTIVE,CONTROLS,opposite,resultFor,clockText,liveClockText,makeClock,remaining,nextClock,terminal,flagResult,adaptiveLevel,parseUci} from './training-core.js';
 const $=id=>document.getElementById(id);
@@ -412,7 +412,8 @@ export function initTraining({canStart,lock,unlock,review,getUser,goHome,goOnlin
   pushChat(s,'Stockfish · ур. '+level,'Привет! Уровень Stockfish '+level+'. Удачи в партии!');
   status('Запускаю Stockfish…');draw();
   try{
-   s.engine=new Engine(enginePath);await s.engine.init();if(session!==s)return false;
+   s.engine=new Engine(enginePath,{onProgress:p=>{if(session===s&&s.starting)status(formatEngineProgress(p));}});
+   await s.engine.init();if(session!==s)return false;
    await s.engine.setSkill(level);if(session!==s)return false;
    s.starting=false;s.clock=makeClock(control,game.turn(),performance.now());
    s.frames[0].clock=cloneClock(s.clock);

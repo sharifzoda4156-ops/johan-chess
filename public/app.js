@@ -17,7 +17,7 @@ import {hasOpenDialog,closeOpenDialog} from './dialog.js';
 import {initCoach,rememberGame,coachBusy} from './android-coach.js';
 import {Chess} from './chess.js';
 import {normalizePgn,splitPgn,buildPgn} from './pgn.js';
-import {Engine,setEngineOnlineLock} from './engine.js';
+import {Engine,setEngineOnlineLock,formatEngineProgress,warmEngineCache} from './engine.js';
 import {enginePath} from './engine-path.js';
 import {MOVE_CLASSES,classifyMove,isSacrificeMove,estimateGameRating,isKeyClass,winChance,displayScore,scoreValue} from './metrics.js';
 const $=id=>document.getElementById(id), status=t=>{$('status').textContent=t;$('reviewBoardStatus').textContent=t;};
@@ -155,7 +155,7 @@ $('analyze').onclick=async()=>{
   if(id!==runId)return;
   detectedOpening=matchOpening(moves);
   const bookPlies=detectedOpening?Math.min(detectedOpening.ply,12):0;
-  status('Запускаю Stockfish…');local=new Engine(enginePath);engine=local;await local.init();const prefix=[];
+  status('Запускаю Stockfish…');local=new Engine(enginePath,{onProgress:p=>{if(id===runId)status(formatEngineProgress(p));}});engine=local;await local.init();const prefix=[];
   for(let i=0;i<moves.length;i++){
    if(id!==runId)return;
    const m=moves[i],actualMove=uci(m);
@@ -243,7 +243,7 @@ async function requestReviewHint(){
  status('Stockfish ищет лучшую подсказку…');renderBoard();
  try{
   if(hintEngine){hintEngine.close();hintEngine=null;}
-  const local=new Engine(enginePath);hintEngine=local;
+  const local=new Engine(enginePath,{onProgress:p=>{if(hintEngine===local)status(formatEngineProgress(p));}});hintEngine=local;
   await local.init();
   await local.setSkill(20);
   const best=await local.choose(fen,[],550);
@@ -629,3 +629,5 @@ $('askReview').onclick=()=>{
  $('aiQuestion').value=historical?'Разбери историческую партию '+historical.title+'. Объясни ключевые идеи, сильные ходы и критические ошибки обеих сторон по анализу Stockfish. Покажи мини-доски и выводы для моей игры.':'Разбери мою партию по данным Stockfish. Выдели главные ошибки, объясни их причины и предложи конкретную тренировку. Задай мне вопрос о том, что я рассчитывал в критической позиции.';
  $('aiPanel').scrollIntoView({behavior:scrollBehavior()});$('aiQuestion').focus();
 };
+if(!globalThis.JohanNative)setTimeout(()=>{if(!onlineLocked)warmEngineCache(enginePath);},1500);
+
