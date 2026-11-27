@@ -10,6 +10,7 @@ import {decodePayload,classify,buildMessages,criticalPositionFacts} from '../lib
 import {createGameTools,runCoachAgent,GAME_TOOLS} from '../lib/coach-agent.mjs';
 import {createStudyTools,combineCoachTools} from '../lib/coach-study-tools.mjs';
 import {createSearchCollector,verifiedSearchLine} from '../lib/coach-stockfish-line.mjs';
+import {createAnswerVerifier,ANSWER_RULES} from '../lib/coach-answer-verifier.mjs';
 
 const require=createRequire(import.meta.url);
 const out=process.env.COACH_OUT||'out/answer.json';
@@ -65,8 +66,10 @@ try{
   const {rows,facts,fens,searchLines}=payload.game?await analyze(payload.game):{rows:[],facts:[],fens:[],searchLines:[]};
   const gameTools=createGameTools({game:payload.game,rows,fens,searchLines,Chess});
   const {execute,schemas}=combineCoachTools(gameTools,createStudyTools({Chess}),GAME_TOOLS);
+  const verifier=createAnswerVerifier({game:payload.game,fens,Chess});
   const messages=buildMessages(payload,rows,facts);
-  const {answer,usage}=await runCoachAgent({messages,request,execute,schemas});
+  messages[0]={...messages[0],content:messages[0].content+'\n'+ANSWER_RULES};
+  const {answer,usage}=await runCoachAgent({messages,request,execute:async(name,args)=>verifier.record(name,await execute(name,args)),schemas,verifyAnswer:verifier.verify});
   if(!answer)throw Error('Пустой ответ модели');
   save({ok:true,answer,usage});
   console.log('answer ready,',answer.length,'chars');

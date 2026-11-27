@@ -14,7 +14,7 @@ test('real Stockfish runner returns a legal stored PV through the tool protocol'
     let body='';for await(const chunk of req)body+=chunk;
     try{
       requests.push(JSON.parse(body));
-      const message=requests.length===1?{content:null,tool_calls:[{id:'sf1',type:'function',function:{name:'stockfish_move',arguments:'{"ply":0}'}}]}:{content:'Проверенный ответ'};
+      const message=requests.length===1?{content:null,tool_calls:[{id:'sf1',type:'function',function:{name:'stockfish_move',arguments:'{"ply":0}'}}]}:{content:'Проверенный вариант: [[pv:0]]'};
       res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({choices:[{message}]}));
     }catch{res.writeHead(500);res.end();}
   });
@@ -38,7 +38,10 @@ test('real Stockfish runner returns a legal stored PV through the tool protocol'
     assert.ok(data.pvSan.length>=1&&data.pvSan.length<=8);
     assert.equal(data.bestSan,data.pvSan[0]);
     for(const san of data.pvSan)assert.ok(chess.move(san,{strict:true}));
-    assert.equal(JSON.parse(await readFile(out,'utf8')).answer,'Проверенный ответ');
+    assert.equal(data.lineRef,'[[pv:0]]');
+    const answer=JSON.parse(await readFile(out,'utf8')).answer;
+    assert.ok(answer.startsWith('Проверенный вариант: 1. '+data.bestSan));
+    assert.ok(!answer.includes('[[pv:'));
   }finally{
     if(child&&child.exitCode===null)child.kill('SIGKILL');
     server.closeAllConnections();await new Promise(resolve=>server.close(resolve));
