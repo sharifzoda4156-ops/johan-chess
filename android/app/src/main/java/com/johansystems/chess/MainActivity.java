@@ -21,7 +21,6 @@ public final class MainActivity extends Activity {
     private static final int REQ_SAVE_FILE = 1002;
     private static final Pattern MSG_ID = Pattern.compile("\"id\"\\s*:\\s*\"([^\"]{1,64})\"");
     private WebView web;
-    private Coach coach;
     private GameShare gameShare;
     private final ExecutorService shareExecutor=Executors.newSingleThreadExecutor();
     private boolean resumed=false,confirmingExit=false;
@@ -104,30 +103,11 @@ public final class MainActivity extends Activity {
             }
         });
         web.setDownloadListener((url,agent,disposition,mime,length)->{});
-        try { coach=new Coach(this); } catch(Exception ignored) {}
         try { lichess=new Lichess(this);onlineSecure(lichess.locked()); } catch(Exception ignored) {}
         if(WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)){
-            WebViewCompat.addWebMessageListener(web,"JohanNative",Collections.singleton(ORIGIN),(view,msg,origin,main,reply)->{
-                if(!main||!ORIGIN.equals(origin.toString()))return;
-                String raw=msg.getData();
-                if(raw==null||raw.length()>350000){rejectOversized(reply,raw,"Сообщение слишком большое");return;}
-                try{JSONObject req=new JSONObject(raw);if(Arrays.asList("cancelLogin","loginProgress").contains(req.optString("op"))){if(coach!=null&&"cancelLogin".equals(req.optString("op")))coach.cancelLogin();reply.postMessage(new JSONObject().put("id",req.getString("id")).put("data",new JSONObject().put("ok",true).put("stage",coach==null?"":coach.loginStage())).toString());return;}}catch(Exception ignored){}
-                executor.execute(()->{
-                    JSONObject out=new JSONObject();
-                    try {
-                        JSONObject req=new JSONObject(raw);
-                        out.put("id",req.getString("id"));
-                        if(coach==null)throw new IOException("Защищённое хранилище недоступно");
-                        if((protectedOnline||lichess!=null&&lichess.locked())&&Arrays.asList("ask","continueCoach").contains(req.optString("op")))throw new IOException("ИИ недоступен во время онлайн-партии");
-                        JSONObject data=coach.handle(req);
-                        if((protectedOnline||lichess!=null&&lichess.locked())&&Arrays.asList("ask","continueCoach").contains(req.optString("op")))throw new IOException("ИИ недоступен во время онлайн-партии");
-                        out.put("data",data);
-                    } catch(Exception e) {
-                        try { out.put("error", e.getMessage()==null?"Ошибка подключения":e.getMessage()); } catch(Exception ignored){}
-                    }
-                    runOnUiThread(()->{if(!isDestroyed())try{reply.postMessage(out.toString());}catch(Exception ignored){}});
-                });
-            });
+            // JohanNative is kept only as the "running inside the Android app" marker used by the web code.
+            // The AI coach now runs through GitHub Actions from the web layer (see public/coach-client.js).
+            WebViewCompat.addWebMessageListener(web,"JohanNative",Collections.singleton(ORIGIN),(view,msg,origin,main,reply)->{});
             WebViewCompat.addWebMessageListener(web,"JohanShare",Collections.singleton(ORIGIN),(view,msg,origin,main,reply)->{
                 if(!main||!ORIGIN.equals(origin.toString()))return;
                 String raw=msg.getData();
@@ -285,7 +265,7 @@ public final class MainActivity extends Activity {
     void openBrowser(String url) {
         runOnUiThread(()->{
             try { if(protectedOnline)return;startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url))); }
-            catch(Exception e) { if(coach!=null)coach.cancelLogin(); }
+            catch(Exception ignored) {}
         });
     }
     void shareLichess(String url){runOnUiThread(()->{if(protectedOnline)return;Intent intent=new Intent(Intent.ACTION_SEND);intent.setType("text/plain");intent.putExtra(Intent.EXTRA_TEXT,url);startActivity(Intent.createChooser(intent,"Поделиться профилем Lichess"));});}
@@ -322,7 +302,6 @@ public final class MainActivity extends Activity {
         if(fileChooserCallback!=null){fileChooserCallback.onReceiveValue(null);fileChooserCallback=null;}
         pendingSaveReply=null;pendingSaveId=null;pendingSaveBytes=null;
         if(lichess!=null)lichess.close();lichessExecutor.shutdownNow();
-        if(coach!=null)coach.cancelLogin();
         executor.shutdownNow();shareExecutor.shutdownNow();
         if(web!=null)web.destroy();
         super.onDestroy();
