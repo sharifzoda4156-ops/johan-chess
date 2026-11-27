@@ -4,7 +4,7 @@ import {findKingSquare,renderMaterial} from './material.js';
 import {playSound,soundForMove,isSoundEnabled,saveSoundEnabled} from './sound.js';
 import {confirmDialog} from './dialog.js';
 import {liveClockText} from './training-core.js';
-import {matchControl,validNick,validGameId,readOnlineGame,serverClock,resultText,completedPgn} from './online-core.js';
+import {matchControl,validNick,validGameId,readOnlineGame,firstMoveRemaining,serverClock,resultText,completedPgn} from './online-core.js';
 import {createWebLichess} from './lichess-web.js';
 
 const $=id=>document.getElementById(id),native=globalThis.JohanLichess;
@@ -31,7 +31,7 @@ function statusReason(status){
 }
 
 export function initOnline({canStart,lock,review,openOnline}){
- let snap={connected:false,locked:false},game=null,signature='',receivedAt=0,selected=null,promotion=[],sending=false,awaiting=false,awaitingSlow=false,awaitTimer=null,optimistic=null,working=false,polling=false,active=false,uiLock=false,history=[],friendRows=[],lastAccount='',error='',syncAttempt='',lastGame='',challengeKey='',claimAt=0;
+ let snap={connected:false,locked:false},game=null,signature='',receivedAt=0,selected=null,promotion=[],sending=false,awaiting=false,awaitingSlow=false,awaitTimer=null,optimistic=null,working=false,polling=false,pollQueued=false,active=false,uiLock=false,history=[],friendRows=[],lastAccount='',error='',syncAttempt='',lastGame='',challengeKey='',claimAt=0;
  let frames=[],sans=[],renderedStripSig='',viewPly=null,hasUnreadMove=false,flipped=false,optionsOpen=false,chatOpen=false,viewingFinished=false,resultDismissedFor='',chatLines=[],chatSig='',seenChatCount=0,chatSending=false;
  const webClient=native?null:createWebLichess({onUpdate:s=>handlePush(s)});
  const call=(op,args={})=>native?nativeCall(op,args):webClient.call(op,args);
@@ -125,13 +125,22 @@ export function initOnline({canStart,lock,review,openOnline}){
   }
   if(!game)return;
   const viewGame=optimistic?{...game,game:optimistic.game,moves:[...game.moves,optimistic.uci]}:game;
-  const times=serverClock(viewGame,Math.max(0,performance.now()-receivedAt));
+  const elapsed=Math.max(0,performance.now()-receivedAt);
+  const times=serverClock(viewGame,elapsed);
   const topColor=flipped?game.color:(game.color==='w'?'b':'w');
   const bottomColor=topColor==='w'?'b':'w';
   const topMs=times[topColor],bottomMs=times[bottomColor];
   text('onlineTopClock',liveClockText(topMs));text('onlineBottomClock',liveClockText(bottomMs));
   $('onlineTopClock').classList.toggle('low-time',!game.done&&topMs<20000);
   $('onlineBottomClock').classList.toggle('low-time',!game.done&&bottomMs<20000);
+  if(!game.done&&!snap.needsSync&&!awaitingSlow){
+   const fm=firstMoveRemaining(viewGame,elapsed);
+   if(fm!==null){
+    const sec=Math.ceil(fm/1000);
+    const mineTurn=viewGame.game.turn()===game.color;
+    text('onlineTurn',mineTurn?`Твой 1-й ход · ${sec} с`:`Ждём 1-й ход соперника · ${sec} с`);
+   }
+  }
  }
  function syncMoveStrip(liveSans,activePly){
   const list=$('onlineMoveStrip');if(!list)return;
@@ -209,7 +218,11 @@ export function initOnline({canStart,lock,review,openOnline}){
   if($('onlineDraw')?.querySelector('span'))$('onlineDraw').querySelector('span').textContent=game.drawOffer?'Принять ничью':'Предложить ничью';
   syncMoveStrip(sansList,displayPly);
   $('onlineTopClock').classList.toggle('running',!game.done&&turn===topColor);$('onlineBottomClock').classList.toggle('running',!game.done&&turn===bottomColor);
-  for(const id of ['onlineResign','onlineDraw','onlineDrawNo','onlineDrawAccept']){if($(id))$(id).disabled=working||sending||game.done||snap.needsSync;}
+  const canAbort=!game.done&&game.moves.length<2;
+  if($('onlineAbort'))$('onlineAbort').hidden=!canAbort;
+  if($('onlineResign'))$('onlineResign').hidden=game.done||canAbort;
+  if($('onlineDraw'))$('onlineDraw').hidden=game.done||canAbort;
+  for(const id of ['onlineAbort','onlineResign','onlineDraw','onlineDrawNo','onlineDrawAccept']){if($(id))$(id).disabled=working||sending||game.done||snap.needsSync;}
   if($('onlineResultCard')){
    const showRes=game.done&&viewingFinished&&resultDismissedFor!==snap.gameId;
    $('onlineResultCard').hidden=!showRes;
@@ -279,7 +292,7 @@ export function initOnline({canStart,lock,review,openOnline}){
    action(refresh);
   }
  }
- async function action(fn){if(working)return;working=true;error='';controls();try{await fn();}catch(e){say(e.message||'Ошибка Lichess');}finally{working=false;controls();draw();}}
+ async function action(fn){if(working)return;working=true;error='';controls();try{await fn();}catch(e){say(e.message||'Ошибка Lichess');}finally{working=false;controls();draw();if(native&&pollQueued&&!document.hidden){pollQueued=false;poll();}}}
  async function refresh(){apply(await call('refresh'));if(!snap.needsSync){clearOptimistic();draw();}}
  function begin(op,args){if(working||uiLock||!canStart())return;if(!snap.eventReady){say('Обнови подключение');return;}setLock(true);action(async()=>{try{apply(await call(op,args));}catch(e){try{apply(await call('snapshot'));}catch{}throw e;}});}
  function params(){const [minutes,increment]=$('onlineControl').value.split('+').map(Number);return {minutes,increment,rated:$('onlineRated').checked};}
@@ -396,6 +409,8 @@ export function initOnline({canStart,lock,review,openOnline}){
  if($('onlineFlipToggle'))$('onlineFlipToggle').onclick=()=>{flipped=!flipped;setOptionsOpen(false);draw();};
  if($('onlineSoundToggle'))$('onlineSoundToggle').onchange=e=>{saveSoundEnabled(e.target.checked);const p=$('soundEnabled');if(p)p.checked=e.target.checked;if(e.target.checked)playSound('move');};
  if($('onlineMotionSelect'))$('onlineMotionSelect').onchange=e=>{setBoardMotion(e.target.value);};
+ if($('onlineSignal'))$('onlineSignal').onclick=()=>action(refresh);
+ if($('onlineAbort'))$('onlineAbort').onclick=()=>{setOptionsOpen(false);gameAction('abort',{title:'Отменить партию?',message:'Партия будет отменена на Lichess без изменения рейтинга.',confirmText:'Отменить партию'});};
  $('onlineResign').onclick=()=>{setOptionsOpen(false);gameAction('resign',{title:'Сдаться в онлайн-партии?',message:'Партия на Lichess завершится вашим поражением.',confirmText:'Сдаться',danger:true});};
  $('onlineClaimVictory').onclick=()=>{if(snap.claimReady)gameAction('claim-victory',{title:'Потребовать победу?',message:'Соперник покинул игру. Зафиксировать победу на Lichess?',confirmText:'Потребовать победу'});};
  $('onlineClaimDraw').onclick=()=>{if(snap.claimReady)gameAction('claim-draw',{title:'Зафиксировать ничью?',message:'Завершить партию вничью из-за ухода соперника?',confirmText:'Ничья'});};
@@ -418,13 +433,17 @@ export function initOnline({canStart,lock,review,openOnline}){
  });
 
  async function poll(){
-  if(polling||working||document.hidden)return;
+  if(document.hidden)return;
+  if(polling||working){pollQueued=true;return;}
   polling=true;
   try{
    const s=await call('snapshot');
    handlePush(s);
   }catch(e){if(active)say(e.message);}
-  finally{polling=false;}
+  finally{
+   polling=false;
+   if(pollQueued&&!working&&!document.hidden){pollQueued=false;poll();}
+  }
  }
 
  // Prevent accidental tab close during a live web Lichess game

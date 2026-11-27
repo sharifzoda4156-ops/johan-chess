@@ -88,7 +88,7 @@ export function createWebLichess({
  now=()=>Date.now()
 }={}){
  let token='',username='',account={},full=null,state=null,ongoing=[],incoming=[],chat=[],gameId='',notice='';
- let terminal=false,needsSync=false,rateUntil=0,revision=0;
+ let terminal=false,needsSync=false,rateUntil=0,revision=0,gameStartedAt=0,disposed=false,reconnectTimer=null;
  let eventsStream=null,gameStream=null,waitStream=null;
  const opponent=createOpponentPresence();
 
@@ -191,7 +191,19 @@ export function createWebLichess({
   try{s.controller.abort();}catch{}
  }
 
+ function clearReconnect(){if(reconnectTimer!==null){clearTimeout(reconnectTimer);reconnectTimer=null;}}
+ function scheduleReconnect(delay=2500){
+  if(disposed||!token||reconnectTimer!==null)return;
+  reconnectTimer=setTimeout(()=>{
+   reconnectTimer=null;
+   if(disposed||!token)return;
+   if(!eventsStream)eventsStream=startStream('events','/api/stream/event','GET',null);
+   if(live()&&!gameStream)gameStream=startStream('game','/api/board/game/stream/'+gameId,'GET',null);
+  },delay);
+ }
+
  function stopStreams(){
+  clearReconnect();
   cancelStream(eventsStream);cancelStream(gameStream);cancelStream(waitStream);
   eventsStream=gameStream=waitStream=null;
  }
@@ -244,7 +256,7 @@ export function createWebLichess({
   if(next===gameId&&gameStream)return;
   if(gameStream){cancelStream(gameStream);gameStream=null;}
   if(waitStream){cancelStream(waitStream);waitStream=null;}
-  revision++;gameId=next;terminal=false;needsSync=true;full=null;state=null;chat=[];
+  revision++;gameId=next;gameStartedAt=now();terminal=false;needsSync=true;full=null;state=null;chat=[];
   opponent.reset();notice='Подключаюсь к партии';
   gameStream=startStream('game','/api/board/game/stream/'+next,'GET',null);
   emit();
@@ -273,8 +285,9 @@ export function createWebLichess({
    }
   }else if(s===gameStream){
    if(type==='gameFull'){
-    full=msg;state=msg.state;
+    revision++;full=msg;state=msg.state;
    }else if(type==='gameState'&&full){
+    revision++;
     const oldMoves=state?.moves||'',newMoves=msg.moves||'';
     if(opponent.gone()&&newMoves!==oldMoves&&newMoves.startsWith(oldMoves)){
      const before=oldMoves.trim()?oldMoves.trim().split(/\s+/).length:0;
@@ -317,15 +330,20 @@ export function createWebLichess({
    notice=errMsg||'Поток событий закрыт';
    if(waitStream){cancelStream(waitStream);waitStream=null;needsSync=true;revision++;}
    emit();
+   scheduleReconnect();
   }else if(s===waitStream){
-   revision++;waitStream=null;needsSync=true;
-   notice=errMsg||'Поиск завершён. Проверяю партии…';
+   waitStream=null;
+   if(!gameId||!gameStream){
+    revision++;needsSync=true;
+    notice=errMsg||'Поиск завершён. Проверяю партии…';
+   }
    emit();
   }else if(s===gameStream){
    gameStream=null;
    if(!terminal){
     revision++;needsSync=true;opponent.reset();
-    notice=errMsg||'Связь потеряна. Нажми «Обновить».';
+    notice=errMsg||'Связь потеряна. Восстанавливаю соединение…';
+    scheduleReconnect();
    }
    emit();
   }
@@ -352,16 +370,21 @@ export function createWebLichess({
    }
   }
   if(next){
-   if(!gameStream||next!==gameId||needsSync){
+   if(!gameStream||next!==gameId){
     if(gameStream){cancelStream(gameStream);gameStream=null;}
     startGame(next);
+   }else{
+    needsSync=false;
    }
   }else if(!waitStream){
-   if(gameId&&!terminal){
-    if(gameStream){cancelStream(gameStream);gameStream=null;}
-    gameId='';full=state=null;notice='Партия завершена на Lichess. Проверь историю.';
+   const recentlyStarted=!!(gameId&&!terminal&&gameStream&&(now()-gameStartedAt)<15000);
+   if(!recentlyStarted){
+    if(gameId&&!terminal){
+     if(gameStream){cancelStream(gameStream);gameStream=null;}
+     gameId='';full=state=null;notice='Партия завершена на Lichess. Проверь историю.';
+    }
+    opponent.reset();needsSync=false;
    }
-   opponent.reset();needsSync=false;
   }
   if(!notice.startsWith('Партия завершена'))notice='';
   emit();
@@ -498,7 +521,7 @@ export function createWebLichess({
    const m=String(r.move||'');
    if(!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(m))throw Error('Неверный ход');
    suffix='move/'+m;
-  }else if(['resign','draw/yes','draw/no','claim-victory','claim-draw'].includes(act)){
+  }else if(['abort','resign','draw/yes','draw/no','claim-victory','claim-draw'].includes(act)){
    suffix=act;
   }else throw Error('Неизвестное действие');
   return jsonReq('/api/board/game/'+target+'/'+suffix,'POST','');
@@ -563,6 +586,6 @@ export function createWebLichess({
   call,
   snapshot,
   consumeOAuthCallback,
-  dispose:stopStreams
+  dispose:()=>{disposed=true;stopStreams();}
  };
 }

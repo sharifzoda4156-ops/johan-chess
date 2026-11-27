@@ -5,7 +5,7 @@ export const validGameId=s=>typeof s==='string'&&/^[A-Za-z0-9]{8}$/.test(s);
 export function matchControl(minutes,increment,direct=false){
  return [3,5,10,15,30].includes(minutes)&&[0,2,3,5,10,20].includes(increment)&&minutes*60+40*increment>=(direct?180:480);
 }
-export function readOnlineGame(full,state,username,Chess){
+ export function readOnlineGame(full,state,username,Chess){
  if(!full||!state||full.variant?.key!=='standard'||!validGameId(full.id))throw Error('Поддерживаются только стандартные шахматы');
  const nick=String(username).toLowerCase(),color=String(full.white?.id||'').toLowerCase()===nick?'w':String(full.black?.id||'').toLowerCase()===nick?'b':null;
  if(!color)throw Error('Эта партия не принадлежит аккаунту');
@@ -14,7 +14,14 @@ export function readOnlineGame(full,state,username,Chess){
  const moves=state.moves.trim()?state.moves.trim().split(/\s+/):[];
  for(const u of moves){if(!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(u))throw Error('Неверный ход сервера');game.move({from:u.slice(0,2),to:u.slice(2,4),...(u.length===5?{promotion:u[4]}:{})});}
  const ms=x=>Number.isFinite(x)?Math.max(0,x):0;
- return {game,moves,color,done:finishedStatus(state.status),status:state.status,winner:state.winner,white:full.white,black:full.black,wtime:ms(state.wtime),btime:ms(state.btime),drawOffer:color==='w'?!!state.bdraw:!!state.wdraw};
+ const done=finishedStatus(state.status);
+ const expMs=Number(full.expiration?.millisToMove);
+ const firstMoveMs=!done&&state.status==='started'&&moves.length<2?(Number.isFinite(expMs)&&expMs>0?expMs:30000):null;
+ return {game,moves,color,done,status:state.status,winner:state.winner,white:full.white,black:full.black,wtime:ms(state.wtime),btime:ms(state.btime),firstMoveMs,drawOffer:color==='w'?!!state.bdraw:!!state.wdraw};
+}
+export function firstMoveRemaining(s,elapsed){
+ if(!s||s.done||s.status!=='started'||s.moves.length>=2||!Number.isFinite(s.firstMoveMs))return null;
+ return Math.max(0,s.firstMoveMs-Math.max(0,elapsed));
 }
 export function serverClock(s,elapsed){
  const e=!s.done&&s.moves.length>=2&&s.status==='started'?Math.max(0,elapsed):0;

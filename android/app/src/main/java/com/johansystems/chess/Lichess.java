@@ -41,7 +41,7 @@ final class Lichess {
     private final ScheduledExecutorService watchdog=Executors.newSingleThreadScheduledExecutor();
     private final ConnectivityManager connectivity;
     private boolean foreground=false,transportLost=false,maintenanceQueued=false;
-    private long nextMaintenance=0;
+    private long nextMaintenance=0,gameStartedAt=0;
     Lichess(MainActivity a)throws Exception{
         activity=a;prefs=a.getSharedPreferences("lichess",0);
         KeyStore ks=KeyStore.getInstance("AndroidKeyStore");ks.load(null);
@@ -79,15 +79,22 @@ final class Lichess {
     synchronized boolean locked(){return needsSync||waiting!=null||(!gameId.isEmpty()&&!terminal);}
     private boolean live(){return !gameId.isEmpty()&&!terminal;}
     private boolean connectedNetwork(){
-        try{Network n=connectivity.getActiveNetwork();NetworkCapabilities c=n==null?null:connectivity.getNetworkCapabilities(n);return c!=null&&c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)&&c.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);}
-        catch(Exception e){return false;}
+        try{Network n=connectivity.getActiveNetwork();NetworkCapabilities c=n==null?null:connectivity.getNetworkCapabilities(n);return c!=null&&c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);}
+        catch(Exception e){return true;}
     }
     private synchronized void persistLock(){
         SharedPreferences.Editor p=prefs.edit().putBoolean("onlineLock",locked());
         if(live())p.putString("activeGame",gameId);else p.remove("activeGame");
         p.commit();activity.onlineSecure(locked());activity.notifyLichessUpdate();
     }
-    synchronized void foreground(boolean value){foreground=value;}
+    synchronized void foreground(boolean value){
+        foreground=value;
+        if(value&&!closed&&!token.isEmpty()){
+            nextMaintenance=0;
+            if(events==null){events=new Stream("events","/api/stream/event","GET",null);events.start();}
+            if(live()&&game==null){game=new Stream("game","/api/board/game/stream/"+gameId,"GET",null);game.start();}
+        }
+    }
     synchronized void background(){
         foreground=false;
         if(game!=null&&live()){
@@ -144,6 +151,9 @@ final class Lichess {
         if(data!=null)try(OutputStream out=c.getOutputStream()){out.write(data.getBytes(StandardCharsets.UTF_8));}
         int code=c.getResponseCode();
         if(code==429)rateUntil=System.currentTimeMillis()+60000;
+        if(code==401&&!token.isEmpty()){
+            synchronized(this){stopStreams();try{save("","");}catch(Exception ignored){token="";username="";}account=new JSONObject();incoming=ongoing=chat=new JSONArray();gameId="";full=state=null;terminal=false;needsSync=false;transportLost=false;persistLock();}
+        }
         if(code<200||code>=300)throw new IOException("Lichess HTTP "+code+(code==401?" · войди заново":code==429?" · подожди минуту":""));
     }
     private static String read(InputStream in,int limit)throws Exception{
@@ -225,12 +235,12 @@ final class Lichess {
     private static boolean finished(String s){return Arrays.asList("aborted","mate","resign","stalemate","timeout","draw","outoftime","cheat","noStart","unknownFinish","variantEnd").contains(s);}
     private synchronized void startGame(String raw)throws Exception{
         String next=id(raw);
-        if(next.equals(gameId)&&game!=null)return;
+        if(next.equals(gameId)&&game!=null&&!transportLost)return;
         if(game!=null){game.cancel();game=null;}if(waiting!=null){waiting.cancel();waiting=null;}
-        revision++;gameId=next;terminal=false;needsSync=true;full=null;state=null;chat=new JSONArray();
+        revision++;gameId=next;gameStartedAt=SystemClock.elapsedRealtime();terminal=false;needsSync=true;full=null;state=null;chat=new JSONArray();
         opponent.reset();transportLost=true;
         notice="Подключаюсь к партии";persistLock();
-        if(foreground){game=new Stream("game","/api/board/game/stream/"+next,"GET",null);game.start();}
+        if(!closed){game=new Stream("game","/api/board/game/stream/"+next,"GET",null);game.start();}
     }
     private synchronized void receive(Stream s,JSONObject msg)throws Exception{
         if(s.canceled||closed)return;
@@ -251,8 +261,9 @@ final class Lichess {
             }
             else if("gameFinish".equals(type)&&!terminal){JSONObject g=msg.optJSONObject("game");if(g!=null&&gameId.equals(g.optString("gameId",g.optString("id")))){revision++;needsSync=true;persistLock();}}
         }else if(s==game){
-            if("gameFull".equals(type)){full=msg;state=msg.getJSONObject("state");}
+            if("gameFull".equals(type)){revision++;full=msg;state=msg.getJSONObject("state");}
             else if("gameState".equals(type)&&full!=null){
+                revision++;
                 String oldMoves=state==null?"":state.optString("moves"),newMoves=msg.optString("moves");
                 // An actual opponent move is also proof of return, even if a gone:false event was lost.
                 if(opponent.gone()&&!newMoves.equals(oldMoves)&&newMoves.startsWith(oldMoves)){
@@ -290,7 +301,11 @@ final class Lichess {
     private synchronized void ended(Stream s,String error){
         if(closed||s.canceled)return;
         if(s==events){events=null;notice=error.isEmpty()?"Поток событий закрыт":error;if(waiting!=null){waiting.cancel();waiting=null;needsSync=true;revision++;persistLock();}else activity.notifyLichessUpdate();}
-        else if(s==waiting){revision++;waiting=null;needsSync=true;notice=error.isEmpty()?"Поиск завершён. Проверяю партии…":error;persistLock();}
+        else if(s==waiting){
+            waiting=null;
+            if(gameId.isEmpty()||game==null){revision++;needsSync=true;notice=error.isEmpty()?"Поиск завершён. Проверяю партии…":error;persistLock();}
+            else activity.notifyLichessUpdate();
+        }
         else if(s==game){game=null;if(!terminal){revision++;needsSync=true;transportLost=true;opponent.reset();notice=error.isEmpty()?"Связь потеряна. Восстанавливаю соединение.":error;persistLock();}}
     }
     private JSONObject refresh()throws Exception{
@@ -304,8 +319,16 @@ final class Lichess {
             if(before!=revision)return snapshot();
             String next="";
             for(int i=0;i<playing.length();i++){JSONObject p=playing.getJSONObject(i);if(!"correspondence".equals(p.optString("speed"))){next=id(p.getString("gameId"));if(next.equals(gameId))break;}}
-            if(!next.isEmpty()){if(game==null||!next.equals(gameId)||needsSync){if(game!=null){game.cancel();game=null;}startGame(next);}}
-            else if(waiting==null){if(!gameId.isEmpty()&&!terminal){if(game!=null)game.cancel();game=null;gameId="";full=state=null;chat=new JSONArray();notice="Партия завершена на Lichess. Проверь историю.";}opponent.reset();transportLost=false;needsSync=false;persistLock();}
+            if(!next.isEmpty()){
+                if(game==null||!next.equals(gameId)||transportLost){if(game!=null){game.cancel();game=null;}startGame(next);}
+                else{needsSync=false;persistLock();}
+            }else if(waiting==null){
+                boolean recentlyStarted=!gameId.isEmpty()&&!terminal&&game!=null&&(SystemClock.elapsedRealtime()-gameStartedAt)<15000L;
+                if(!recentlyStarted){
+                    if(!gameId.isEmpty()&&!terminal){if(game!=null)game.cancel();game=null;gameId="";full=state=null;chat=new JSONArray();notice="Партия завершена на Lichess. Проверь историю.";}
+                    opponent.reset();transportLost=false;needsSync=false;persistLock();
+                }
+            }
             if(!notice.startsWith("Партия завершена"))notice="";return snapshot();
         }
     }
@@ -340,17 +363,17 @@ final class Lichess {
     private JSONObject action(JSONObject r)throws Exception{
         String target=id(r.getString("gameId")),action=r.getString("action"),suffix;
         if("chat".equals(action)){
-            synchronized(this){if(!target.equals(gameId)||!foreground||needsSync||full==null||state==null)throw new IOException("Нет подключённой партии");}
+            synchronized(this){if(!target.equals(gameId)||needsSync||full==null||state==null)throw new IOException("Нет подключённой партии");}
             String txt=r.optString("text","").trim();
             if(txt.isEmpty()||txt.length()>140)throw new IOException("Сообщение должно быть от 1 до 140 символов");
             return json("/api/board/game/"+target+"/chat","POST",form("room","player","text",txt));
         }
         synchronized(this){
-            if(!target.equals(gameId)||terminal||!foreground||needsSync||full==null||state==null||game==null||!game.ready)throw new IOException("Нет активной подключённой партии");
+            if(!target.equals(gameId)||terminal||needsSync||full==null||state==null||game==null||!game.ready)throw new IOException("Нет активной подключённой партии");
             if(("claim-victory".equals(action)||"claim-draw".equals(action))&&!opponent.canClaim(SystemClock.elapsedRealtime()))throw new IOException("Lichess ещё не разрешил завершить партию");
         }
         if("move".equals(action)){String m=r.getString("move");if(!m.matches("[a-h][1-8][a-h][1-8][qrbn]?"))throw new IOException("Неверный ход");suffix="move/"+m;}
-        else if(Arrays.asList("resign","draw/yes","draw/no","claim-victory","claim-draw").contains(action))suffix=action;
+        else if(Arrays.asList("abort","resign","draw/yes","draw/no","claim-victory","claim-draw").contains(action))suffix=action;
         else throw new IOException("Неизвестное действие");
         return json("/api/board/game/"+target+"/"+suffix,"POST","");
     }

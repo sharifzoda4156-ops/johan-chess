@@ -300,10 +300,9 @@ public final class MainActivity extends Activity {
         });
     }
     void runLichessMaintenance(Runnable task){if(!lichessExecutor.isShutdown())lichessExecutor.execute(task);}
-    private void syncForeground(){if(lichess!=null)lichess.foreground(resumed&&(hasWindowFocus()||confirmingExit));}
-    @Override protected void onResume(){super.onResume();resumed=true;syncForeground();}
-    @Override protected void onPause(){resumed=false;if(lichess!=null)lichess.background();super.onPause();}
-    @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);syncForeground();}
+    @Override protected void onStart(){super.onStart();resumed=true;if(lichess!=null)lichess.foreground(true);}
+    @Override protected void onResume(){super.onResume();resumed=true;if(lichess!=null)lichess.foreground(true);}
+    @Override protected void onStop(){resumed=false;if(lichess!=null)lichess.background();super.onStop();}
     @Override public void onBackPressed(){
         if(lichess!=null&&lichess.liveGame()){
             if(confirmingExit)return;
@@ -312,7 +311,7 @@ public final class MainActivity extends Activity {
                 .setMessage("Выход считается сдачей. Остаться можно без штрафа.")
                 .setNegativeButton("Продолжить игру",null)
                 .setPositiveButton("Сдаться",(d,which)->lichess.resignConfirmed()).create();
-            dialog.setOnDismissListener(d->{confirmingExit=false;syncForeground();});dialog.show();
+            dialog.setOnDismissListener(d->{confirmingExit=false;if(lichess!=null&&resumed)lichess.foreground(true);});dialog.show();
             return;
         }
         if(protectedOnline||lichess!=null&&lichess.locked())return;
