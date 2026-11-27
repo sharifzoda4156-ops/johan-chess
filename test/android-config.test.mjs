@@ -48,3 +48,17 @@ test('ChessImport.java returns aligned game metadata fields',()=>{
   assert.match(java,new RegExp(`"${field}"`));
  }
 });
+
+test('Android build and workflow support persistent release signing without committing keystores',()=>{
+ const gradle=read('android/app/build.gradle');
+ assert.match(gradle,/signingConfigs/);
+ assert.match(gradle,/ANDROID_KEYSTORE_PATH/);
+ assert.match(gradle,/ANDROID_KEYSTORE_PASSWORD/);
+ assert.match(gradle,/ANDROID_KEY_ALIAS/);
+ assert.match(gradle,/ANDROID_KEY_PASSWORD/);
+ const yml=read('.github/workflows/android.yml');
+ assert.match(yml,/ANDROID_KEYSTORE_BASE64/);
+ assert.match(yml,/:app:assembleRelease/);
+ assert.match(yml,/apksigner.*verify/);
+});
+
