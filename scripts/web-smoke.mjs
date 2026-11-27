@@ -55,6 +55,32 @@ try{
   assert.ok(await page.evaluate(()=>[...document.querySelectorAll('#profileAwards img')].every(img=>img.complete&&img.naturalWidth>0)),'Award SVGs loaded');
   assert.equal(await page.locator('#soundEnabled').isChecked(),true,'Sound enabled by default');
 
+  // Verified coach account must unlock chat and memory; old global consent is not reused.
+  if(viewport.width>=1200){
+   const token='github_pat_'+'A'.repeat(30);
+   await page.route('https://api.github.com/user',async route=>{
+    const headers={'access-control-allow-origin':'*','access-control-allow-headers':'authorization,accept,x-github-api-version','access-control-allow-methods':'GET, OPTIONS','content-type':'application/json'};
+    if(route.request().method()==='OPTIONS')return route.fulfill({status:204,headers});
+    assert.equal(route.request().headers().authorization,'Bearer '+token);
+    await route.fulfill({status:200,headers,body:JSON.stringify({id:123456,login:'test'})});
+   });
+   await page.evaluate(()=>localStorage.setItem('jc-coach-consent','1'));
+   await page.locator('#profileConnect').click();
+   await page.locator('#aiToken').fill(token);
+   await page.locator('#aiLogin').click();
+   await page.locator('#aiConsent').waitFor({state:'visible'});
+   assert.equal(await page.locator('#aiGoal').isDisabled(),false);
+   await page.locator('#aiConsent').click();
+   await page.waitForFunction(()=>document.querySelector('#aiAccountStatus').textContent==='Тренер подключён.');
+   await page.locator('[data-tab="coach"]').click();
+   await page.locator('#aiChat').waitFor({state:'visible'});
+   assert.equal(await page.locator('#aiAsk').isDisabled(),false);
+   await page.locator('[data-tab="profile"]').click();
+   await page.locator('#profileConnect').click();
+   await page.locator('#aiLogout').click();
+   await page.waitForFunction(()=>document.querySelector('#aiAccount').textContent==='Не подключён');
+  }
+
   // Puzzles: Classic focus board fits viewport cleanly across mobile, desktop, and landscape
   await page.locator('[data-tab="puzzles"]').click();
   await page.locator('#modeClassic').click();
