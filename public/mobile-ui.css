@@ -384,7 +384,10 @@ body.review-board-focus #review,body.review-board-focus #review>.layout{height:1
  display:flex;justify-content:space-evenly;align-items:stretch;gap:2px;margin:0 auto;padding:2px 4px;
  max-width:720px;width:100%;background:var(--chrome);border-top:1px solid var(--line);
 }
-.game-toolbar button{display:flex;flex:1;flex-direction:column;justify-content:center;align-items:center;gap:3px;min-width:0;min-height:50px;border:0;background:transparent;color:var(--muted);border-radius:10px;font-size:10.5px;padding:4px 2px;font-weight:650}
+.game-toolbar button{display:flex;flex:1;flex-direction:column;justify-content:center;align-items:center;gap:3px;min-width:0;min-height:50px;border:0;background:transparent;color:var(--muted);border-radius:10px;font-size:10.5px;padding:4px 2px;font-weight:650;overflow:hidden}
+.game-toolbar button span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.review-toolbar button{padding:4px 1px;font-size:9.5px;letter-spacing:-.2px}
+@media(max-width:360px){.review-toolbar button{font-size:8.5px;gap:2px}}
 .game-toolbar button:hover:not(:disabled){background:rgba(255,255,255,.05);color:var(--ink)}
 .game-toolbar button:not(:disabled):active{background:var(--surface-raised);color:var(--accent)}
 .game-toolbar button.is-active{color:var(--accent);background:rgba(34,197,94,.12)}
@@ -403,7 +406,30 @@ body.review-board-focus #review,body.review-board-focus #review>.layout{height:1
 body.is-playing #playArea,body.is-online-playing.online-board-focus #onlineGame,body.review-board-focus #reviewBoardShell{
  display:grid;grid-template-rows:48px 32px minmax(0,1fr) 62px;max-width:none;width:100%;height:100%;margin:0;min-height:0;overflow:hidden;
 }
-body.review-board-focus #reviewBoardShell{grid-template-rows:48px 32px minmax(0,1fr) 62px 72px}
+body.review-board-focus #reviewBoardShell{grid-template-rows:48px 18px 32px minmax(0,1fr) 56px 104px}
+@media(max-height:660px){body.review-board-focus #reviewBoardShell{grid-template-rows:48px 18px 32px minmax(0,1fr) 54px 82px}}
+.review-eval-bar{
+ position:relative;height:18px;background:#1e293b;overflow:hidden;
+ display:flex;align-items:center;border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+}
+.review-eval-fill{
+ height:100%;background:linear-gradient(90deg,#f8fafc,#e2e8f0);
+ transition:width 260ms cubic-bezier(.22,1,.36,1);
+}
+.review-eval-text{
+ position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+ padding:0 7px;border-radius:99px;font:780 10.5px/15px system-ui,sans-serif;font-variant-numeric:tabular-nums;
+ background:rgba(11,14,20,.82);color:#f8fafc;border:1px solid rgba(255,255,255,.14);pointer-events:none;
+}
+.review-strip-row{
+ display:grid;grid-template-columns:30px minmax(0,1fr) 30px;align-items:center;
+ height:32px;background:var(--surface-inset);min-width:0;
+}
+.strip-edge-btn{
+ width:30px;height:32px;min-height:32px;padding:0;border:0;border-radius:0;
+ background:transparent;color:var(--muted);font-size:13px;display:grid;place-items:center;
+}
+.strip-edge-btn:hover:not(:disabled){background:rgba(255,255,255,.06);color:var(--ink);border:0}
 :is(body.is-playing,body.is-online-playing.online-board-focus,body.review-board-focus) .game-stage{
  container-type:size;
  --board-size:min(100cqw,720px,max(0px,calc(100cqh - 96px)));
@@ -421,7 +447,7 @@ body.review-board-focus #reviewBoardShell{grid-template-rows:48px 32px minmax(0,
  grid-template-columns:repeat(8,minmax(0,1fr));grid-template-rows:repeat(8,minmax(0,1fr));overflow:hidden;
 }
 .game-stage .square,.game-stage .square .piece-image{touch-action:none}
-#playPromotion,#onlinePromotion,.game-notice{
+#playPromotion,#onlinePromotion,#reviewPromotion,.game-notice{
  position:absolute;z-index:22;left:50%;top:50%;transform:translate(-50%,-50%);
  width:min(92%,340px);margin:0;padding:12px;background:var(--surface);border:1px solid var(--line-strong);
  border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,.6);
@@ -511,8 +537,8 @@ body.is-online-playing.online-board-focus #onlineOpponentGone,body.is-online-pla
 }
 body.is-online-playing.online-board-focus #onlineOpponentGone:has(+ #onlineClaimActions:not([hidden])){bottom:112px}
 body.review-board-focus #coach{
- height:72px;min-height:0;margin:0;padding:6px 12px;border:0;border-top:1px solid var(--line);
- border-radius:0;font-size:12.5px;line-height:1.38;overflow:auto;overscroll-behavior:contain;
+ height:100%;min-height:0;margin:0;padding:6px 12px;border:0;border-top:1px solid var(--line);
+ border-radius:0;font-size:12px;line-height:1.34;overflow:auto;overscroll-behavior:contain;
 }
 .sr-game{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 
@@ -526,7 +552,10 @@ body.review-board-focus #coach{
  :is(body.is-playing,body.is-online-playing.online-board-focus,body.review-board-focus) .game-stage>.game-player-top{grid-column:2;grid-row:1;width:100%;align-self:end}
  :is(body.is-playing,body.is-online-playing.online-board-focus,body.review-board-focus) .game-stage>.game-player-bottom{grid-column:2;grid-row:2;width:100%;align-self:start}
  body.is-playing #playArea,body.is-online-playing.online-board-focus #onlineGame{grid-template-rows:36px 26px minmax(0,1fr) 48px}
- body.review-board-focus #reviewBoardShell{grid-template-rows:36px 26px minmax(0,1fr) 46px 44px}
+ body.review-board-focus #reviewBoardShell{grid-template-rows:36px 14px 26px minmax(0,1fr) 46px 44px}
+ .review-strip-row{height:26px}
+ .strip-edge-btn{height:26px;min-height:26px}
+ .review-eval-bar{height:14px}
  .game-move-strip,#playMoves.game-move-strip{height:26px;min-height:26px;max-height:26px;padding-block:3px}
  body.review-board-focus #coach{height:44px;font-size:11.5px;padding:4px 10px}
  .review-title .game-title,.game-title{font-size:15px}
