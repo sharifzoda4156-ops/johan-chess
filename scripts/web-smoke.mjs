@@ -64,12 +64,13 @@ try{
   await boardBox(page,'#puzzleBoard');
   await page.locator('#journeyBack').click();
 
-  // Web Study tab routes directly to Library
+  // Study tab opens the coach; Library is one tap away
   await page.locator('[data-tab="coach"]').click();
+  await page.locator('[data-screen="coach"] [data-go="library"]').first().click();
   await page.waitForFunction(()=>Number(document.querySelector('#studyOpeningCount').textContent)>0);
   assert.equal(await page.locator('#studyBoard [data-square]').count(),64);
   await page.locator('#studyNext').click();
-  assert.equal(await page.locator('#studyOpeningAsk').isVisible(),false);
+  assert.equal(await page.locator('#studyOpeningAsk').isVisible(),true);
 
   // Review: unified Lichess URL & PGN import, keyboard nav, check highlight & material
   await page.locator('[data-tab="home"]').click();
