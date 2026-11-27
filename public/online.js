@@ -1,8 +1,9 @@
 import {Chess} from './chess.js';
-import {renderBoardView,clearBoardView,roundMotionFactor} from './board-view.js';
+import {renderBoardView,clearBoardView,roundMotionFactor,decoratePromotionButtons} from './board-view.js';
 import {findKingSquare,renderMaterial} from './material.js';
 import {playSound,soundForMove} from './sound.js';
 import {confirmDialog} from './dialog.js';
+import {liveClockText} from './training-core.js';
 import {matchControl,validNick,validGameId,readOnlineGame,serverClock,resultText,completedPgn} from './online-core.js';
 import {createWebLichess} from './lichess-web.js';
 
@@ -13,13 +14,13 @@ function nativeCall(op,args={}){return new Promise((resolve,reject)=>{const id=S
 
 const el=(tag,value,cls)=>{const a=document.createElement(tag);if(value!==undefined)a.textContent=value;if(cls)a.className=cls;return a;};
 const text=(id,value)=>{const a=$(id);value=String(value??'');if(a.textContent!==value)a.textContent=value;};
-const clock=ms=>{const n=Math.ceil(ms/1000);return Math.floor(n/60)+':'+String(n%60).padStart(2,'0');};
 
 export function initOnline({canStart,lock,review,openOnline}){
- let snap={connected:false,locked:false},game=null,signature='',receivedAt=0,selected=null,promotion=[],sending=false,awaiting=false,working=false,polling=false,active=false,uiLock=false,history=[],friendRows=[],lastAccount='',error='',syncAttempt='',lastGame='',challengeKey='',claimAt=0;
+ let snap={connected:false,locked:false},game=null,signature='',receivedAt=0,selected=null,promotion=[],sending=false,awaiting=false,awaitingSlow=false,awaitTimer=null,optimistic=null,working=false,polling=false,active=false,uiLock=false,history=[],friendRows=[],lastAccount='',error='',syncAttempt='',lastGame='',challengeKey='',claimAt=0;
  const webClient=native?null:createWebLichess({onUpdate:s=>handlePush(s)});
  const call=(op,args={})=>native?nativeCall(op,args):webClient.call(op,args);
 
+ function clearOptimistic(){if(awaitTimer!==null){clearTimeout(awaitTimer);awaitTimer=null;}optimistic=null;awaiting=false;awaitingSlow=false;}
  function setLock(v){v=!!v;if(v!==uiLock){uiLock=v;lock(v);}}
  const say=s=>{error=s;text('onlineStatus',s);};
  function controls(){
@@ -29,10 +30,11 @@ export function initOnline({canStart,lock,review,openOnline}){
   $('onlineLogin').disabled=working||uiLock;$('onlineLogout').disabled=blocked;$('onlineRefresh').disabled=working||!connected;
   $('onlineSeek').disabled=blocked||!snap.eventReady||!canStart();$('onlineChallenge').disabled=blocked||!snap.eventReady||!canStart();$('onlineCancel').hidden=!snap.waiting;$('onlineCancel').disabled=working;
   $('onlineGame').hidden=!game||snap.waiting;document.body.classList.toggle('online-board-focus',!!game&&!game.done&&!snap.waiting&&uiLock);$('onlineHistoryRefresh').disabled=blocked;$('onlineFriendSearch').disabled=blocked;$('onlineFriendsRefresh').disabled=blocked;
-  $('onlineWaiting').hidden=!snap.waiting;$('onlineReconnect').hidden=!(snap.locked&&!snap.waiting&&(!game||snap.needsSync||awaiting));$('onlineOpponentGone').hidden=!snap.opponentGone||!game||game.done;
+  $('onlineWaiting').hidden=!snap.waiting;$('onlineReconnect').hidden=!(snap.locked&&!snap.waiting&&(!game||snap.needsSync||awaitingSlow));$('onlineOpponentGone').hidden=!snap.opponentGone||!game||game.done;
   $('onlineClaimActions').hidden=!snap.claimReady||!game||game.done||snap.needsSync;
   for(const id of ['onlineClaimVictory','onlineClaimDraw'])$(id).disabled=working||sending||!snap.claimReady;
-  $('onlineGameNotice').hidden=!(game&&!game.done&&(snap.needsSync||awaiting||error));$('onlineGameNoticeText').textContent=error||(snap.needsSync?'Связь потеряна':awaiting?'Ожидаю подтверждения Lichess':'');$('onlineGameReconnect').hidden=!(snap.needsSync||awaiting);
+  const showSlow=awaitingSlow&&awaiting;
+  $('onlineGameNotice').hidden=!(game&&!game.done&&(snap.needsSync||showSlow||error));$('onlineGameNoticeText').textContent=error||(snap.needsSync?'Связь потеряна':showSlow?'Ожидаю подтверждение Lichess':'');$('onlineGameReconnect').hidden=!(snap.needsSync||showSlow);
  }
  function profileView(){text('onlineName',snap.username||'');const perf=snap.account?.perfs||{};for(const [type,id] of [['blitz','onlineBlitzRating'],['rapid','onlineRapidRating'],['classical','onlineClassicalRating']]){const r=perf[type];text(id,Number.isFinite(r?.rating)?r.rating+(r.prov?'?':''):'—');}}
  function tick(){
@@ -40,23 +42,34 @@ export function initOnline({canStart,lock,review,openOnline}){
    const seconds=Math.max(0,Math.ceil((snap.claimRemaining-(performance.now()-claimAt))/1000));
    text('onlineOpponentGone',snap.claimReady?'Соперник покинул игру. Можно потребовать победу или ничью.':snap.claimRemaining>=0?'Соперник отключился · ожидание '+seconds+' с':'Соперник отключился · ожидаем Lichess');
   }
-  if(!game)return;const times=serverClock(game,Math.max(0,performance.now()-receivedAt));text('onlineTopClock',clock(times[game.color==='w'?'b':'w']));text('onlineBottomClock',clock(times[game.color]));
+  if(!game)return;
+  const viewGame=optimistic?{...game,game:optimistic.game,moves:[...game.moves,optimistic.uci]}:game;
+  const times=serverClock(viewGame,Math.max(0,performance.now()-receivedAt));
+  const oppColor=game.color==='w'?'b':'w';
+  const topMs=times[oppColor],bottomMs=times[game.color];
+  text('onlineTopClock',liveClockText(topMs));text('onlineBottomClock',liveClockText(bottomMs));
+  $('onlineTopClock').classList.toggle('low-time',!game.done&&topMs<20000);
+  $('onlineBottomClock').classList.toggle('low-time',!game.done&&bottomMs<20000);
  }
  function draw(animateMoves=[]){
   if(!game){clearBoardView($('onlineBoard'));return;}
-  const mine=game.color,turn=game.game.turn(),playable=!game.done&&turn===mine&&!snap.needsSync&&!sending&&!awaiting&&!working&&!promotion.length;
-  const targets=[]; // No assistance or legal-move dots in rated or casual online play.
-  const rows=game.game.board(),checkSquare=game.game.isCheck()?findKingSquare(rows,turn):null;
-  renderBoardView($('onlineBoard'),{rows,flip:mine==='b',interactive:true,disabled:!playable,onClick:click,selected,targets,last:game.game.history({verbose:true}).at(-1),checkSquare,animateMoves,motionFactor:roundMotionFactor(snap.full?.clock?.initial,snap.full?.clock?.increment,game.done)});
+  const chess=optimistic?optimistic.game:game.game;
+  const mine=game.color,turn=chess.turn(),playable=!game.done&&turn===mine&&!snap.needsSync&&!sending&&!awaiting&&!working&&!promotion.length;
+  const targets=selected&&playable?chess.moves({square:selected,verbose:true}).map(m=>m.to):[];
+  const rows=chess.board(),checkSquare=chess.isCheck()?findKingSquare(rows,turn):null;
+  const lastMove=optimistic?optimistic.last:chess.history({verbose:true}).at(-1);
+  renderBoardView($('onlineBoard'),{rows,flip:mine==='b',interactive:true,disabled:!playable,onClick:click,onDrop:drop,selected,targets,last:lastMove,checkSquare,animateMoves,motionFactor:roundMotionFactor(snap.full?.clock?.initial,snap.full?.clock?.increment,game.done)});
   renderMaterial($('onlineTopMat'),rows,mine==='w'?'b':'w');
   renderMaterial($('onlineBottomMat'),rows,mine);
+  if(promotion.length)decoratePromotionButtons($('onlinePromotion'),mine,'onlinePromote');
   $('onlinePromotion').hidden=!promotion.length;
   const player=c=>c==='w'?game.white:game.black,label=p=>[p?.name||p?.id||'Игрок',p?.rating].filter(Boolean).join(' · ');
   text('onlineTop',label(player(mine==='w'?'b':'w')));text('onlineBottom',label(player(mine)));
-  text('onlineTurn',game.done?resultText(game):snap.needsSync?'Связь потеряна · обнови':awaiting?'Ожидаю подтверждение Lichess':resultText(game));
+  const viewTurnText=game.done?resultText(game):snap.needsSync?'Связь потеряна · обнови':awaitingSlow?'Ожидаю подтверждение Lichess':turn===mine?'Твой ход':'Ход соперника';
+  text('onlineTurn',viewTurnText);
   $('onlineGameActions').hidden=game.done;$('onlineReviewGame').hidden=!game.done||!game.moves.length||snap.locked;
   $('onlineDrawNo').hidden=!game.drawOffer;$('onlineDraw').querySelector('span').textContent=game.drawOffer?'Принять':'Ничья';
-  const list=$('onlineMoveStrip'),sans=game.game.history().map((m,i)=>i%2===0?Math.floor(i/2)+1+'. '+m:m).join(' ');if(list.textContent!==sans){list.textContent=sans;list.scrollLeft=list.scrollWidth;}
+  const list=$('onlineMoveStrip'),sans=chess.history().map((m,i)=>i%2===0?Math.floor(i/2)+1+'. '+m:m).join(' ');if(list.textContent!==sans){list.textContent=sans;list.scrollLeft=list.scrollWidth;}
   $('onlineTopClock').classList.toggle('running',!game.done&&turn!==mine);$('onlineBottomClock').classList.toggle('running',!game.done&&turn===mine);
   for(const id of ['onlineResign','onlineDraw','onlineDrawNo'])$(id).disabled=working||sending||game.done||snap.needsSync;
   tick();
@@ -79,14 +92,21 @@ export function initOnline({canStart,lock,review,openOnline}){
   if(s.username!==lastAccount){lastAccount=s.username;history=[];friendRows=[];renderHistory();renderFriends();$('onlinePlayer').replaceChildren();}
   const sig=JSON.stringify([s.gameId,s.full?.id,s.state]);
   if(sig!==signature){
-   signature=sig;const old=game;game=null;selected=null;promotion=[];awaiting=false;
+   signature=sig;const old=game,prevOpt=optimistic;game=null;selected=null;promotion=[];clearOptimistic();
    if(s.full&&s.state){
     try{
      game=readOnlineGame(s.full,s.state,s.username,Chess);receivedAt=performance.now();
-     const moves=old&&lastGame===s.gameId&&game.moves.length===old.moves.length+1&&old.moves.every((u,i)=>u===game.moves[i])?[game.game.history({verbose:true}).at(-1)]:[];
+     const matchedOpt=prevOpt&&lastGame===s.gameId&&game.moves.length>prevOpt.baseLen&&game.moves[prevOpt.baseLen]===prevOpt.uci;
+     let moves=[];
+     if(matchedOpt){
+      // Already rendered and sounded our optimistic move; only animate an opponent reply if it also arrived.
+      if(game.moves.length===prevOpt.baseLen+2)moves=[game.game.history({verbose:true}).at(-1)];
+     }else if(old&&lastGame===s.gameId&&game.moves.length===old.moves.length+1&&old.moves.every((u,i)=>u===game.moves[i])){
+      moves=[game.game.history({verbose:true}).at(-1)];
+     }
      lastGame=s.gameId;draw(moves);
      if(moves.length)playSound(soundForMove(moves[0],game.game));
-     else if(old&&!old.done&&game.done)playSound('end');
+     else if(old&&!old.done&&game.done&&!matchedOpt)playSound('end');
     }catch(e){say(e.message+' · открой Lichess для этой партии');}
    }else clearBoardView($('onlineBoard'));
   }else if(previous.needsSync!==s.needsSync||previous.locked!==s.locked)draw();
@@ -103,11 +123,45 @@ export function initOnline({canStart,lock,review,openOnline}){
   }
  }
  async function action(fn){if(working)return;working=true;error='';controls();try{await fn();}catch(e){say(e.message||'Ошибка Lichess');}finally{working=false;controls();draw();}}
- async function refresh(){apply(await call('refresh'));if(!snap.needsSync){awaiting=false;draw();}}
+ async function refresh(){apply(await call('refresh'));if(!snap.needsSync){clearOptimistic();draw();}}
  function begin(op,args){if(working||uiLock||!canStart())return;if(!snap.eventReady){say('Обнови подключение');return;}setLock(true);action(async()=>{try{apply(await call(op,args));}catch(e){try{apply(await call('snapshot'));}catch{}throw e;}});}
  function params(){const [minutes,increment]=$('onlineControl').value.split('+').map(Number);return {minutes,increment,rated:$('onlineRated').checked};}
- async function sendMove(move){if(sending||awaiting||working||!game||game.done||snap.needsSync||game.game.turn()!==game.color)return;sending=true;awaiting=true;selected=null;promotion=[];draw();try{await call('gameAction',{gameId:snap.gameId,action:'move',move:move.from+move.to+(move.promotion||'')});}catch(e){say(e.message);try{await refresh();}catch{}awaiting=false;}finally{sending=false;draw();}}
- function click(square){if(!game||game.done||game.game.turn()!==game.color||sending||awaiting||working||snap.needsSync||promotion.length)return;if(selected){const options=game.game.moves({square:selected,verbose:true}).filter(m=>m.to===square);if(options.length>1){promotion=options;draw();return;}if(options.length===1){sendMove(options[0]);return;}}selected=game.game.get(square)?.color===game.color&&square!==selected?square:null;draw();}
+ async function sendMove(move,via='tap'){
+  if(sending||awaiting||working||!game||game.done||snap.needsSync||game.game.turn()!==game.color)return;
+  const uci=move.from+move.to+(move.promotion||'');
+  const preview=new Chess();
+  const initialFen=snap.full?.initialFen;
+  if(initialFen&&initialFen!=='startpos')preview.load(initialFen);
+  for(const u of game.moves)preview.move({from:u.slice(0,2),to:u.slice(2,4),...(u.length===5?{promotion:u[4]}:{})});
+  const applied=preview.move({from:move.from,to:move.to,...(move.promotion?{promotion:move.promotion}:{})});
+  if(!applied)return;
+  sending=true;awaiting=true;awaitingSlow=false;selected=null;promotion=[];
+  optimistic={baseLen:game.moves.length,uci,game:preview,last:applied};
+  if(awaitTimer!==null)clearTimeout(awaitTimer);
+  awaitTimer=setTimeout(()=>{if(awaiting){awaitingSlow=true;controls();draw();}},1500);
+  draw([{...applied,dragged:via==='drag'}]);
+  playSound(soundForMove(applied,preview));
+  controls();
+  try{
+   await call('gameAction',{gameId:snap.gameId,action:'move',move:uci});
+  }catch(e){
+   clearOptimistic();
+   playSound('illegal');
+   say(e.message);
+   try{await refresh();}catch{}
+  }finally{
+   sending=false;
+   controls();
+   draw();
+  }
+ }
+ function drop(from,to){
+  if(!game||game.done||game.game.turn()!==game.color||sending||awaiting||working||snap.needsSync||promotion.length)return;
+  const options=game.game.moves({square:from,verbose:true}).filter(m=>m.to===to);
+  if(options.length>1){promotion=options;draw();return;}
+  if(options.length===1){sendMove(options[0],'drag');return;}
+ }
+ function click(square){if(!game||game.done||game.game.turn()!==game.color||sending||awaiting||working||snap.needsSync||promotion.length)return;if(selected){const options=game.game.moves({square:selected,verbose:true}).filter(m=>m.to===square);if(options.length>1){promotion=options;draw();return;}if(options.length===1){sendMove(options[0],'tap');return;}}selected=game.game.get(square)?.color===game.color&&square!==selected?square:null;draw();}
  async function gameAction(name,confirmCfg){if(!game||game.done||working||sending||snap.needsSync)return;const targetId=snap.gameId;if(confirmCfg&&!(await confirmDialog(confirmCfg)))return;if(!game||game.done||working||sending||snap.needsSync||snap.gameId!==targetId)return;action(async()=>{await call('gameAction',{gameId:targetId,action:name});});}
  function renderFriends(){
   const box=$('onlineFriends'),frag=document.createDocumentFragment();
@@ -162,7 +216,7 @@ export function initOnline({canStart,lock,review,openOnline}){
  $('onlineClaimVictory').onclick=()=>{if(snap.claimReady)gameAction('claim-victory',{title:'Потребовать победу?',message:'Соперник покинул игру. Зафиксировать победу на Lichess?',confirmText:'Потребовать победу'});};
  $('onlineClaimDraw').onclick=()=>{if(snap.claimReady)gameAction('claim-draw',{title:'Зафиксировать ничью?',message:'Завершить партию вничью из-за ухода соперника?',confirmText:'Ничья'});};
  $('onlineDraw').onclick=()=>gameAction('draw/yes');$('onlineDrawNo').onclick=()=>gameAction('draw/no');
- for(const type of ['q','r','b','n'])$('onlinePromote'+type).onclick=()=>{const m=promotion.find(x=>x.promotion===type);if(m)sendMove(m);};
+ for(const type of ['q','r','b','n'])$('onlinePromote'+type).onclick=()=>{const m=promotion.find(x=>x.promotion===type);if(m)sendMove(m,'tap');};
  $('onlinePromotionCancel').onclick=()=>{promotion=[];draw();};
 
  document.addEventListener('jc-screen',e=>{
@@ -191,7 +245,7 @@ export function initOnline({canStart,lock,review,openOnline}){
  }
 
  // Tick clocks and opponent-gone countdown only when online screen is visible and active
- setInterval(()=>{if(active&&(game||snap.opponentGone))tick();},250);
+ setInterval(()=>{if(active&&(game||snap.opponentGone))tick();},100);
 
  if(native){
   document.addEventListener('jc-native-online-lock',()=>{setLock(true);poll();});

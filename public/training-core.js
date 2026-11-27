@@ -4,6 +4,7 @@ export const CONTROLS={'free':{base:null,increment:0},'10+0':{base:600000,increm
 export const opposite=c=>c==='w'?'b':'w';
 export const resultFor=c=>c==='w'?'1-0':'0-1';
 export function clockText(ms){if(ms===null)return '∞';const s=Math.max(0,Math.ceil(ms/1000));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
+export function liveClockText(ms){if(ms===null)return '∞';if(ms<=0)return '0:00.0';if(ms<20000){const tenths=Math.ceil(ms/100);const sec=Math.floor(tenths/10);return '0:'+String(sec).padStart(2,'0')+'.'+String(tenths%10);}return clockText(ms);}
 export function makeClock(control,turn,now){const x=CONTROLS[control];if(!x)throw Error('Unknown time control');return {w:x.base,b:x.base,increment:x.increment,turn,since:now};}
 export function remaining(clock,now){const next={w:clock.w,b:clock.b};if(next[clock.turn]!==null)next[clock.turn]=Math.max(0,next[clock.turn]-Math.max(0,now-clock.since));return next;}
 export function nextClock(clock,now){const r=remaining(clock,now),c=clock.turn;if(r[c]===0)return null;if(r[c]!==null)r[c]+=clock.increment;return {...clock,...r,turn:opposite(c),since:now};}

@@ -1,11 +1,11 @@
-import {renderBoardView,clearBoardView,moveDuration,roundMotionFactor} from './board-view.js';
+import {renderBoardView,clearBoardView,moveDuration,roundMotionFactor,decoratePromotionButtons} from './board-view.js';
 import {findKingSquare,renderMaterial} from './material.js';
 import {playSound,soundForMove} from './sound.js';
 import {confirmDialog} from './dialog.js';
 import {Chess} from './chess.js';
 import {Engine} from './engine.js';
 import {enginePath} from './engine-path.js';
-import {LEVELS,DEFAULT_ADAPTIVE,CONTROLS,opposite,resultFor,clockText,makeClock,remaining,nextClock,terminal,flagResult,adaptiveLevel,parseUci} from './training-core.js';
+import {LEVELS,DEFAULT_ADAPTIVE,CONTROLS,opposite,resultFor,clockText,liveClockText,makeClock,remaining,nextClock,terminal,flagResult,adaptiveLevel,parseUci} from './training-core.js';
 const $=id=>document.getElementById(id);
 const STORAGE='jc-training-history-v1';
 function readHistory(){try{const data=JSON.parse(localStorage.getItem(STORAGE)||'[]');return Array.isArray(data)?data.filter(x=>x&&typeof x.pgn==='string'):[];}catch{return [];}}
@@ -44,19 +44,20 @@ export function initTraining({canStart,lock,unlock,review,getUser,goHome,goOnlin
   for(const b of document.querySelectorAll('#playColorGroup button,#playBotGrid button'))b.disabled=!enabled;
  }
  function syncColorGroup(){const v=$('playColor').value;for(const b of document.querySelectorAll('#playColorGroup button'))b.setAttribute('aria-pressed',String(b.dataset.color===v));}
- function renderClock(){if(!session?.clock)return;const r=remaining(session.clock,performance.now());for(const [id,c] of [['playTopClock',opposite(session.color)],['playBottomClock',session.color]]){const el=$(id);const text=clockText(r[c]);if(el.textContent!==text)el.textContent=text;el.classList.toggle('running',session.clock.turn===c);}}
+ function renderClock(){if(!session?.clock)return;const r=remaining(session.clock,performance.now());for(const [id,c] of [['playTopClock',opposite(session.color)],['playBottomClock',session.color]]){const el=$(id);const text=liveClockText(r[c]);if(el.textContent!==text)el.textContent=text;el.classList.toggle('running',session.clock.turn===c);el.classList.toggle('low-time',r[c]!==null&&r[c]<20000);}}
  function draw(animateMoves=[]){
   const s=session;if(!s)return;
   const rows=s.game.board();
   const checkSquare=s.game.isCheck()?findKingSquare(rows,s.game.turn()):null;
   const targets=selected&&!s.thinking&&!s.starting&&s.game.turn()===s.color?s.game.moves({square:selected,verbose:true}).map(m=>m.to):[];
-  renderBoardView($('playBoard'),{rows,flip:s.color==='b',interactive:true,disabled:s.starting||s.thinking||s.game.turn()!==s.color||promotions.length>0,onClick:click,selected,targets,last:s.last,checkSquare,animateMoves,motionFactor:roundMotionFactor(CONTROLS[s.control]?.base,CONTROLS[s.control]?.increment)});
+  renderBoardView($('playBoard'),{rows,flip:s.color==='b',interactive:true,disabled:s.starting||s.thinking||s.game.turn()!==s.color||promotions.length>0,onClick:click,onDrop:drop,selected,targets,last:s.last,checkSquare,animateMoves,motionFactor:roundMotionFactor(CONTROLS[s.control]?.base,CONTROLS[s.control]?.increment)});
   renderMaterial($('playTopMat'),rows,opposite(s.color));
   renderMaterial($('playBottomMat'),rows,s.color);
   if(s.renderedPly!==s.sans.length){
    const list=$('playMoves');list.textContent=s.sans.map((m,i)=>i%2===0?Math.floor(i/2)+1+'. '+m:m).join(' ');
    list.scrollLeft=list.scrollWidth;s.renderedPly=s.sans.length;
   }
+  if(promotions.length)decoratePromotionButtons($('playPromotion'),s.color,'promote-');
   $('playPromotion').hidden=!promotions.length;renderClock();
  }
  function stopEngine(s){if(timer!==null){clearInterval(timer);timer=null;}if(s?.engine){s.engine.close();s.engine=null;}}
@@ -81,12 +82,12 @@ export function initTraining({canStart,lock,unlock,review,getUser,goHome,goOnlin
   $('playResign').disabled=true;$('playCancel').disabled=true;$('playReview').hidden=true;$('playArea').hidden=true;settings(true);historyList();unlock();status(message);
  }
  function tick(){const s=session;if(!s?.clock)return;renderClock();if(remaining(s.clock,performance.now())[s.clock.turn]===0)finish(flagResult(s.game,s.clock.turn));}
- function move(m){
+ function move(m,via='tap'){
   const s=session;if(!s||!s.clock)return false;
   const now=performance.now(),clock=nextClock(s.clock,now);
   if(!clock){finish(flagResult(s.game,s.clock.turn));return false;}
   try{s.last=s.game.move(m);s.sans.push(s.last.san);}catch{return false;}
-  s.clock=clock;selected=null;promotions=[];draw([s.last]);
+  s.clock=clock;selected=null;promotions=[];draw([{...s.last,dragged:via==='drag'}]);
   playSound(soundForMove(s.last,s.game));
   const end=terminal(s.game);if(end){finish(end);return true;}
   return true;
@@ -96,22 +97,30 @@ export function initTraining({canStart,lock,unlock,review,getUser,goHome,goOnlin
   const id=s.id;s.thinking=true;status('Stockfish думает…');draw();
   try{
    const r=remaining(s.clock,performance.now())[s.game.turn()];
-   const budget=r===null?1000:Math.max(10,Math.min(1000,r-50));
+   const budget=r===null?800:Math.max(10,Math.min(800,r-50));
    const began=performance.now();const best=await s.engine.choose(s.startFen,s.game.history({verbose:true}).map(m=>m.from+m.to+(m.promotion||'')),budget);
-   const wait=Math.max(0,moveDuration(roundMotionFactor(CONTROLS[s.control]?.base,CONTROLS[s.control]?.increment))-(performance.now()-began));
-   if(wait&& (r===null||r>700))await new Promise(resolve=>setTimeout(resolve,wait));
+   const minPace=r===null||r>15000?380:r>5000?180:0;
+   const targetDelay=Math.max(minPace,moveDuration(roundMotionFactor(CONTROLS[s.control]?.base,CONTROLS[s.control]?.increment))+140);
+   const wait=Math.max(0,targetDelay-(performance.now()-began));
+   if(wait&&(r===null||r>1500))await new Promise(resolve=>setTimeout(resolve,wait));
    if(session!==s||id!==serial)return;
    s.thinking=false;
-   if(!move(parseUci(best))&&session===s)throw Error('Stockfish вернул нелегальный ход.');
+   if(!move(parseUci(best),'bot')&&session===s)throw Error('Stockfish вернул нелегальный ход.');
    if(session===s){status(s.game.isCheck()?'Твой ход · шах!':'Твой ход');draw();}
   }catch(e){if(session===s&&id===serial)cancel('Тренировка прервана: '+e.message);}
  }
- function human(m){const s=session;if(!s||s.starting||s.thinking||s.game.turn()!==s.color)return;if(move(m)&&session===s)bot();}
+ function human(m,via='tap'){const s=session;if(!s||s.starting||s.thinking||s.game.turn()!==s.color)return;if(move(m,via)&&session===s)bot();}
+ function drop(from,to){
+  const s=session;if(!s||s.starting||s.thinking||s.game.turn()!==s.color||promotions.length)return;
+  const options=s.game.moves({square:from,verbose:true}).filter(m=>m.to===to);
+  if(options.length>1){promotions=options;draw();return;}
+  if(options.length===1){human(options[0],'drag');return;}
+ }
  function click(square){
   const s=session;if(!s||s.starting||s.thinking||s.game.turn()!==s.color||promotions.length)return;
   if(selected){const options=s.game.moves({square:selected,verbose:true}).filter(m=>m.to===square);
    if(options.length>1){promotions=options;draw();return;}
-   if(options.length===1){human(options[0]);return;}}
+   if(options.length===1){human(options[0],'tap');return;}}
   const p=s.game.get(square);selected=p?.color===s.color&&selected!==square?square:null;draw();
  }
  async function start(overrides={}){
@@ -133,9 +142,10 @@ export function initTraining({canStart,lock,unlock,review,getUser,goHome,goOnlin
   $('playArea').hidden=false;$('playCancel').disabled=false;$('playResign').disabled=true;$('playReview').hidden=true;
   $('playTopName').textContent='Stockfish · уровень '+level;$('playBottomName').textContent=user;
   $('playTopClock').textContent=$('playBottomClock').textContent=clockText(CONTROLS[control].base);
+  $('playTopClock').classList.remove('low-time');$('playBottomClock').classList.remove('low-time');
   status('Запускаю Stockfish…');draw();
   try{s.engine=new Engine(enginePath);await s.engine.init();if(session!==s)return false;await s.engine.setSkill(level);if(session!==s)return false;
-   s.starting=false;s.clock=makeClock(control,game.turn(),performance.now());timer=setInterval(tick,200);$('playResign').disabled=false;
+   s.starting=false;s.clock=makeClock(control,game.turn(),performance.now());timer=setInterval(tick,100);$('playResign').disabled=false;
    if(game.turn()!==color)bot();else{status(game.isCheck()?'Твой ход · шах!':'Твой ход');draw();}
    return true;
   }catch(e){if(session===s)cancel('Не удалось запустить Stockfish: '+e.message);return false;}

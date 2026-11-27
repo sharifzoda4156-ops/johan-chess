@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Chess} from 'chess.js';
-import {makeClock,remaining,nextClock,clockText,terminal,flagResult,adaptiveLevel,parseUci} from '../public/training-core.js';
+import {makeClock,remaining,nextClock,clockText,liveClockText,terminal,flagResult,adaptiveLevel,parseUci} from '../public/training-core.js';
 test('clock charges moving side, gives increment only on legal move and detects flag',()=>{
  const c=makeClock('15+10','w',1000);
  assert.deepEqual(remaining(c,3000),{w:898000,b:900000});
  const n=nextClock(c,3000);assert.equal(n.w,908000);assert.equal(n.turn,'b');assert.equal(remaining(n,5000).b,898000);
  assert.equal(nextClock(makeClock('10+0','b',0),600000),null);assert.equal(clockText(1),'0:01');
+ assert.equal(liveClockText(null),'∞');assert.equal(liveClockText(25000),'0:25');assert.equal(liveClockText(14150),'0:14.2');assert.equal(liveClockText(0),'0:00.0');
  assert.equal(nextClock(makeClock('free','b',0),100000000).b,null);
 });
 test('checkmate, stalemate and repetition use full game history',()=>{
