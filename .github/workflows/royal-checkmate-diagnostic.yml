@@ -1,0 +1,32 @@
+name: Royal checkmate diagnostic
+on:
+  pull_request:
+jobs:
+  stockfish:
+    runs-on: ubuntu-latest
+    steps:
+      - run: sudo apt-get update && sudo apt-get install -y stockfish
+      - name: Compare all legal king moves
+        run: |
+          python3 - <<'PY'
+          import subprocess
+          p = subprocess.Popen(['/usr/games/stockfish'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True,bufsize=1)
+          def send(s):
+              p.stdin.write(s+'\n'); p.stdin.flush()
+          def until(prefix):
+              for l in p.stdout:
+                  print(l,end='',flush=True)
+                  if l.startswith(prefix): return
+          send('uci'); until('uciok')
+          send('setoption name MultiPV value 3')
+          send('setoption name Threads value 2')
+          send('setoption name Hash value 128')
+          send('isready'); until('readyok')
+          send('position fen 1k6/2B5/K4b1q/1P6/8/8/8/2R5 b - - 0 3')
+          send('go movetime 15000'); until('bestmove')
+          send('quit')
+          PY
+      - name: Exact seven-piece tablebase
+        run: |
+          curl -fsS --max-time 20 --get --data-urlencode 'fen=1k6/2B5/K4b1q/1P6/8/8/8/2R5 b - - 0 3' https://tablebase.lichess.ovh/standard | python3 -m json.tool
+        continue-on-error: true
