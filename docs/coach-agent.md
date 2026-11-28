@@ -1,7 +1,28 @@
-# Coach agent, bounded memory and cache
-Official SIWC plan usage: https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations . Uses OAuth, store=false and stream=true, explicit input; no previous_response_id, API-key fallback or unsupported retention. Subscription access and model availability depend on the account; real Android sign-in and inference are not verified by Node tests.
-- Fixed trainer instructions, editable local summary capped at 2400 characters. With history consent enabled, the model can call study.memory_update whenever durable learning facts change. Every sixth dialogue the app prompts a review. The tool accepts a complete replacement (including empty to clear), or explicit keep. It stages one valid update per turn, commits only after successful final reply, and is separate from chess-data permission. Missing or invalid calls retain the previous summary and leave the periodic review due. Tool continuation consumes an additional inference step when called; no dedicated summarization model or mandatory extra request every turn. Keep up to 8 recent messages (12 during compaction) and 12k characters, each 3000 max; existing bounded local archive remains. Clear conversation also clears derived summary. Disable history sharing to stop sending summary/history. No import of ChatGPT memory.
-- Stable instructions and profile first, recent dialogue next, dynamic data last. Automatic provider prompt caching; stable account cache key. Display actual input/cached tokens when reported; no guaranteed hit or quota discount. No unsupported prompt_cache_retention or speculative cache-hit claim.
-- Read-only namespace tools: current/local/Chess.com/historical completed games, actual moves, local Stockfish evaluation of a selected ply (10/13/16), training stats, opening search. User must enable data access, no active training/analysis; bounded rounds/calls (six tool rounds total) and engine searches. No live help, no arbitrary FEN or shell/network URL. Engine search cache is a bounded in-memory LRU, keyed by exact history, engine path, actual move and depth. Existing report reused at same depth. No external hosted tools.
-- Device acceptance: authenticate, list models, call ordinary chat, run tool call/continuation, check tool namespace and cache key acceptance on SIWC preview, switch accounts, deny history/data, test malformed/missing summary, disconnect network, test engine error. APK/manual device testing required.
-Added game_report (complete current report when available at the requested depth, otherwise ranges up to 24 plies with explicit coverage/next and bounded time); puzzle_search (actual IDs from offline Lichess pack, no answers). Local engine work is capped at 48 fresh positions/90 seconds per coach turn and 45 seconds per range. Revoked data permission or changed nickname stops tool continuation.
+# AI-тренер через GitHub Actions
+
+Вход через ChatGPT/OpenAI удалён. Тренер одинаково работает в вебе и в Android-приложении.
+
+## Как это устроено
+1. Клиент ([public/coach-client.js](../public/coach-client.js)) запускает workflow `Coach runner` через GitHub API (`workflow_dispatch`) с токеном пользователя. Входные данные: `request_id` и `payload_b64` (вопрос, последние сообщения, завершённая партия, профиль).
+2. Раннер ([.github/workflows/coach-runner.yml](../.github/workflows/coach-runner.yml), [scripts/coach-runner.mjs](../scripts/coach-runner.mjs)) ставит готовую сборку llama.cpp, берёт GGUF-модель из кэша, считает оценки позиций Stockfish'ем, находит критические моменты и спрашивает модель.
+3. Ответ сохраняется артефактом `coach-<request_id>` (хранится 1 день) и публикуется аннотацией задачи `coach-answer:<base64>`. Клиент читает аннотацию, потому что браузер не может скачать артефакт (CORS).
+4. Название запуска `coach <request_id>` — по нему клиент находит свой запуск.
+
+## Настройка токена
+1. GitHub → Settings → Developer settings → Fine-grained personal access tokens.
+2. Репозиторий: только `johan-chess`. Права: **Actions: Read and write** (остальное не нужно).
+3. В приложении: Профиль → Тренер → вставить токен → «Сохранить токен» → «Разрешить отправку данных в GitHub Actions».
+Токен хранится только в `localStorage` устройства.
+
+## Модель
+По умолчанию `unsloth/Qwen3.5-9B-GGUF` (`Q4_K_M`). Свои (дообученные) веса: переменные репозитория `COACH_GGUF_URL` и `COACH_GGUF_NAME`. Смена имени файла сбрасывает кэш.
+
+## Ограничения и приватность
+- **Если репозиторий публичный, входные данные запуска и ответ тренера видны всем в логах Actions.** Для личных данных используйте приватный репозиторий.
+- Ответ приходит за 2–10 минут (очередь раннера, запуск модели, анализ). Первый запуск скачивает модель (~5,3 ГБ).
+- Лимиты: контекст до ~60 КБ, партия до 160 полуходов, ответ до 8000 символов.
+- Тренер недоступен во время онлайн-партии (честная игра).
+- Инструменты старого тренера (поиск задач, дебютов, `memory_update` моделью) в раннер пока не перенесены: Stockfish-анализ партии выполняется на раннере автоматически.
+
+## Проверка
+`npm test` (юнит-тесты клиента и ядра раннера). Сквозной запуск: `gh workflow run coach-runner.yml -f request_id=test0001 -f payload_b64=$(echo '{"question":"Привет"}' | base64 -w0)`, ответ — в аннотации задачи.

@@ -29,7 +29,7 @@ npm start
   - Режимы «Путь» (160 уровней, XP), «Задача дня» (календарь и сердечки) и «Классика» (адаптивный рейтинг и фильтр тем).
 - **Библиотека шахмат и ИИ-тренер**:
   - Дебюты Lichess TSV A–E (CC0, 3865 линий), тематический эндшпиль, 7 исторических партий (public domain). В веб-версии вкладка «Учёба» открывает Библиотеку напрямую.
-  - В Android APK доступен ИИ-тренер через официальный [Sign in with ChatGPT](https://developers.openai.com/siwc/token-sharing-open-source) с постоянной локальной памятью, мини-досками `[[board:N]]` и учебным планом.
+  - ИИ-тренер (Web и Android) работает через GitHub Actions: Qwen3.5-9B на llama.cpp + Stockfish на раннере GitHub, с локальной памятью, мини-досками `[[board:N]]` и учебным планом. Настройка: [docs/coach-agent.md](docs/coach-agent.md).
 
 ## Android APK
 - Сборка: Node.js 22, JDK 17, Android SDK 35, Gradle 8.9 (`npm install && gradle -p android :app:assembleDebug`).
@@ -41,7 +41,7 @@ npm start
 npm install
 node scripts/build-pages.mjs
 ```
-Статическая сборка помещается в `dist/` (в `.gitignore`) и публикуется workflow `Web Pages` с предварительным запуском `scripts/web-smoke.mjs` в headless Chrome. В веб-версии работают анализ Stockfish, игра с компьютером, задачи, библиотека, импорт/экспорт PGN и ссылок Lichess/Chess.com, а также онлайн-игра на Lichess через OAuth2 PKCE; только ИИ-тренер (Sign in with ChatGPT) остаётся эксклюзивом Android APK.
+Статическая сборка помещается в `dist/` (в `.gitignore`) и публикуется workflow `Web Pages` с предварительным запуском `scripts/web-smoke.mjs` в headless Chrome. В веб-версии работают анализ Stockfish, игра с компьютером, задачи, библиотека, импорт/экспорт PGN и ссылок Lichess/Chess.com, а также онлайн-игра на Lichess через OAuth2 PKCE; ИИ-тренер доступен и в вебе (нужен токен GitHub).
 
 ## Проверки и лицензии
 - `npm test` — модульные тесты (анализ, PGN, материал, звуки, доска, веб-клиент Lichess, профиль, задачи, библиотека, Android-конфигурация).
